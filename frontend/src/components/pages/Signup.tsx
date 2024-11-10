@@ -4,9 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import signupImage from "../../assets/signupImage.jpg";
 import { useToast } from "@/hooks/use-toast";
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { signupSchema, SignupSchemaType } from '@kunalpisolkar24/blogapp-common'; // Adjust the import based on your actual schema path
+import { signupSchema } from '@kunalpisolkar24/blogapp-common'; // Adjust the import based on your actual schema path
 import LoadingSpinner from "./LoadingSpinner";
 
 const SignupCard: React.FC = () => {
@@ -34,9 +33,9 @@ const SignupCard: React.FC = () => {
         return;
       }
 
-      const validatedInput: SignupSchemaType = parsedInput.data;
+      // const validatedInput: SignupSchemaType = parsedInput.data;
 
-      const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signup', validatedInput);
+      // const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signup', validatedInput);
 
       toast({
         title: "Success",
@@ -127,9 +126,9 @@ const Signup: React.FC = () => {
         return;
       }
 
-      const validatedInput: SignupSchemaType = parsedInput.data;
+      // const validatedInput: SignupSchemaType = parsedInput.data;
 
-      const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signup', validatedInput);
+      // const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signup', validatedInput);
 
       toast({
         title: "Success",
