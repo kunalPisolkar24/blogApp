@@ -18,7 +18,7 @@ import {
 import { toast } from "../../hooks/use-toast";
 import { createPostSchema, CreatePostSchemaType } from '@kunalpisolkar24/blogapp-common';
 
-import BannerImage from "../../assets/blogImages/banner.jpg";
+import BannerImage from "/blogImages/banner.jpg";
 import StickyNavbar from './StickyNavbar';
 
 const CreateNewBlog: React.FC = () => {

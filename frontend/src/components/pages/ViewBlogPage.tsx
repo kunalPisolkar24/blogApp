@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from "./LoadingSpinner";
-import BannerImage from "../../assets/blogImages/banner.jpg";
+import BannerImage from "/blogImages/banner.jpg";
 import { toast } from "../../hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
