@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import BlogCard from './BlogCard';
-import Image1 from "../../assets/blogImages/one.jpg";
-import Image2 from "../../assets/blogImages/two.jpg";
-import Image3 from "../../assets/blogImages/three.jpg";
-import Image4 from "../../assets/blogImages/four.jpg";
-import Image5 from "../../assets/blogImages/five.jpg";
-import Image6 from "../../assets/blogImages/six.jpg";
+import Image1 from "/blogImages/one.jpg";
+import Image2 from "/blogImages/two.jpg";
+import Image3 from "/blogImages/three.jpg";
+import Image4 from "/blogImages/four.jpg";
+import Image5 from "/blogImages/five.jpg";
+import Image6 from "/blogImages/six.jpg";
 import {
   Pagination,
   PaginationContent,

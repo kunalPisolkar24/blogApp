@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import signupImage from "../../assets/signupImage.jpg";
+import signupImage from "/signupImage.jpg";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
 import  axios  from 'axios';
