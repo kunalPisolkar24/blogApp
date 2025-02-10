@@ -67,3 +67,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+html, body {
+  overflow-y: scroll;
+  background-color: #09090b;
+  margin: 0;
+  padding: 0;
+}
+
+/* Webkit scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b; /* Same as your background color */
+}
+::-webkit-scrollbar-thumb {
+  background-color: #71717a;
+  border-radius: 10px;
+  border: 3px solid #09090b;
+}

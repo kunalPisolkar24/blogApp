@@ -53,13 +53,6 @@ interface FormattedBlogPost {
   id: number; // Add the blog ID
 }
 
-function shuffleArray(array: any[]) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-}
-
 interface BlogListProps {
   filterTag?: string;
 }
@@ -71,7 +64,6 @@ const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 6;
   const arr = [Image1, Image2, Image3, Image4, Image5, Image6];
-  shuffleArray(arr);
 
   useEffect(() => {
     const fetchBlogs = async () => {
