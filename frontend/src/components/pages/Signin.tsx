@@ -19,7 +19,7 @@ const SigninCard: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true); // Set loading to true
+    setLoading(true);
 
     try {
       const parsedInput = signinSchema.safeParse({ email, password });
@@ -36,7 +36,7 @@ const SigninCard: React.FC = () => {
 
       const validatedInput: SigninSchemaType = parsedInput.data;
 
-      const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signin', validatedInput);
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/signin`, validatedInput);
 
       localStorage.setItem('jwt', response.data.jwt);
       toast({
@@ -129,7 +129,7 @@ const Signin: React.FC = () => {
 
       const validatedInput: SigninSchemaType = parsedInput.data;
 
-      const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signin', validatedInput);
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/signin`, validatedInput);
       localStorage.setItem('jwt', response.data.jwt);
 
       toast({

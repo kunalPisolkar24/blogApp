@@ -36,7 +36,8 @@ const SignupCard: React.FC = () => {
 
       const validatedInput: SignupSchemaType = parsedInput.data;
 
-      const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signup', validatedInput);
+      console.log(import.meta.env.VITE_BACKEND_URL)
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/signup`, validatedInput);
       console.log(response);
 
       toast({
@@ -129,8 +130,8 @@ const Signup: React.FC = () => {
       }
 
       const validatedInput: SignupSchemaType = parsedInput.data;
-
-      const response = await axios.post('https://blogapp.kpisolkar24.workers.dev/api/signup', validatedInput);
+      console.log(import.meta.env.VITE_BACKEND_URL)
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/signup`, validatedInput);
       console.log(response);
 
       toast({
