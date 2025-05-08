@@ -19,7 +19,7 @@ import { toast } from "../../hooks/use-toast";
 import { createPostSchema, CreatePostSchemaType } from '@kunalpisolkar24/blogapp-common';
 
 import BannerImage from "/blogImages/banner.jpg";
-import StickyNavbar from './StickyNavbar';
+import { StickyNavbar } from '../layouts';
 
 const CreateNewBlog: React.FC = () => {
   const navigate = useNavigate();
@@ -58,7 +58,7 @@ const CreateNewBlog: React.FC = () => {
         throw new Error('No token found');
       }
 
-      await axios.post('https://blogapp.kpisolkar24.workers.dev/api/posts', parsedData, {
+      await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/posts`, parsedData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

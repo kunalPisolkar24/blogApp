@@ -23,7 +23,7 @@ const extendedSignupSchema = z
     path: ["confirmPassword"],
   })
 
-const Signup = () => {
+export const Signup = () => {
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -258,6 +258,4 @@ const Signup = () => {
       </Card>
     </div>
   )
-}
-
-export default Signup;
+};

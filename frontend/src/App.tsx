@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/toaster";
-import { ThemeProvider } from "@/components/theme-provider";
-import Signup from '@/components/pages/Signup';
-import Signin from '@/components/pages/Signin';
+import { ThemeProvider } from "@/components/utils/theme-provider";
+import { Signup } from '@/components/auth';
+import { Signin } from '@/components/auth/';
 import Home from "@/components/pages/Home";
 import ViewBlogPage from '@/components/pages/ViewBlogPage';
 import CreateNewBlog from '@/components/pages/CreateNewBlog'; 

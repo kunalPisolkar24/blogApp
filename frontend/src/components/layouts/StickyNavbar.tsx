@@ -8,11 +8,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, Settings, HelpCircle, LogOut, Plus } from 'lucide-react';
+import { User, LogOut, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const StickyNavbar: React.FC = () => {
+export const StickyNavbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [userInitial, setUserInitial] = useState("U");
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ const StickyNavbar: React.FC = () => {
           const decodedToken = JSON.parse(atob(jwt.split('.')[1]));
           const userId = decodedToken.id;
 
-          const response = await axios.get(`https://blogapp.kpisolkar24.workers.dev/api/users/${userId}`);
+          const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/users/${userId}`);
           const username = response.data.username;
           const initial = username ? username.charAt(0).toUpperCase() : "U";
           setUserInitial(initial);
@@ -83,14 +83,6 @@ const StickyNavbar: React.FC = () => {
                     <span>Create a Blog</span>
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  <span>Help</span>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -103,6 +95,4 @@ const StickyNavbar: React.FC = () => {
       </div>
     </nav>
   );
-}
-
-export default StickyNavbar;
+};

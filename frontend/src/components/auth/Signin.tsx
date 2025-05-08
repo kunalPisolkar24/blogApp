@@ -16,7 +16,7 @@ const extendedSigninSchema = z.object({
   password: z.string().min(1, "Password is required"),
 })
 
-const Signin = () => {
+export const Signin = () => {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -205,6 +205,4 @@ const Signin = () => {
       </Card>
     </div>
   )
-}
-
-export default Signin
+};

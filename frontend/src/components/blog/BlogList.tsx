@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import BlogCard from "./BlogCard";
+import { BlogCard } from "./BlogCard";
 import Image1 from "/blogImages/one.jpg";
 import Image2 from "/blogImages/two.jpg";
 import Image3 from "/blogImages/three.jpg";
@@ -15,7 +15,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import LoadingSpinner from "./LoadingSpinner";
+import { LoadingSpinner } from "../utils";
 
 interface Tag {
   postId: number;
@@ -57,7 +57,7 @@ interface BlogListProps {
   filterTag?: string;
 }
 
-const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
+export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   const [blogPosts, setBlogPosts] = useState<FormattedBlogPost[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -188,5 +188,3 @@ const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
     </div>
   );
 };
-
-export default BlogList;

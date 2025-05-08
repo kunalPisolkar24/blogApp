@@ -17,7 +17,7 @@ interface BlogCardProps {
   id: number; 
 }
 
-const BlogCard: React.FC<BlogCardProps> = ({ imageUrl, title, snippet, author, tags, id }) => {
+export const BlogCard: React.FC<BlogCardProps> = ({ imageUrl, title, snippet, author, tags, id }) => {
   return (
     <Link to={`/blog/${id}`} className="block"> 
       <Card className="overflow-hidden transition-all hover:bg-accent hover:shadow-lg">
@@ -58,5 +58,3 @@ const BlogCard: React.FC<BlogCardProps> = ({ imageUrl, title, snippet, author, t
     </Link>
   );
 };
-
-export default BlogCard;

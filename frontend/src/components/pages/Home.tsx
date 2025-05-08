@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import StickyNavbar from './StickyNavbar';
-import BlogList from './BlogList';
-import SearchBar from './SearchBar';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { StickyNavbar } from "../layouts";
+import { BlogList } from "../blog";
+import { SearchBar } from "../blog";
 
-import ErrorBoundary from './ErrorBoundary';
+import { ErrorBoundary } from "../utils/";
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   useEffect(() => {
-    const jwt = localStorage.getItem('jwt');
+    const jwt = localStorage.getItem("jwt");
     if (!jwt) {
-      navigate('/signin');
+      navigate("/signin");
     }
   }, [navigate]);
 
@@ -28,7 +28,7 @@ const Home: React.FC = () => {
         <SearchBar onTagSelect={handleTagSelect} />
       </ErrorBoundary>
       <ErrorBoundary>
-        <BlogList filterTag={selectedTag || ''} />
+        <BlogList filterTag={selectedTag || ""} />
       </ErrorBoundary>
     </div>
   );

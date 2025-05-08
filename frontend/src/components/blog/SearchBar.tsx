@@ -19,7 +19,7 @@ interface SearchBarProps {
   onTagSelect: (tag: string) => void;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
+export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredTags, setFilteredTags] = useState<Tag[]>([]);
   const [isFocused, setIsFocused] = useState(false);
@@ -27,7 +27,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
   useEffect(() => {
     const fetchTags = async () => {
       try {
-        const response = await axios.get<Tag[]>('https://blogapp.kpisolkar24.workers.dev/api/tags');
+        const response = await axios.get<Tag[]>(`${import.meta.env.VITE_BACKEND_URL}/api/tags`);
         setFilteredTags(response.data);
       } catch (error) {
         console.error('Error fetching tags:', error);
@@ -79,5 +79,3 @@ const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
     </div>
   );
 };
-
-export default SearchBar;
