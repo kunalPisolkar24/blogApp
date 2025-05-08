@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { Hono } from "hono";
-
 import { StatusCode } from '../constants/status-code';
 
 export const tagRouter = new Hono<{
@@ -13,14 +12,44 @@ export const tagRouter = new Hono<{
 
 tagRouter.get('/', async (c) => {
   const prisma = new PrismaClient({ datasourceUrl: c.env?.DATABASE_URL }).$extends(withAccelerate());
+  const searchQuery = c.req.query('query');
+  const limit = 4;
+
   try {
-    const tags = await prisma.tag.findMany();
+    let tags;
+    const cacheOptions = {
+      cacheStrategy: {
+        ttl: 300,
+      }
+    };
+
+    if (searchQuery && searchQuery.trim() !== "") {
+      tags = await prisma.tag.findMany({
+        where: {
+          name: {
+            contains: searchQuery.trim(),
+            mode: 'insensitive',
+          },
+        },
+        take: limit,
+        orderBy: {
+          name: 'asc',
+        },
+        ...cacheOptions
+      });
+    } else {
+      tags = await prisma.tag.findMany({
+        take: limit,
+        orderBy: {
+          name: 'asc',
+        },
+        ...cacheOptions
+      });
+    }
     return c.json(tags, StatusCode.OK);
   } catch (error) {
-    console.error(error);
+    console.error('Failed to get tags:', error);
     return c.json({ error: 'Failed to get tags' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });
 
@@ -53,6 +82,7 @@ tagRouter.get('/getPost/:tag', async (c) => {
           },
         },
       },
+      cacheStrategy: { ttl: 600 }
     });
 
     if (posts.length === 0) {
@@ -61,9 +91,7 @@ tagRouter.get('/getPost/:tag', async (c) => {
 
     return c.json(posts, StatusCode.OK);
   } catch (error) {
-    console.error(error);
+    console.error('Failed to get posts for the given tag:', error);
     return c.json({ error: 'Failed to get posts for the given tag' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });
