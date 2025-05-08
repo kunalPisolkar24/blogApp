@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import BlogCard from './BlogCard';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import BlogCard from "./BlogCard";
 import Image1 from "/blogImages/one.jpg";
 import Image2 from "/blogImages/two.jpg";
 import Image3 from "/blogImages/three.jpg";
@@ -15,7 +15,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import LoadingSpinner from './LoadingSpinner';
+import LoadingSpinner from "./LoadingSpinner";
 
 interface Tag {
   postId: number;
@@ -69,23 +69,25 @@ const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
     const fetchBlogs = async () => {
       setIsLoading(true);
       try {
-        const response = await axios.get<BlogPost[]>('https://blogapp.kpisolkar24.workers.dev/api/posts');
+        const response = await axios.get<BlogPost[]>(
+          `${import.meta.env.VITE_BACKEND_URL}/api/posts`
+        );
         const data = response.data;
-        const formattedBlogs: FormattedBlogPost[] = data.map(post => ({
+        const formattedBlogs: FormattedBlogPost[] = data.map((post) => ({
           title: post.title,
-          snippet: post.body.substring(0, 200) + '...',
+          snippet: post.body.substring(0, 200) + "...",
           author: {
             name: post.author.username,
             avatarUrl: `https://i.pravatar.cc/150?img=${post.authorId}`,
           },
-          tags: post.tags.map(tag => tag.tag.name),
+          tags: post.tags.map((tag) => tag.tag.name),
           slug: `post-${post.id}`,
           id: post.id, // Include the blog ID
         }));
         setBlogPosts(formattedBlogs);
         setTotalPages(Math.ceil(formattedBlogs.length / itemsPerPage));
       } catch (error) {
-        console.error('Error fetching blogs:', error);
+        console.error("Error fetching blogs:", error);
       } finally {
         setIsLoading(false);
       }
@@ -99,23 +101,25 @@ const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
       const fetchFilteredBlogs = async () => {
         setIsLoading(true);
         try {
-          const response = await axios.get<BlogPost[]>(`https://blogapp.kpisolkar24.workers.dev/api/tags/getPost/${filterTag}`);
+          const response = await axios.get<BlogPost[]>(
+            `${import.meta.env.VITE_BACKEND_URL}/api/tags/getPost/${filterTag}`
+          );
           const data = response.data;
-          const formattedBlogs: FormattedBlogPost[] = data.map(post => ({
+          const formattedBlogs: FormattedBlogPost[] = data.map((post) => ({
             title: post.title,
-            snippet: post.body.substring(0, 200) + '...',
+            snippet: post.body.substring(0, 200) + "...",
             author: {
               name: post.author.username,
               avatarUrl: `https://i.pravatar.cc/150?img=${post.authorId}`,
             },
-            tags: post.tags.map(tag => tag.tag.name),
+            tags: post.tags.map((tag) => tag.tag.name),
             slug: `post-${post.id}`,
             id: post.id, // Include the blog ID
           }));
           setBlogPosts(formattedBlogs);
           setTotalPages(Math.ceil(formattedBlogs.length / itemsPerPage));
         } catch (error) {
-          console.error('Error fetching filtered blogs:', error);
+          console.error("Error fetching filtered blogs:", error);
         } finally {
           setIsLoading(false);
         }
@@ -141,7 +145,11 @@ const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-1 xs:m-[15px] sm:m-[20px] lg:m-[40px] md:m-[30px] lg:grid-cols-1 gap-6 m-6 max-w-7xl lg:mx-auto">
         {currentBlogPosts.map((post, index) => (
-          <BlogCard imageUrl={arr[index % arr.length]} key={post.slug} {...post} />
+          <BlogCard
+            imageUrl={arr[index % arr.length]}
+            key={post.slug}
+            {...post}
+          />
         ))}
       </div>
 
@@ -156,17 +164,17 @@ const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
             )}
           </PaginationItem>
 
-{Array.from({ length: totalPages }, (_, i) => (
-  <PaginationItem key={i}>
-    <PaginationLink
-      href="#"
-      onClick={() => handlePageChange(i + 1)}
-      isActive={currentPage === i + 1} 
-    >
-      {i + 1}
-    </PaginationLink>
-  </PaginationItem>
-))}
+          {Array.from({ length: totalPages }, (_, i) => (
+            <PaginationItem key={i}>
+              <PaginationLink
+                href="#"
+                onClick={() => handlePageChange(i + 1)}
+                isActive={currentPage === i + 1}
+              >
+                {i + 1}
+              </PaginationLink>
+            </PaginationItem>
+          ))}
           <PaginationItem>
             {currentPage < totalPages && (
               <PaginationNext
