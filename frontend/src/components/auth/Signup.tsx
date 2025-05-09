@@ -120,8 +120,8 @@ export const Signup = () => {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 bg-zinc-950">
-      <Card className="w-full max-w-md border-zinc-800 bg-zinc-900 shadow-xl">
+    <div className="flex min-h-screen items-center bg-zinc-950 justify-center p-4">
+      <Card className="w-full max-w-md border-zinc-800 shadow-xl">
         <CardHeader className="space-y-1">
           <CardTitle className="md:text-3xl text-2xl text-center font-bold tracking-tight text-zinc-100">
             Your Story Starts Here
@@ -143,7 +143,7 @@ export const Signup = () => {
                 placeholder="Enter your email"
                 value={formData.email}
                 onChange={handleChange}
-                className={`bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 ${
+                className={`border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 ${
                   errors.email ? "border-red-500" : ""
                 }`}
               />
@@ -160,7 +160,7 @@ export const Signup = () => {
                 placeholder="Enter your username"
                 value={formData.username}
                 onChange={handleChange}
-                className={`bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 ${
+                className={`border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 ${
                   errors.username ? "border-red-500" : ""
                 }`}
               />
@@ -179,7 +179,7 @@ export const Signup = () => {
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
-                  className={`bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 pr-10 ${
+                  className={` border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 pr-10 ${
                     errors.password ? "border-red-500" : ""
                   }`}
                 />
@@ -209,7 +209,7 @@ export const Signup = () => {
                   placeholder="Confirm your password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className={`bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 pr-10 ${
+                  className={`border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-zinc-500 pr-10 ${
                     errors.confirmPassword ? "border-red-500" : ""
                   }`}
                 />
@@ -229,7 +229,7 @@ export const Signup = () => {
 
             <Button
               type="submit"
-              className="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 mt-6 transition-all duration-200 transform hover:scale-[1.02]"
+              className="w-full bg-zinc-50 hover:bg-zinc-200 text-zinc-950 mt-6 transition-all duration-200 transform hover:scale-[1.02]"
               disabled={isLoading}
             >
               {isLoading ? (
