@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { BlogCard } from "./BlogCard";
-import Image1 from "/blogImages/one.jpg";
-import Image2 from "/blogImages/two.jpg";
-import Image3 from "/blogImages/three.jpg";
-import Image4 from "/blogImages/four.jpg";
-import Image5 from "/blogImages/five.jpg";
-import Image6 from "/blogImages/six.jpg";
 import {
   Pagination,
   PaginationContent,
@@ -50,7 +44,8 @@ interface FormattedBlogPost {
   };
   tags: string[];
   slug: string;
-  id: number; // Add the blog ID
+  id: number;
+  imageUrl: string;
 }
 
 interface BlogListProps {
@@ -63,27 +58,32 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 6;
-  const arr = [Image1, Image2, Image3, Image4, Image5, Image6];
+
+  const formatBlogData = (data: BlogPost[]): FormattedBlogPost[] => {
+    return data.map((post) => ({
+      id: post.id,
+      title: post.title,
+      snippet: post.body.substring(0, 150) + (post.body.length > 150 ? "..." : ""),
+      author: {
+        name: post.author.username,
+        avatarUrl: `https://i.pravatar.cc?u=${encodeURIComponent(
+          post.author.username
+        )}&background=random&color=fff&size=48&font-size=0.4&rounded=true`,
+      },
+      tags: post.tags.map((tag) => tag.tag.name),
+      slug: `post-${post.id}`,
+      imageUrl: `https://picsum.photos/seed/${post.id}/600/400`,
+    }));
+  };
 
   useEffect(() => {
-    const fetchBlogs = async () => {
+    const fetchAllBlogs = async () => {
       setIsLoading(true);
       try {
         const response = await axios.get<BlogPost[]>(
           `${import.meta.env.VITE_BACKEND_URL}/api/posts`
         );
-        const data = response.data;
-        const formattedBlogs: FormattedBlogPost[] = data.map((post) => ({
-          title: post.title,
-          snippet: post.body.substring(0, 200) + "...",
-          author: {
-            name: post.author.username,
-            avatarUrl: `https://i.pravatar.cc/150?img=${post.authorId}`,
-          },
-          tags: post.tags.map((tag) => tag.tag.name),
-          slug: `post-${post.id}`,
-          id: post.id, // Include the blog ID
-        }));
+        const formattedBlogs = formatBlogData(response.data);
         setBlogPosts(formattedBlogs);
         setTotalPages(Math.ceil(formattedBlogs.length / itemsPerPage));
       } catch (error) {
@@ -93,38 +93,31 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
       }
     };
 
-    fetchBlogs();
-  }, []);
+    if (!filterTag) {
+      fetchAllBlogs();
+    }
+  }, [filterTag]);
 
   useEffect(() => {
     if (filterTag) {
       const fetchFilteredBlogs = async () => {
         setIsLoading(true);
+        setBlogPosts([]); 
+        setCurrentPage(1);
         try {
           const response = await axios.get<BlogPost[]>(
             `${import.meta.env.VITE_BACKEND_URL}/api/tags/getPost/${filterTag}`
           );
-          const data = response.data;
-          const formattedBlogs: FormattedBlogPost[] = data.map((post) => ({
-            title: post.title,
-            snippet: post.body.substring(0, 200) + "...",
-            author: {
-              name: post.author.username,
-              avatarUrl: `https://i.pravatar.cc/150?img=${post.authorId}`,
-            },
-            tags: post.tags.map((tag) => tag.tag.name),
-            slug: `post-${post.id}`,
-            id: post.id, // Include the blog ID
-          }));
+          const formattedBlogs = formatBlogData(response.data);
           setBlogPosts(formattedBlogs);
           setTotalPages(Math.ceil(formattedBlogs.length / itemsPerPage));
         } catch (error) {
           console.error("Error fetching filtered blogs:", error);
+          setTotalPages(0); 
         } finally {
           setIsLoading(false);
         }
       };
-
       fetchFilteredBlogs();
     }
   }, [filterTag]);
@@ -141,50 +134,73 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
     return <LoadingSpinner />;
   }
 
+  if (!isLoading && blogPosts.length === 0 && filterTag) {
+     return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <p className="text-xl text-muted-foreground">No posts found for the tag "{filterTag}".</p>
+      </div>
+    );
+  }
+  
+  if (!isLoading && blogPosts.length === 0) {
+    return (
+     <div className="container mx-auto px-4 py-8 text-center">
+       <p className="text-xl text-muted-foreground">No blog posts available yet.</p>
+     </div>
+   );
+ }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 md:grid-cols-1 xs:m-[15px] sm:m-[20px] lg:m-[40px] md:m-[30px] lg:grid-cols-1 gap-6 m-6 max-w-7xl lg:mx-auto">
-        {currentBlogPosts.map((post, index) => (
-          <BlogCard
-            imageUrl={arr[index % arr.length]}
-            key={post.slug}
-            {...post}
-          />
+      <div className="grid grid-cols-1 md:grid-cols-1 xs:m-[15px] sm:m-[20px] lg:m-[40px] md:m-[30px] lg:grid-cols-1 gap-8 m-6 max-w-7xl lg:mx-auto">
+        {currentBlogPosts.map((post) => (
+          <BlogCard key={post.slug} {...post} />
         ))}
       </div>
 
-      <Pagination>
-        <PaginationContent>
-          <PaginationItem>
-            {currentPage > 1 && (
-              <PaginationPrevious
-                href="#"
-                onClick={() => handlePageChange(currentPage - 1)}
-              />
-            )}
-          </PaginationItem>
-
-          {Array.from({ length: totalPages }, (_, i) => (
-            <PaginationItem key={i}>
-              <PaginationLink
-                href="#"
-                onClick={() => handlePageChange(i + 1)}
-                isActive={currentPage === i + 1}
-              >
-                {i + 1}
-              </PaginationLink>
+      {totalPages > 1 && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              {currentPage > 1 && (
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePageChange(currentPage - 1);
+                  }}
+                />
+              )}
             </PaginationItem>
-          ))}
-          <PaginationItem>
-            {currentPage < totalPages && (
-              <PaginationNext
-                href="#"
-                onClick={() => handlePageChange(currentPage + 1)}
-              />
-            )}
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
+
+            {Array.from({ length: totalPages }, (_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePageChange(i + 1);
+                  }}
+                  isActive={currentPage === i + 1}
+                >
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              {currentPage < totalPages && (
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePageChange(currentPage + 1);
+                  }}
+                />
+              )}
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
     </div>
   );
 };
