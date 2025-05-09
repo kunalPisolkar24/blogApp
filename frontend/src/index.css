@@ -70,17 +70,16 @@
 
 html, body {
   overflow-y: scroll;
-  background-color: #09090b;
   margin: 0;
   padding: 0;
 }
 
 /* Webkit scrollbar styling */
 ::-webkit-scrollbar {
-  width: 12px;
+  width: 0.5px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b; /* Same as your background color */
+  background: transparent; /* Same as your background color */
 }
 ::-webkit-scrollbar-thumb {
   background-color: #71717a;

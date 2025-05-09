@@ -81,7 +81,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
 
   return (
     <div ref={commandWrapperRef} className="w-full max-w-3xl mx-auto px-4 sm:px-6 mt-16 sm:mt-20">
-      <Card className="border border-zinc-800 bg-zinc-900/80 backdrop-blur-sm shadow-lg rounded-xl overflow-hidden">
+      <Card className="border border-zinc-800 bg-zinc-950 backdrop-blur-sm shadow-lg rounded-xl overflow-hidden">
         <div className="relative">
           <Command shouldFilter={false} className="bg-transparent">
             <div className="flex items-center px-3 border-b border-zinc-800">
@@ -130,9 +130,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
                         key={tag.id}
                         onSelect={() => handleSelectTag(tag)}
                         value={tag.name}
-                        className="cursor-pointer flex items-center px-2 py-2 rounded-lg hover:bg-zinc-800 transition-colors duration-200"
+                        className="cursor-pointer flex items-center px-2 py-2 rounded-lg hover:bg-zinc-900/70 transition-colors duration-200"
                       >
-                        <Badge variant="outline" className="bg-zinc-800 text-zinc-300 border-zinc-700 mr-2">
+                        <Badge variant="outline" className="bg-zinc-900 text-zinc-300 border-zinc-700 mr-2">
                           <Hash className="mr-1 h-3 w-3 text-zinc-400" />
                           {tag.name}
                         </Badge>

@@ -22,14 +22,17 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-zinc-900/20">
       <StickyNavbar />
-      <ErrorBoundary>
-        <SearchBar onTagSelect={handleTagSelect} />
-      </ErrorBoundary>
-      <ErrorBoundary>
-        <BlogList filterTag={selectedTag || ""} />
-      </ErrorBoundary>
+
+      <main className=" mx-auto md:pt-4 pt-8">
+        <ErrorBoundary>
+          <SearchBar onTagSelect={handleTagSelect} />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <BlogList filterTag={selectedTag || ""} />
+        </ErrorBoundary>
+      </main>
     </div>
   );
 };

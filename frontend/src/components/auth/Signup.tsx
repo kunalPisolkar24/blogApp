@@ -120,7 +120,7 @@ export const Signup = () => {
   }
 
   return (
-    <div className="flex min-h-screen items-center bg-zinc-950 justify-center p-4">
+    <div className="flex min-h-screen items-center bg-zinc-900/20 justify-center p-4">
       <Card className="w-full max-w-md border-zinc-800 shadow-xl">
         <CardHeader className="space-y-1">
           <CardTitle className="md:text-3xl text-2xl text-center font-bold tracking-tight text-zinc-100">
