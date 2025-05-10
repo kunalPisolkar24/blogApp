@@ -87,7 +87,7 @@ export const StickyNavbar: React.FC = () => {
 
 
   const handleHomeClick = () => {
-    navigate('/');
+    window.location.href = '/';
   };
 
   return (
