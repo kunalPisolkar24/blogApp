@@ -98,7 +98,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
                     }
                   }, 150)
                 }}
-                className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-zinc-500 text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-12 w-[660px] rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-zinc-500 text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
 
