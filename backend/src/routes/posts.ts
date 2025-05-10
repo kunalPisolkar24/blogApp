@@ -15,30 +15,50 @@ export const postRouter = new Hono<{
 
 postRouter.get('/', async (c: Context) => {
   const prisma = new PrismaClient({ datasourceUrl: c.env?.DATABASE_URL }).$extends(withAccelerate());
+  const page = parseInt(c.req.query('page') || '1');
+  const limit = parseInt(c.req.query('limit') || '6');
+  const skip = (page - 1) * limit;
+
   try {
-    const posts = await prisma.post.findMany({
-      include: {
-        tags: {
-          include: {
-            tag: true,
+    const [posts, totalPosts] = await Promise.all([
+      prisma.post.findMany({
+        skip: skip,
+        take: limit,
+        include: {
+          tags: {
+            include: {
+              tag: true,
+            },
+          },
+          author: {
+            select: {
+              id: true,
+              username: true,
+              email: true
+            }
           },
         },
-        author: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
+        orderBy: {
+          id: 'desc'
         },
-      },
-    });
+        cacheStrategy: { ttl: 60 }
+      }),
+      prisma.post.count({
+        cacheStrategy: { ttl: 60 }
+      })
+    ]);
 
-    return c.json(posts, StatusCode.OK);
+    const totalPages = Math.ceil(totalPosts / limit);
+
+    return c.json({
+      data: posts,
+      totalPages: totalPages,
+      currentPage: page,
+      totalPosts: totalPosts
+    }, StatusCode.OK);
   } catch (error) {
     console.error(error);
     return c.json({ error: 'Failed to get posts' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });
 
@@ -68,6 +88,7 @@ postRouter.get('/:id', async (c: Context) => {
           }
         },
       },
+      cacheStrategy: { ttl: 60 }
     });
 
     if (!post) {
@@ -78,8 +99,6 @@ postRouter.get('/:id', async (c: Context) => {
   } catch (error) {
     console.error(error);
     return c.json({ error: 'Failed to get post' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });
 
@@ -124,8 +143,6 @@ postRouter.post("/", authMiddleware, async (c: Context) => {
   } catch (error) {
     console.error(error);
     return c.json({ error: 'Failed to create post' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });
 
@@ -209,8 +226,6 @@ postRouter.put('/:id', authMiddleware, async (c: Context) => {
   } catch (error) {
     console.error(error);
     return c.json({ error: 'Failed to update post' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });
 
@@ -251,7 +266,5 @@ postRouter.delete('/:id', authMiddleware, async (c: Context) => {
   } catch (error) {
     console.error(error);
     return c.json({ error: 'Failed to delete post' }, StatusCode.INTERNAL_SERVER_ERROR);
-  } finally {
-    await prisma.$disconnect();
   }
 });

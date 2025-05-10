@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/pagination";
 import { LoadingSpinner } from "../utils";
 
-interface Tag {
+interface TagItem {
   postId: number;
   tagId: number;
   tag: {
@@ -31,7 +31,7 @@ interface BlogPost {
   title: string;
   body: string;
   authorId: number;
-  tags: Tag[];
+  tags: TagItem[];
   author: Author;
 }
 
@@ -48,6 +48,13 @@ interface FormattedBlogPost {
   imageUrl: string;
 }
 
+interface PaginatedResponse {
+  data: BlogPost[];
+  totalPages: number;
+  currentPage: number;
+  totalPosts: number;
+}
+
 interface BlogListProps {
   filterTag?: string;
 }
@@ -56,6 +63,7 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   const [blogPosts, setBlogPosts] = useState<FormattedBlogPost[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalPosts, setTotalPosts] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 6;
 
@@ -70,90 +78,72 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
           post.author.username
         )}&background=random&color=fff&size=48&font-size=0.4&rounded=true`,
       },
-      tags: post.tags.map((tag) => tag.tag.name),
+      tags: post.tags.map((tagItem) => tagItem.tag.name),
       slug: `post-${post.id}`,
       imageUrl: `https://picsum.photos/seed/${post.id}/600/400`,
     }));
   };
 
   useEffect(() => {
-    const fetchAllBlogs = async () => {
+    const fetchBlogs = async () => {
       setIsLoading(true);
+      let url = "";
+      const params = `?page=${currentPage}&limit=${itemsPerPage}`;
+
+      if (filterTag) {
+        url = `${import.meta.env.VITE_BACKEND_URL}/api/tags/getPost/${encodeURIComponent(filterTag)}${params}`;
+      } else {
+        url = `${import.meta.env.VITE_BACKEND_URL}/api/posts${params}`;
+      }
+
       try {
-        const response = await axios.get<BlogPost[]>(
-          `${import.meta.env.VITE_BACKEND_URL}/api/posts`
-        );
-        const formattedBlogs = formatBlogData(response.data);
+        const response = await axios.get<PaginatedResponse>(url);
+        const formattedBlogs = formatBlogData(response.data.data);
         setBlogPosts(formattedBlogs);
-        setTotalPages(Math.ceil(formattedBlogs.length / itemsPerPage));
+        setTotalPages(response.data.totalPages);
+        setCurrentPage(response.data.currentPage);
+        setTotalPosts(response.data.totalPosts);
       } catch (error) {
         console.error("Error fetching blogs:", error);
+        setBlogPosts([]);
+        setTotalPages(1);
+        setTotalPosts(0);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (!filterTag) {
-      fetchAllBlogs();
-    }
-  }, [filterTag]);
+    fetchBlogs();
+  }, [currentPage, filterTag]);
 
   useEffect(() => {
-    if (filterTag) {
-      const fetchFilteredBlogs = async () => {
-        setIsLoading(true);
-        setBlogPosts([]); 
-        setCurrentPage(1);
-        try {
-          const response = await axios.get<BlogPost[]>(
-            `${import.meta.env.VITE_BACKEND_URL}/api/tags/getPost/${filterTag}`
-          );
-          const formattedBlogs = formatBlogData(response.data);
-          setBlogPosts(formattedBlogs);
-          setTotalPages(Math.ceil(formattedBlogs.length / itemsPerPage));
-        } catch (error) {
-          console.error("Error fetching filtered blogs:", error);
-          setTotalPages(0); 
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchFilteredBlogs();
-    }
+    setCurrentPage(1);
   }, [filterTag]);
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
   };
-
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentBlogPosts = blogPosts.slice(startIndex, endIndex);
 
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  if (!isLoading && blogPosts.length === 0 && filterTag) {
+  if (!isLoading && totalPosts === 0) {
      return (
       <div className="container mx-auto px-4 py-8 text-center">
-        <p className="text-xl text-muted-foreground">No posts found for the tag "{filterTag}".</p>
+        <p className="text-xl text-muted-foreground">
+          {filterTag ? `No posts found for the tag "${filterTag}".` : "No blog posts available yet."}
+        </p>
       </div>
     );
   }
-  
-  if (!isLoading && blogPosts.length === 0) {
-    return (
-     <div className="container mx-auto px-4 py-8 text-center">
-       <p className="text-xl text-muted-foreground">No blog posts available yet.</p>
-     </div>
-   );
- }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-1 xs:m-[15px] sm:m-[20px] lg:m-[40px] md:m-[30px] lg:grid-cols-1 gap-8 m-6 max-w-7xl lg:mx-auto">
-        {currentBlogPosts.map((post) => (
+        {blogPosts.map((post) => (
           <BlogCard key={post.slug} {...post} />
         ))}
       </div>

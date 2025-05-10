@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
-import { Hono } from "hono";
+import { Hono, Context } from "hono";
 import { StatusCode } from '../constants/status-code';
 
 export const tagRouter = new Hono<{
@@ -10,10 +10,10 @@ export const tagRouter = new Hono<{
   }
 }>();
 
-tagRouter.get('/', async (c) => {
+tagRouter.get('/', async (c: Context) => {
   const prisma = new PrismaClient({ datasourceUrl: c.env?.DATABASE_URL }).$extends(withAccelerate());
   const searchQuery = c.req.query('query');
-  const limit = 4;
+  const limitParam = 4;
 
   try {
     let tags;
@@ -31,7 +31,7 @@ tagRouter.get('/', async (c) => {
             mode: 'insensitive',
           },
         },
-        take: limit,
+        take: limitParam,
         orderBy: {
           name: 'asc',
         },
@@ -39,7 +39,7 @@ tagRouter.get('/', async (c) => {
       });
     } else {
       tags = await prisma.tag.findMany({
-        take: limit,
+        take: limitParam,
         orderBy: {
           name: 'asc',
         },
@@ -53,45 +53,70 @@ tagRouter.get('/', async (c) => {
   }
 });
 
-tagRouter.get('/getPost/:tag', async (c) => {
+tagRouter.get('/getPost/:tag', async (c: Context) => {
   const prisma = new PrismaClient({ datasourceUrl: c.env?.DATABASE_URL }).$extends(withAccelerate());
-  try {
-    const tagName = c.req.param('tag');
+  const tagName = c.req.param('tag');
+  const page = parseInt(c.req.query('page') || '1');
+  const limit = parseInt(c.req.query('limit') || '6');
+  const skip = (page - 1) * limit;
 
-    const posts = await prisma.post.findMany({
-      where: {
-        tags: {
-          some: {
-            tag: {
-              name: tagName,
+  try {
+    const [posts, totalPosts] = await Promise.all([
+      prisma.post.findMany({
+        where: {
+          tags: {
+            some: {
+              tag: {
+                name: tagName,
+              },
             },
           },
         },
-      },
-      include: {
-        tags: {
-          include: {
-            tag: true,
+        skip: skip,
+        take: limit,
+        include: {
+          tags: {
+            include: {
+              tag: true,
+            },
+          },
+          author: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
           },
         },
-        author: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
+        orderBy: {
+          id: 'desc'
+        },
+        cacheStrategy: { ttl: 60 }
+      }),
+      prisma.post.count({
+        where: {
+          tags: {
+            some: {
+              tag: {
+                name: tagName,
+              },
+            },
           },
         },
-      },
-      cacheStrategy: { ttl: 600 }
-    });
+        cacheStrategy: { ttl: 60 }
+      })
+    ]);
 
-    if (posts.length === 0) {
-      return c.json({ error: 'No posts found for the given tag' }, StatusCode.NOT_FOUND);
-    }
+    const totalPages = Math.ceil(totalPosts / limit);
 
-    return c.json(posts, StatusCode.OK);
+    return c.json({
+      data: posts,
+      totalPages: totalPages,
+      currentPage: page,
+      totalPosts: totalPosts
+    }, StatusCode.OK);
   } catch (error) {
-    console.error('Failed to get posts for the given tag:', error);
+    console.error(error);
     return c.json({ error: 'Failed to get posts for the given tag' }, StatusCode.INTERNAL_SERVER_ERROR);
   }
 });
