@@ -59,7 +59,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
       }
     }
 
-    fetchTags()
+    if (inputIsFocused || debouncedSearchQuery.trim()) {
+        fetchTags()
+    } else {
+        setTagsToShow([])
+        setIsLoading(false)
+    }
   }, [debouncedSearchQuery, inputIsFocused])
 
   const handleInputChange = (query: string) => {
@@ -71,13 +76,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
 
   const handleSelectTag = (tag: Tag) => {
     onTagSelect(tag.name)
-    setSearchQuery("")
-    setInputIsFocused(false)
+    setSearchQuery("") 
+    setInputIsFocused(false) 
     const activeElement = document.activeElement as HTMLElement | null
     if (activeElement && commandWrapperRef.current?.contains(activeElement)) {
       activeElement.blur()
     }
   }
+
+  const showCommandList = inputIsFocused || searchQuery.trim() !== ""
 
   return (
     <div ref={commandWrapperRef} className="w-full max-w-3xl mx-auto px-4 sm:px-6 mt-16 sm:mt-20">
@@ -101,47 +108,49 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onTagSelect }) => {
                 className="flex h-12 w-[660px] rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-zinc-500 text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
+            
+            <CommandList className="max-h-[300px] overflow-y-auto">
+              {showCommandList ? (
+                <>
+                  {isLoading && (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                      <span className="ml-2 text-sm text-zinc-400">Searching tags...</span>
+                    </div>
+                  )}
 
-            {(inputIsFocused || searchQuery.trim() !== "" || isLoading) && (
-              <CommandList className="max-h-[300px] overflow-y-auto p-2">
-                {isLoading && (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-                    <span className="ml-2 text-sm text-zinc-400">Searching tags...</span>
-                  </div>
-                )}
+                  {!isLoading && tagsToShow.length === 0 && (
+                    <CommandEmpty className="py-6 text-center text-sm text-zinc-400">
+                      {debouncedSearchQuery.trim()
+                        ? `No results for "${debouncedSearchQuery}"`
+                        : "Type to search for tags"}
+                    </CommandEmpty>
+                  )}
 
-                {!isLoading && tagsToShow.length === 0 && (
-                  <CommandEmpty className="py-6 text-center text-sm text-zinc-400">
-                    {debouncedSearchQuery.trim()
-                      ? `No results for "${debouncedSearchQuery}"`
-                      : "Type to search for tags"}
-                  </CommandEmpty>
-                )}
-
-                {!isLoading && tagsToShow.length > 0 && (
-                  <CommandGroup
-                    heading={
-                      <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Suggestions</span>
-                    }
-                  >
-                    {tagsToShow.map((tag) => (
-                      <CommandItem
-                        key={tag.id}
-                        onSelect={() => handleSelectTag(tag)}
-                        value={tag.name}
-                        className="cursor-pointer flex items-center px-2 py-2 rounded-lg hover:bg-zinc-900/70 transition-colors duration-200"
-                      >
-                        <Badge variant="outline" className="bg-zinc-900 text-zinc-300 border-zinc-700 mr-2">
-                          <Hash className="mr-1 h-3 w-3 text-zinc-400" />
-                          {tag.name}
-                        </Badge>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            )}
+                  {!isLoading && tagsToShow.length > 0 && (
+                    <CommandGroup
+                      heading={
+                        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Suggestions</span>
+                      }
+                    >
+                      {tagsToShow.map((tag) => (
+                        <CommandItem
+                          key={tag.id}
+                          onSelect={() => handleSelectTag(tag)}
+                          value={tag.name}
+                          className="cursor-pointer flex items-center px-2 py-2 rounded-lg hover:bg-zinc-900/70 transition-colors duration-200"
+                        >
+                          <Badge variant="outline" className="bg-zinc-900 text-zinc-300 border-zinc-700 mr-2">
+                            <Hash className="mr-1 h-3 w-3 text-zinc-400" />
+                            {tag.name}
+                          </Badge>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                </>
+              ) : null}
+            </CommandList>
           </Command>
         </div>
       </Card>
