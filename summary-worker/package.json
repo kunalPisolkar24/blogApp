@@ -15,10 +15,15 @@
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.1",
     "@types/node": "^22.15.17",
+    "@types/node-fetch": "^2.6.12",
+    "prisma": "^6.8.1",
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@prisma/client": "^6.8.1",
+    "@upstash/redis": "^1.34.9",
     "dotenv": "^16.5.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "node-fetch": "^2.7.0"
   }
 }
