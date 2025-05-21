@@ -2,14 +2,28 @@ import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { Context, Hono } from "hono";
 import { Redis } from "@upstash/redis/cloudflare";
+import { z } from "zod";
 
 import { StatusCode } from "../constants/status-code";
 import { authMiddleware } from "../middleware/auth";
-import {
-  createPostSchema,
-  updatePostSchema,
-  postIdSchema,
-} from "@kunalpisolkar24/blogapp-common";
+
+const internalCreatePostSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  body: z.string().min(1, "Body is required"),
+  tags: z.array(z.string()).optional().default([]),
+  imageUrl: z.string().url("Invalid image URL").optional().nullable(),
+});
+
+const internalUpdatePostSchema = z.object({
+  title: z.string().min(1, "Title is required").optional(),
+  body: z.string().min(1, "Body is required").optional(),
+  tags: z.array(z.string()).optional(),
+  imageUrl: z.string().url("Invalid image URL").optional().nullable(),
+});
+
+const internalPostIdSchema = z.object({
+  id: z.number().int().positive("Post ID must be a positive integer"),
+});
 
 type HonoEnv = {
   Bindings: {
@@ -154,7 +168,7 @@ postRouter.get("/", async (c) => {
           tags: { include: { tag: true } },
           author: { select: { id: true, username: true, email: true } },
         },
-        orderBy: { id: "desc" },
+        orderBy: { createdAt: "desc" },
         cacheStrategy: { ttl: 60 },
       }),
       prisma.post.count({ cacheStrategy: { ttl: 60 } }),
@@ -179,7 +193,7 @@ postRouter.get("/:id", async (c) => {
   }).$extends(withAccelerate());
   try {
     const postId = parseInt(c.req.param("id"));
-    const parsedParams = postIdSchema.safeParse({ id: postId });
+    const parsedParams = internalPostIdSchema.safeParse({ id: postId });
     if (!parsedParams.success)
       return c.json(
         { error: parsedParams.error.errors },
@@ -212,7 +226,7 @@ postRouter.post("/", authMiddleware, async (c) => {
 
   try {
     const body = await c.req.json();
-    const parsedBody = createPostSchema.safeParse(body);
+    const parsedBody = internalCreatePostSchema.safeParse(body);
     if (!parsedBody.success) {
       return c.json({ error: parsedBody.error.errors }, StatusCode.BAD_REQUEST);
     }
@@ -222,10 +236,11 @@ postRouter.post("/", authMiddleware, async (c) => {
       data: {
         title: parsedBody.data.title,
         body: parsedBody.data.body,
+        imageUrl: parsedBody.data.imageUrl,
         authorId: userId,
         summaryStatus: "PENDING",
         tags: {
-          create: parsedBody.data.tags.map((tagName: string) => ({
+          create: (parsedBody.data.tags || []).map((tagName: string) => ({
             tag: {
               connectOrCreate: {
                 where: { name: tagName },
@@ -251,7 +266,6 @@ postRouter.post("/", authMiddleware, async (c) => {
       );
       await redis.lpush(SUMMARIZATION_QUEUE_KEY, stringifiedPayload);
       console.log(`[PRODUCER - Create] Job enqueued for postId: ${newPost.id}`);
-
       triggerConsumerWakeup(c, "Create", newPost.id);
     } catch (queueError: any) {
       console.error(
@@ -280,29 +294,35 @@ postRouter.put("/:id", authMiddleware, async (c) => {
   try {
     const postId = parseInt(c.req.param("id"));
     const body = await c.req.json();
-    const parsedParams = postIdSchema.safeParse({ id: postId });
+    const parsedParams = internalPostIdSchema.safeParse({ id: postId });
     if (!parsedParams.success)
       return c.json(
         { error: parsedParams.error.errors },
         StatusCode.BAD_REQUEST
       );
-    const parsedBody = updatePostSchema.safeParse(body);
+
+    const parsedBody = internalUpdatePostSchema.safeParse(body);
     if (!parsedBody.success)
       return c.json({ error: parsedBody.error.errors }, StatusCode.BAD_REQUEST);
+
     const userId = c.get("user").id;
 
-    const post = await prisma.post.findUnique({
+    const postToUpdate = await prisma.post.findUnique({
       where: { id: parsedParams.data.id },
       select: { authorId: true },
     });
-    if (!post) return c.json({ error: "Post not found" }, StatusCode.NOT_FOUND);
-    if (post.authorId !== userId)
+    if (!postToUpdate)
+      return c.json({ error: "Post not found" }, StatusCode.NOT_FOUND);
+    if (postToUpdate.authorId !== userId)
       return c.json({ error: "Unauthorized" }, StatusCode.UNAUTHORIZED);
 
-    await prisma.postTag.deleteMany({
-      where: { postId: parsedParams.data.id },
-    });
-    const tagsToConnectOrCreate = parsedBody.data.tags.map(
+    if (parsedBody.data.tags) {
+      await prisma.postTag.deleteMany({
+        where: { postId: parsedParams.data.id },
+      });
+    }
+
+    const tagsToConnectOrCreate = (parsedBody.data.tags || []).map(
       (tagName: string) => ({
         tag: {
           connectOrCreate: {
@@ -313,41 +333,67 @@ postRouter.put("/:id", authMiddleware, async (c) => {
       })
     );
 
-    const updatedPostData = await prisma.post.update({
+    const updateData: {
+      title?: string;
+      body?: string;
+      imageUrl?: string | null;
+      summary?: string | null;
+      summaryStatus?: string;
+      tags?: { create: any[] };
+    } = {};
+
+    if (parsedBody.data.title !== undefined)
+      updateData.title = parsedBody.data.title;
+    if (parsedBody.data.body !== undefined)
+      updateData.body = parsedBody.data.body;
+    if (parsedBody.data.imageUrl !== undefined)
+      updateData.imageUrl = parsedBody.data.imageUrl;
+    if (parsedBody.data.tags !== undefined)
+      updateData.tags = { create: tagsToConnectOrCreate };
+
+    if (Object.keys(updateData).length === 0 && !parsedBody.data.tags) {
+      return c.json({ message: "No fields to update" }, StatusCode.BAD_REQUEST);
+    }
+
+    let triggerSummarization = false;
+    if (
+      parsedBody.data.body !== undefined ||
+      parsedBody.data.title !== undefined
+    ) {
+      updateData.summary = null;
+      updateData.summaryStatus = "PENDING";
+      triggerSummarization = true;
+    }
+
+    const updatedPost = await prisma.post.update({
       where: { id: parsedParams.data.id },
-      data: {
-        title: parsedBody.data.title,
-        body: parsedBody.data.body,
-        summary: null,
-        summaryStatus: "PENDING",
-        tags: { create: tagsToConnectOrCreate },
-      },
-      select: { id: true, body: true },
+      data: updateData,
     });
 
-    try {
-      const jobPayload = {
-        postId: updatedPostData.id,
-        text: updatedPostData.body,
-        attempt: 1,
-      };
-      const stringifiedPayload = JSON.stringify(jobPayload);
-      console.log(`[PRODUCER - Update] Job Payload Object:`, jobPayload);
-      console.log(
-        `[PRODUCER - Update] Stringified Payload for Redis:`,
-        stringifiedPayload
-      );
-      await redis.lpush(SUMMARIZATION_QUEUE_KEY, stringifiedPayload);
-      console.log(
-        `[PRODUCER - Update] Job enqueued for updated postId: ${updatedPostData.id}`
-      );
-
-      triggerConsumerWakeup(c, "Update", updatedPostData.id);
-    } catch (queueError: any) {
-      console.error(
-        `[PRODUCER - Update] Failed to enqueue job for updated postId ${updatedPostData.id}. Error: ${queueError.message}`,
-        queueError
-      );
+    if (triggerSummarization) {
+      try {
+        const jobPayload = {
+          postId: updatedPost.id,
+          text: updatedPost.body,
+          attempt: 1,
+        };
+        const stringifiedPayload = JSON.stringify(jobPayload);
+        console.log(`[PRODUCER - Update] Job Payload Object:`, jobPayload);
+        console.log(
+          `[PRODUCER - Update] Stringified Payload for Redis:`,
+          stringifiedPayload
+        );
+        await redis.lpush(SUMMARIZATION_QUEUE_KEY, stringifiedPayload);
+        console.log(
+          `[PRODUCER - Update] Job enqueued for updated postId: ${updatedPost.id}`
+        );
+        triggerConsumerWakeup(c, "Update", updatedPost.id);
+      } catch (queueError: any) {
+        console.error(
+          `[PRODUCER - Update] Failed to enqueue job for updated postId ${updatedPost.id}. Error: ${queueError.message}`,
+          queueError
+        );
+      }
     }
 
     const finalUpdatedPost = await prisma.post.findUnique({
@@ -376,19 +422,21 @@ postRouter.delete("/:id", authMiddleware, async (c) => {
   }).$extends(withAccelerate());
   try {
     const postId = parseInt(c.req.param("id"));
-    const parsedParams = postIdSchema.safeParse({ id: postId });
+    const parsedParams = internalPostIdSchema.safeParse({ id: postId });
     if (!parsedParams.success)
       return c.json(
         { error: parsedParams.error.errors },
         StatusCode.BAD_REQUEST
       );
     const userId = c.get("user").id;
-    const post = await prisma.post.findUnique({
+    const postToDelete = await prisma.post.findUnique({
       where: { id: parsedParams.data.id },
     });
-    if (!post) return c.json({ error: "Post not found" }, StatusCode.NOT_FOUND);
-    if (post.authorId !== userId)
+    if (!postToDelete)
+      return c.json({ error: "Post not found" }, StatusCode.NOT_FOUND);
+    if (postToDelete.authorId !== userId)
       return c.json({ error: "Unauthorized" }, StatusCode.UNAUTHORIZED);
+
     await prisma.postTag.deleteMany({
       where: { postId: parsedParams.data.id },
     });
