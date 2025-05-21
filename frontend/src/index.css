@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap');
+
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -79,10 +82,164 @@ html, body {
   width: 0.5px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent; /* Same as your background color */
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background-color: #71717a;
   border-radius: 10px;
   border: 3px solid #09090b;
+}
+
+
+.blog-title-input {
+  font-family: 'Merriweather', serif;
+}
+
+.ql-container.ql-snow {
+  border: 1px solid hsl(var(--input));
+  border-top: none;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  min-height: 400px;
+}
+
+.ql-editor {
+  font-family: 'Merriweather', serif;
+  min-height: 400px;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  line-height: 1.8;
+  padding: 16px 18px;
+}
+
+.ql-editor.ql-blank::before {
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
+  left: 18px;
+  font-family: 'Merriweather', serif;
+}
+
+.ql-toolbar.ql-snow {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--input));
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+  padding: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label,
+.ql-toolbar.ql-snow .ql-picker-item,
+.ql-toolbar.ql-snow .ql-stroke,
+.ql-toolbar.ql-snow .ql-fill {
+  color: hsl(var(--foreground)) !important;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label:hover,
+.ql-toolbar.ql-snow .ql-picker-item:hover,
+.ql-toolbar.ql-snow button:hover .ql-stroke,
+.ql-toolbar.ql-snow button:hover .ql-fill {
+  color: hsl(var(--primary)) !important;
+}
+
+.ql-toolbar.ql-snow button:hover {
+  background-color: hsl(var(--muted));
+}
+
+.ql-toolbar.ql-snow .ql-picker-label.ql-active,
+.ql-toolbar.ql-snow .ql-picker-item.ql-selected,
+.ql-toolbar.ql-snow button.ql-active .ql-stroke,
+.ql-toolbar.ql-snow button.ql-active .ql-fill {
+    color: hsl(var(--primary)) !important;
+}
+
+.ql-snow .ql-picker.ql-expanded .ql-picker-label {
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary)) !important;
+}
+
+.ql-snow .ql-picker.ql-expanded .ql-picker-options {
+  background-color: hsl(var(--popover))  !important;
+  border-color: hsl(var(--border)) !important;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.ql-snow .ql-picker-options .ql-picker-item {
+    color: hsl(var(--popover-foreground)) !important;
+}
+
+.ql-snow .ql-picker-options .ql-picker-item:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+/* Tooltip Styling - Addressing Clipping */
+.ql-snow .ql-tooltip {
+  background-color: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.15);
+  color: hsl(var(--popover-foreground));
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  z-index: 10000 !important;
+}
+
+/* When the tooltip is for link/video input and positioned by Quill */
+.ql-snow .ql-tooltip[data-mode="link"],
+.ql-snow .ql-tooltip[data-mode="video"] {
+  /* Try to give it a little breathing room if it's at the very edge */
+  /* This is tricky as Quill's JS positions it. If clipping persists, */
+  /* it might be due to the parent #blog-content-editor-wrapper's overflow. */
+  /* Removing 'overflow-hidden' from that wrapper is the most direct fix for clipping if the tooltip is a child. */
+}
+
+
+.ql-snow .ql-tooltip input[type=text] {
+  background-color: hsl(var(--input));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  padding: 6px;
+  border-radius: calc(var(--radius) - 2px);
+  width: auto;
+  min-width: 150px;
+  max-width: 250px;
+}
+
+.ql-snow .ql-tooltip a.ql-action::before {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+  margin-left: 8px;
+}
+.ql-snow .ql-tooltip a.ql-remove::before {
+  background-color: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.ql-snow .ql-tooltip.ql-editing input[type=text] {
+  /* Ensure this doesn't try to be wider than the tooltip allows */
+}
+
+.ql-snow .ql-toolbar button svg .ql-stroke {
+  stroke: hsl(var(--foreground));
+}
+.ql-snow .ql-toolbar button:hover svg .ql-stroke {
+  stroke: hsl(var(--primary));
+}
+.ql-snow .ql-toolbar button.ql-active svg .ql-stroke {
+  stroke: hsl(var(--primary));
+}
+
+.blog-content-editor-wrapper .ql-editor {
+  min-height: 400px;
+}
+.blog-content-editor-wrapper .ql-container {
+  min-height: 400px;
 }
