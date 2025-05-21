@@ -30,9 +30,12 @@ interface BlogPost {
   id: number;
   title: string;
   body: string;
+  imageUrl?: string;
   authorId: number;
   tags: TagItem[];
   author: Author;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface FormattedBlogPost {
@@ -46,6 +49,7 @@ interface FormattedBlogPost {
   slug: string;
   id: number;
   imageUrl: string;
+  publishedAt: Date;
 }
 
 interface PaginatedResponse {
@@ -59,6 +63,17 @@ interface BlogListProps {
   filterTag?: string;
 }
 
+const stripHtml = (html: string): string => {
+  if (typeof DOMParser !== "undefined") {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return doc.body.textContent || "";
+  }
+  return html.replace(/<[^>]+>/g, "");
+};
+
+const DEFAULT_PLACEHOLDER_IMAGE =
+  "https://images.unsplash.com/photo-1554995207-c18c203602cb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80";
+
 export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   const [blogPosts, setBlogPosts] = useState<FormattedBlogPost[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,20 +83,26 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   const itemsPerPage = 6;
 
   const formatBlogData = (data: BlogPost[]): FormattedBlogPost[] => {
-    return data.map((post) => ({
-      id: post.id,
-      title: post.title,
-      snippet: post.body.substring(0, 150) + (post.body.length > 150 ? "..." : ""),
-      author: {
-        name: post.author.username,
-        avatarUrl: `https://i.pravatar.cc?u=${encodeURIComponent(
-          post.author.username
-        )}&background=random&color=fff&size=48&font-size=0.4&rounded=true`,
-      },
-      tags: post.tags.map((tagItem) => tagItem.tag.name),
-      slug: `post-${post.id}`,
-      imageUrl: `https://picsum.photos/seed/${post.id}/600/400`,
-    }));
+    return data.map((post) => {
+      const plainTextBody = stripHtml(post.body);
+      return {
+        id: post.id,
+        title: post.title,
+        snippet:
+          plainTextBody.substring(0, 150) +
+          (plainTextBody.length > 150 ? "..." : ""),
+        author: {
+          name: post.author.username,
+          avatarUrl: `https://i.pravatar.cc/48?u=${encodeURIComponent(
+            post.author.username
+          )}`,
+        },
+        tags: post.tags.map((tagItem) => tagItem.tag.name),
+        slug: `post-${post.id}`,
+        imageUrl: post.imageUrl || DEFAULT_PLACEHOLDER_IMAGE,
+        publishedAt: new Date(post.createdAt),
+      };
+    });
   };
 
   useEffect(() => {
@@ -91,7 +112,9 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
       const params = `?page=${currentPage}&limit=${itemsPerPage}`;
 
       if (filterTag) {
-        url = `${import.meta.env.VITE_BACKEND_URL}/api/tags/getPost/${encodeURIComponent(filterTag)}${params}`;
+        url = `${
+          import.meta.env.VITE_BACKEND_URL
+        }/api/tags/getPost/${encodeURIComponent(filterTag)}${params}`;
       } else {
         url = `${import.meta.env.VITE_BACKEND_URL}/api/posts${params}`;
       }
@@ -131,10 +154,12 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   }
 
   if (!isLoading && totalPosts === 0) {
-     return (
+    return (
       <div className="container mx-auto px-4 py-8 text-center">
         <p className="text-xl text-muted-foreground">
-          {filterTag ? `No posts found for the tag "${filterTag}".` : "No blog posts available yet."}
+          {filterTag
+            ? `No posts found for the tag "${filterTag}".`
+            : "No blog posts available yet."}
         </p>
       </div>
     );
@@ -162,7 +187,6 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
                 />
               )}
             </PaginationItem>
-
             {Array.from({ length: totalPages }, (_, i) => (
               <PaginationItem key={i}>
                 <PaginationLink
