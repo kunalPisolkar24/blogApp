@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap');
 
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -77,7 +76,6 @@ html, body {
   padding: 0;
 }
 
-/* Webkit scrollbar styling */
 ::-webkit-scrollbar {
   width: 0.5px;
 }
@@ -90,10 +88,168 @@ html, body {
   border: 3px solid #09090b;
 }
 
-
-.blog-title-input {
+.blog-title-input, 
+.view-blog-title {
   font-family: 'Merriweather', serif;
 }
+
+.prose {
+  font-family: 'Merriweather', serif;
+  color: hsl(var(--foreground));
+  line-height: 1.8;
+  letter-spacing: 0.3px;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-family: 'Merriweather', serif;
+  color: hsl(var(--foreground));
+  font-weight: 700; /* Ensure headings are bold with Merriweather */
+}
+
+.prose h1 {
+  font-size: 2.25em; /* Example: adjust based on Tailwind's prose defaults if needed */
+  margin-bottom: 0.8em;
+}
+.prose h2 {
+  font-size: 1.8em;
+  margin-bottom: 0.7em;
+}
+.prose h3 {
+  font-size: 1.5em;
+  margin-bottom: 0.6em;
+}
+
+
+.prose p,
+.prose li,
+.prose blockquote,
+.prose td,
+.prose th,
+.prose caption,
+.prose figcaption,
+.prose strong,
+.prose b,
+.prose em,
+.prose i,
+.prose a,
+.prose ul,
+.prose ol,
+.prose dl {
+  font-family: 'Merriweather', serif;
+  color: hsl(var(--foreground));
+}
+
+.prose a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+.prose a:hover {
+  color: hsl(var(--primary) / 0.8);
+}
+
+.prose strong,
+.prose b {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.prose blockquote {
+  font-family: 'Merriweather', serif;
+  border-left-color: hsl(var(--primary));
+  color: hsl(var(--muted-foreground));
+  padding-left: 1em;
+  font-style: italic;
+}
+
+.prose blockquote p {
+ color: hsl(var(--muted-foreground));
+}
+
+.prose pre,
+.prose code,
+.prose kbd,
+.prose samp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: hsl(var(--foreground));
+}
+
+.prose pre {
+  background-color: hsl(var(--muted) / 0.5);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1em;
+  overflow-x: auto;
+}
+
+.prose code:not(pre > code) { /* Inline code */
+  background-color: hsl(var(--muted) / 0.7);
+  padding: 0.2em 0.4em;
+  border-radius: calc(var(--radius) / 2);
+  font-size: 0.875em;
+}
+
+
+.dark .prose {
+  color: hsl(var(--foreground)); 
+}
+
+.dark .prose h1,
+.dark .prose h2,
+.dark .prose h3,
+.dark .prose h4,
+.dark .prose h5,
+.dark .prose h6 {
+  color: hsl(var(--foreground)); 
+}
+
+.dark .prose a {
+  color: hsl(var(--primary));
+}
+.dark .prose a:hover {
+   color: hsl(var(--primary) / 0.8);
+}
+
+.dark .prose strong,
+.dark .prose b {
+  color: hsl(var(--foreground));
+}
+
+.dark .prose blockquote {
+  border-left-color: hsl(var(--primary));
+  color: hsl(var(--muted-foreground));
+}
+.dark .prose blockquote p {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .prose pre {
+  background-color: hsl(var(--secondary));
+  border-color: hsl(var(--border));
+}
+.dark .prose code {
+ color: hsl(var(--foreground));
+}
+.dark .prose code:not(pre > code) {
+  background-color: hsl(var(--muted));
+}
+
+.quill-content-view img {
+  max-width: 100%;
+  height: auto;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.dark .quill-content-view img {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
 
 .ql-container.ql-snow {
   border: 1px solid hsl(var(--input));
@@ -177,7 +333,6 @@ html, body {
   color: hsl(var(--accent-foreground)) !important;
 }
 
-/* Tooltip Styling - Addressing Clipping */
 .ql-snow .ql-tooltip {
   background-color: hsl(var(--popover));
   border: 1px solid hsl(var(--border));
@@ -187,16 +342,6 @@ html, body {
   padding: 8px 12px;
   z-index: 10000 !important;
 }
-
-/* When the tooltip is for link/video input and positioned by Quill */
-.ql-snow .ql-tooltip[data-mode="link"],
-.ql-snow .ql-tooltip[data-mode="video"] {
-  /* Try to give it a little breathing room if it's at the very edge */
-  /* This is tricky as Quill's JS positions it. If clipping persists, */
-  /* it might be due to the parent #blog-content-editor-wrapper's overflow. */
-  /* Removing 'overflow-hidden' from that wrapper is the most direct fix for clipping if the tooltip is a child. */
-}
-
 
 .ql-snow .ql-tooltip input[type=text] {
   background-color: hsl(var(--input));
@@ -223,10 +368,6 @@ html, body {
   border-radius: calc(var(--radius) - 2px);
 }
 
-.ql-snow .ql-tooltip.ql-editing input[type=text] {
-  /* Ensure this doesn't try to be wider than the tooltip allows */
-}
-
 .ql-snow .ql-toolbar button svg .ql-stroke {
   stroke: hsl(var(--foreground));
 }
@@ -237,9 +378,7 @@ html, body {
   stroke: hsl(var(--primary));
 }
 
-.blog-content-editor-wrapper .ql-editor {
-  min-height: 400px;
-}
+.blog-content-editor-wrapper .ql-editor,
 .blog-content-editor-wrapper .ql-container {
   min-height: 400px;
 }
