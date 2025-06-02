@@ -1,27 +1,23 @@
-FROM node:18-alpine AS base
+FROM node:18-alpine AS builder
+
 WORKDIR /usr/src/app
 
-FROM base AS dependencies
-COPY summary-worker/package.json summary-worker/package-lock.json ./
-COPY backend/prisma ./prisma
-RUN npm ci --only=production
-
-FROM base AS build
-COPY summary-worker/package.json summary-worker/package-lock.json ./
-RUN npm ci
-COPY summary-worker/tsconfig.json ./
-COPY summary-worker/src ./src
-COPY backend/prisma ./prisma
+COPY package*.json ./
+RUN npm install
+COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-FROM base AS release
-ENV NODE_ENV=production
-COPY --from=dependencies /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /usr/src/app/dist ./dist
-COPY summary-worker/.env.example ./.env.example
+FROM node:18-alpine
 
-EXPOSE 8000
-# CMD [ "node", "dist/index.js" ]
-CMD [ "tail", "-f", "/dev/null" ]
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
+
+ENV NODE_ENV production
+
+CMD ["npm", "start"]
