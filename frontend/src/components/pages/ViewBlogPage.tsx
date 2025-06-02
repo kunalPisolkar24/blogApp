@@ -1,4 +1,7 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+"use client";
+
+import type React from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import DOMPurify from "dompurify";
@@ -17,7 +20,9 @@ import {
   Trash2,
   Edit3,
   UploadCloud,
-  Image as ImageIcon,
+  Clock,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -74,6 +79,8 @@ interface Blog {
   author: AuthorData;
   createdAt: string;
   updatedAt: string;
+  summary?: string | null;
+  summaryStatus?: string | null;
 }
 
 const ViewBlogPage: React.FC = () => {
@@ -92,6 +99,7 @@ const ViewBlogPage: React.FC = () => {
   >(null);
   const [isUploadingCardImage, setIsUploadingCardImage] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
 
   const quillRef = useRef<ReactQuill>(null);
   const cardImageInputRef = useRef<HTMLInputElement>(null);
@@ -151,7 +159,9 @@ const ViewBlogPage: React.FC = () => {
       }
       await axios.delete(
         `${import.meta.env.VITE_BACKEND_URL}/api/posts/${id}`,
-        { headers: { Authorization: `Bearer ${jwt}` } }
+        {
+          headers: { Authorization: `Bearer ${jwt}` },
+        }
       );
       toast({
         title: "Blog Deleted",
@@ -282,7 +292,9 @@ const ViewBlogPage: React.FC = () => {
       await axios.put(
         `${import.meta.env.VITE_BACKEND_URL}/api/posts/${id}`,
         parsedData,
-        { headers: { Authorization: `Bearer ${jwt}` } }
+        {
+          headers: { Authorization: `Bearer ${jwt}` },
+        }
       );
 
       toast({
@@ -431,7 +443,7 @@ const ViewBlogPage: React.FC = () => {
   if (isLoading) return <LoadingSpinner />;
   if (!blog)
     return (
-      <div className="container mx-auto px-4 py-8 text-center">
+      <div className="container mx-auto px-4 py-8 text-center text-zinc-400">
         Blog post not found.
       </div>
     );
@@ -442,30 +454,30 @@ const ViewBlogPage: React.FC = () => {
   const cleanBlogBody = DOMPurify.sanitize(blog.body);
 
   return (
-    <div>
+    <div className="min-h-screen bg-zinc-950/20">
       <StickyNavbar />
       <div className="container mx-auto px-4 py-8 mt-[50px]">
         {blog.imageUrl && !isEditing && (
-          <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
+          <div className="mb-8 rounded-xl overflow-hidden shadow-lg border border-zinc-900">
             <img
-              src={blog.imageUrl}
+              src={blog.imageUrl || "/placeholder.svg"}
               alt={blog.title}
               className="w-full h-auto max-h-[400px] object-cover"
             />
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row gap-8">
+        <div className="flex flex-col lg:flex-row gap-8">
           <main className="flex-1">
             {isEditing ? (
               <form
                 onSubmit={handleUpdate}
-                className="space-y-8 bg-card p-6 rounded-lg shadow-md"
+                className="space-y-8 bg-zinc-900/20 border border-zinc-800 p-6 rounded-xl shadow-lg"
               >
                 <div>
                   <label
                     htmlFor="editBlogTitle"
-                    className="block text-lg font-medium text-foreground mb-2"
+                    className="block text-lg font-medium text-zinc-300 mb-2"
                   >
                     Edit Title
                   </label>
@@ -475,7 +487,7 @@ const ViewBlogPage: React.FC = () => {
                     placeholder="Enter title for the blog"
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
-                    className="text-2xl font-bold p-4 blog-title-input"
+                    className="text-2xl font-bold p-4 bg-zinc-800/20 border-zinc-900 text-zinc-100 blog-title-input"
                     required
                   />
                 </div>
@@ -483,27 +495,26 @@ const ViewBlogPage: React.FC = () => {
                 <div>
                   <label
                     htmlFor="editCardImageUpload"
-                    className="block text-lg font-medium text-foreground mb-2"
+                    className="block text-lg font-medium text-zinc-300 mb-2"
                   >
-                    Blog Card Image (Recommended: 600x400)
+                    Blog Card Image (Recommended: 1920x1080)
                   </label>
                   <div
-                    className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer h-60"
-                    style={{ borderColor: "hsl(var(--border))" }}
+                    className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-dashed border-zinc-700 rounded-xl cursor-pointer h-60 bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
                     onClick={() => cardImageInputRef.current?.click()}
                   >
                     <div className="space-y-1 text-center">
                       {editCardImagePreview ? (
                         <img
-                          src={editCardImagePreview}
+                          src={editCardImagePreview || "/placeholder.svg"}
                           alt="Card preview"
                           className="mx-auto h-40 object-contain rounded-md"
                         />
                       ) : (
-                        <UploadCloud className="mx-auto h-10 w-10 text-muted-foreground" />
+                        <UploadCloud className="mx-auto h-10 w-10 text-zinc-400" />
                       )}
-                      <div className="flex text-sm text-muted-foreground">
-                        <span className="relative rounded-md font-medium text-primary hover:text-primary-focus">
+                      <div className="flex text-sm text-zinc-400">
+                        <span className="relative rounded-md font-medium text-zinc-300 hover:text-zinc-100">
                           {editCardImage
                             ? "Change image"
                             : editCardImageUrl
@@ -521,19 +532,17 @@ const ViewBlogPage: React.FC = () => {
                         />
                       </div>
                       {!editCardImagePreview && (
-                        <p className="text-xs text-muted-foreground">
-                          PNG, JPG, GIF
-                        </p>
+                        <p className="text-xs text-zinc-500">PNG, JPG, GIF</p>
                       )}
                       {editCardImage && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-zinc-400 mt-1">
                           {editCardImage.name}
                         </p>
                       )}
                     </div>
                   </div>
                   {isUploadingCardImage && (
-                    <p className="text-sm text-primary mt-2">
+                    <p className="text-sm text-zinc-300 mt-2">
                       Uploading card image...
                     </p>
                   )}
@@ -541,7 +550,7 @@ const ViewBlogPage: React.FC = () => {
                     <Button
                       variant="link"
                       size="sm"
-                      className="text-destructive mt-1 p-0 h-auto"
+                      className="text-red-400 hover:text-red-300 mt-1 p-0 h-auto"
                       onClick={() => {
                         setEditCardImageUrl(null);
                         setEditCardImagePreview(null);
@@ -555,7 +564,7 @@ const ViewBlogPage: React.FC = () => {
                 <div>
                   <label
                     htmlFor="editBlogContent"
-                    className="block text-lg font-medium text-foreground mb-2"
+                    className="block text-lg font-medium text-zinc-300 mb-2"
                   >
                     Edit Content
                   </label>
@@ -575,19 +584,21 @@ const ViewBlogPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Edit Tags</h3>
+                  <h3 className="text-lg font-semibold mb-2 text-zinc-300">
+                    Edit Tags
+                  </h3>
                   <div className="flex flex-wrap gap-2 mb-4">
                     {editTags.map((tag) => (
                       <Badge
                         key={tag}
                         variant="secondary"
-                        className="px-3 py-1"
+                        className="px-3 py-1 bg-zinc-800 text-zinc-300 border-zinc-700"
                       >
                         {tag}
                         <button
                           type="button"
                           onClick={() => handleRemoveEditTag(tag)}
-                          className="ml-2 text-xs"
+                          className="ml-2 text-xs hover:text-red-400"
                           aria-label={`Remove ${tag} tag`}
                         >
                           <X size={12} />
@@ -597,14 +608,20 @@ const ViewBlogPage: React.FC = () => {
                   </div>
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-zinc-700 text-zinc-300"
+                      >
                         Add Tag
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="bg-zinc-950 border-zinc-800">
                       <DialogHeader>
-                        <DialogTitle>Add Tag</DialogTitle>
-                        <DialogDescription>
+                        <DialogTitle className="text-zinc-100">
+                          Add Tag
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-400">
                           Enter the tag name.
                         </DialogDescription>
                       </DialogHeader>
@@ -612,7 +629,7 @@ const ViewBlogPage: React.FC = () => {
                         placeholder="Enter tag name"
                         value={editNewTag}
                         onChange={(e) => setEditNewTag(e.target.value)}
-                        className="mb-4"
+                        className="mb-4 bg-zinc-950 border-zinc-700 text-zinc-100"
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
@@ -634,20 +651,26 @@ const ViewBlogPage: React.FC = () => {
                     type="button"
                     variant="outline"
                     onClick={handleCancelEdit}
+                    className="border-zinc-700 text-zinc-300"
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={isUploadingCardImage}>
+                  <Button
+                    type="submit"
+                    disabled={isUploadingCardImage}
+                    className="bg-zinc-300 hover:bg-zinc-400"
+                  >
                     Save Changes
                   </Button>
                 </div>
               </form>
             ) : (
               <>
-                <h1 className="text-4xl lg:text-5xl font-bold mb-4 view-blog-title">
+                <h1 className="text-4xl lg:text-5xl font-bold mb-4 text-zinc-100 view-blog-title">
                   {blog.title}
                 </h1>
-                <div className="flex items-center space-x-2 text-xs text-muted-foreground mb-6 md:sm">
+                <div className="flex items-center space-x-2 text-sm text-zinc-400 mb-6">
+                  <Clock className="h-4 w-4" />
                   <span>
                     Published on{" "}
                     {new Date(blog.createdAt).toLocaleDateString(undefined, {
@@ -669,49 +692,135 @@ const ViewBlogPage: React.FC = () => {
                   )}
                 </div>
                 <div
-                  className="prose prose-lg dark:prose-invert max-w-none mb-8 quill-content-view"
+                  className="prose prose-lg dark:prose-invert max-w-none mb-8 quill-content-view text-zinc-200"
                   dangerouslySetInnerHTML={{ __html: cleanBlogBody }}
                 />
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-8">
                   {blog.tags.map((tagItem) => (
                     <Badge
                       key={tagItem.tag.id}
                       variant="secondary"
-                      className="hover:bg-secondary/80 transition-colors cursor-pointer"
+                      className="bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700 transition-colors cursor-pointer"
                       onClick={() => navigate(`/tag/${tagItem.tag.name}`)}
                     >
                       {tagItem.tag.name}
                     </Badge>
                   ))}
                 </div>
+
+                <div className="mt-8 pt-6 border-t border-zinc-800">
+                  <AlertDialog
+                    open={isSummaryDialogOpen}
+                    onOpenChange={setIsSummaryDialogOpen}
+                  >
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full sm:w-auto bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-all duration-200"
+                        onClick={() => setIsSummaryDialogOpen(true)}
+                      >
+                        <Sparkles size={16} className="mr-2" />
+                        View AI Summary
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="w-[90vw] max-w-xl md:max-w-2xl bg-zinc-950 border-zinc-800 text-zinc-100 rounded-xl shadow-2xl">
+                      <AlertDialogHeader className="pb-3 pt-5 px-6">
+                        <AlertDialogTitle className="text-xl sm:text-2xl font-semibold text-zinc-100 flex items-center">
+                          <Sparkles className="mr-2 h-5 w-5 text-zinc-400" />
+                          AI-Generated Summary
+                        </AlertDialogTitle>
+                      </AlertDialogHeader>
+                      <div className="px-2 pb-4">
+                        {(() => {
+                          if (
+                            blog.summary &&
+                            (blog.summaryStatus === "COMPLETED" ||
+                              (!blog.summaryStatus && blog.summary))
+                          ) {
+                            return (
+                              <div className="max-h-[60vh] overflow-y-auto py-2 my-2 scrollbar-thin scrollbar-thumb-zinc-600 scrollbar-track-zinc-800 pr-3 -mr-1">
+                                <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                                  <p className="whitespace-pre-wrap text-base sm:text-lg text-justify leading-relaxed text-zinc-200 selection:bg-zinc-600/30 prose">
+                                    {blog.summary}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          } else if (blog.summaryStatus === "PENDING") {
+                            return (
+                              <div className="py-4 my-2">
+                                <div className="bg-amber-900/20 border border-amber-800/50 rounded-lg p-4 flex items-center">
+                                  <Clock className="mr-3 h-5 w-5 text-amber-400 animate-pulse" />
+                                  <div>
+                                    <AlertDialogDescription className="text-base sm:text-lg text-amber-200 font-medium">
+                                      Summary in Progress
+                                    </AlertDialogDescription>
+                                    <p className="text-sm text-amber-300/80 mt-1">
+                                      The AI summary for this blog post is
+                                      currently being generated. Please check
+                                      back in a few moments.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="py-4 my-2">
+                                <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 flex items-center">
+                                  <AlertCircle className="mr-3 h-5 w-5 text-zinc-400" />
+                                  <div>
+                                    <AlertDialogDescription className="text-base sm:text-lg text-zinc-300 font-medium">
+                                      Summary Unavailable
+                                    </AlertDialogDescription>
+                                    <p className="text-sm text-zinc-400 mt-1">
+                                      The AI summary for this blog post is not
+                                      available at this time.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                        })()}
+                      </div>
+                      <AlertDialogFooter className="px-6 py-4 border-t border-zinc-800">
+                        <AlertDialogCancel
+                          onClick={() => setIsSummaryDialogOpen(false)}
+                          className="w-full sm:w-auto bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
+                        >
+                          Close
+                        </AlertDialogCancel>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </>
             )}
           </main>
 
-          <aside className="w-full md:w-1/3 md:max-w-xs lg:max-w-sm">
-            <Card className="sticky top-20 shadow-lg">
-              <CardHeader className="text-center border-b">
-                <Avatar className="w-24 h-24 mx-auto mb-4 border-2 border-primary">
+          <aside className="w-full lg:w-1/3 lg:max-w-xs xl:max-w-sm">
+            <Card className="sticky top-20 shadow-lg bg-zinc-900/20 border-zinc-800">
+              <CardHeader className="text-center border-b border-zinc-800">
+                <Avatar className="w-24 h-24 mx-auto mb-4 border-2 border-zinc-700">
                   <AvatarImage
-                    src={authorAvatarUrl}
+                    src={authorAvatarUrl || "/placeholder.svg"}
                     alt={blog.author.username}
                   />
-                  <AvatarFallback className="text-4xl bg-muted">
+                  <AvatarFallback className="text-4xl bg-zinc-800 text-zinc-300">
                     {blog.author.username.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <CardTitle className="text-xl mb-1">
+                <CardTitle className="text-xl mb-1 text-zinc-100">
                   {blog.author.username}
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {blog.author.email}
-                </p>
+                <p className="text-sm text-zinc-400">{blog.author.email}</p>
               </CardHeader>
               <CardContent className="pt-6">
-                <h3 className="font-semibold mb-2 text-foreground">
+                <h3 className="font-semibold mb-2 text-zinc-200">
                   About Author
                 </h3>
-                <p className="text-sm text-muted-foreground mb-6">
+                <p className="text-sm text-zinc-400 mb-6">
                   A passionate writer and tech enthusiast sharing insights on
                   various topics.
                 </p>
@@ -720,7 +829,7 @@ const ViewBlogPage: React.FC = () => {
                     <Button
                       variant="outline"
                       onClick={handleEdit}
-                      className="w-full"
+                      className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                     >
                       <Edit3 size={16} className="mr-2" /> Update Blog
                     </Button>
@@ -729,24 +838,32 @@ const ViewBlogPage: React.FC = () => {
                       onOpenChange={setIsDeleteDialogOpen}
                     >
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full">
+                        <Button
+                          variant="destructive"
+                          className="w-full bg-red-900 hover:bg-red-800"
+                        >
                           <Trash2 size={16} className="mr-2" /> Delete Blog
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent>
+                      <AlertDialogContent className="bg-zinc-900 border-zinc-800">
                         <AlertDialogHeader>
-                          <AlertDialogTitle>
+                          <AlertDialogTitle className="text-zinc-100">
                             Are you absolutely sure?
                           </AlertDialogTitle>
-                          <AlertDialogDescription>
+                          <AlertDialogDescription className="text-zinc-400">
                             This action cannot be undone. This will permanently
                             delete your blog post and remove its data from our
                             servers.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={confirmDelete}>
+                          <AlertDialogCancel className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                            Cancel
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={confirmDelete}
+                            className="bg-red-900 hover:bg-red-800 text-white"
+                          >
                             Continue
                           </AlertDialogAction>
                         </AlertDialogFooter>

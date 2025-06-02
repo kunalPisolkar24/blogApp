@@ -88,6 +88,12 @@ html, body {
   border: 3px solid #09090b;
 }
 
+.blog-summary-alert{
+  font-family: 'Merriweather', serif;
+  letter-spacing:0.2px;
+  font-size: 13px;
+}
+
 .blog-title-input, 
 .view-blog-title {
   font-family: 'Merriweather', serif;
