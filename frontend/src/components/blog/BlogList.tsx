@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { BlogCard } from "./BlogCard";
+import { BlogCardSkeleton } from "@/components/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Pagination,
   PaginationContent,
@@ -9,7 +11,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { LoadingSpinner } from "../utils";
 
 interface TagItem {
   postId: number;
@@ -150,13 +151,28 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
   };
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-1 xs:m-[15px] sm:m-[20px] lg:m-[40px] md:m-[30px] lg:grid-cols-1 gap-8 m-6 max-w-7xl lg:mx-auto">
+          {Array.from({ length: itemsPerPage }).map((_, index) => (
+            <BlogCardSkeleton key={index} />
+          ))}
+        </div>
+        <div className="mt-10 mb-6 flex justify-center items-center space-x-2">
+          <Skeleton className="h-10 w-24 rounded-md bg-zinc-800" />
+          <Skeleton className="h-10 w-10 rounded-md bg-zinc-800" />
+          <Skeleton className="h-10 w-10 rounded-md bg-zinc-800" />
+          <Skeleton className="h-10 w-10 rounded-md bg-zinc-800" />
+          <Skeleton className="h-10 w-24 rounded-md bg-zinc-800" />
+        </div>
+      </div>
+    );
   }
 
   if (!isLoading && totalPosts === 0) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
-        <p className="text-xl text-muted-foreground">
+        <p className="text-xl text-zinc-400">
           {filterTag
             ? `No posts found for the tag "${filterTag}".`
             : "No blog posts available yet."}
@@ -184,6 +200,7 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
                     e.preventDefault();
                     handlePageChange(currentPage - 1);
                   }}
+                  className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                 />
               )}
             </PaginationItem>
@@ -196,6 +213,11 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
                     handlePageChange(i + 1);
                   }}
                   isActive={currentPage === i + 1}
+                  className={`hover:text-zinc-200 hover:bg-zinc-800 ${
+                    currentPage === i + 1
+                      ? "text-zinc-100 bg-zinc-800 border-zinc-700"
+                      : "text-zinc-400"
+                  }`}
                 >
                   {i + 1}
                 </PaginationLink>
@@ -209,6 +231,7 @@ export const BlogList: React.FC<BlogListProps> = ({ filterTag }) => {
                     e.preventDefault();
                     handlePageChange(currentPage + 1);
                   }}
+                  className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                 />
               )}
             </PaginationItem>
