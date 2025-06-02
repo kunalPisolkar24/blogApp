@@ -1,13 +1,24 @@
-import React, { useState, useRef, useMemo } from "react";
+"use client";
+
+import type React from "react";
+import { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { X, UploadCloud, Image as ImageIcon } from "lucide-react";
+import {
+  X,
+  UploadCloud,
+  ImageIcon,
+  FileText,
+  Tag,
+  Sparkles,
+} from "lucide-react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +29,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "../../hooks/use-toast";
-import {
-  createPostSchema,
-} from "@kunalpisolkar24/blogapp-common";
+import { createPostSchema } from "@kunalpisolkar24/blogapp-common";
 import { StickyNavbar } from "../layouts";
 
 const CreateNewBlog: React.FC = () => {
@@ -300,201 +309,258 @@ const CreateNewBlog: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-zinc-950">
       <StickyNavbar />
       <div className="container mx-auto px-4 mt-[70px] py-8">
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-8 bg-card p-6 sm:p-8 rounded-lg shadow-xl"
-        >
-          <div>
-            <label
-              htmlFor="blogTitle"
-              className="block text-lg font-medium text-foreground mb-3"
-            >
-              Blog Title
-            </label>
-            <Input
-              id="blogTitle"
-              type="text"
-              placeholder="Enter title for the blog"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="text-xl font-semibold p-3 blog-title-input"
-              required
-            />
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl lg:text-4xl font-bold text-zinc-100 mb-2 flex items-center">
+              <Sparkles className="mr-3 h-8 w-8 text-zinc-400" />
+              Create New Blog Post
+            </h1>
+            <p className="text-zinc-400">
+              Share your thoughts and ideas with the world
+            </p>
           </div>
 
-          <div>
-            <label
-              htmlFor="cardImageUpload"
-              className="block text-lg font-medium text-foreground mb-3"
-            >
-              Blog Card Image (Recommended: 600x400)
-            </label>
-            <div
-              className="mt-2 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer h-64"
-              style={{ borderColor: "hsl(var(--border))" }}
-              onClick={() => cardImageInputRef.current?.click()}
-            >
-              <div className="space-y-1 text-center">
-                {cardImagePreview ? (
-                  <img
-                    src={cardImagePreview}
-                    alt="Card preview"
-                    className="mx-auto h-48 object-contain rounded-md"
-                  />
-                ) : (
-                  <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
-                )}
-                <div className="flex text-sm text-muted-foreground">
-                  <span className="relative rounded-md font-medium text-primary hover:text-primary-focus focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-focus">
-                    {cardImage ? "Change image" : "Upload an image"}
-                  </span>
-                  <input
-                    id="cardImageUpload"
-                    name="cardImageUpload"
-                    type="file"
-                    className="sr-only"
-                    accept="image/*"
-                    ref={cardImageInputRef}
-                    onChange={handleCardImageChange}
-                  />
-                </div>
-                {!cardImagePreview && (
-                  <p className="text-xs text-muted-foreground">
-                    PNG, JPG, GIF up to 10MB
-                  </p>
-                )}
-                {cardImage && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {cardImage.name}
-                  </p>
-                )}
-              </div>
-            </div>
-            {cardImageUrl && (
-              <div className="mt-2 text-xs text-green-500 flex items-center">
-                <ImageIcon size={14} className="mr-1" /> Image uploaded:{" "}
-                <a
-                  href={cardImageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline ml-1 truncate max-w-[200px]"
-                >
-                  {cardImageUrl}
-                </a>
-              </div>
-            )}
-            {isUploadingCardImage && (
-              <p className="text-sm text-primary mt-2">
-                Uploading card image...
-              </p>
-            )}
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Title Section */}
+            <Card className="bg-zinc-900/20 border-zinc-800 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-zinc-100 flex items-center">
+                  <FileText className="mr-2 h-5 w-5 text-zinc-400" />
+                  Blog Title
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Input
+                  id="blogTitle"
+                  type="text"
+                  placeholder="Enter an engaging title for your blog post..."
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="text-xl prose p-4 bg-zinc-800/20 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500"
+                  required
+                />
+              </CardContent>
+            </Card>
 
-          <div>
-            <label
-              htmlFor="blogContent"
-              className="block text-lg font-medium text-foreground mb-3"
-            >
-              Blog Content
-            </label>
-            <div className="blog-content-editor-wrapper rounded-md">
-              <ReactQuill
-                ref={quillRef}
-                theme="snow"
-                value={content}
-                onChange={setContent}
-                modules={modules}
-                formats={formats}
-                placeholder="Write your masterpiece here..."
-                id="blogContent"
-                bounds={".blog-content-editor-wrapper"}
-              />
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Tags</h3>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {tags.length > 0 ? (
-                tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="px-3 py-1.5 text-sm"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="ml-2 text-muted-foreground hover:text-destructive transition-colors"
-                      aria-label={`Remove ${tag} tag`}
-                    >
-                      <X size={14} />
-                    </button>
-                  </Badge>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No tags added yet. Click 'Add Tags' to get started.
+            {/* Card Image Section */}
+            <Card className="bg-zinc-900/20 border-zinc-800 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-zinc-100 flex items-center">
+                  <ImageIcon className="mr-2 h-5 w-5 text-zinc-400" />
+                  Featured Image
+                </CardTitle>
+                <p className="text-sm text-zinc-400">
+                  Upload a compelling image for your blog card (Recommended:
+                  600x400)
                 </p>
-              )}
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">Add Tags</Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Add a new tag</DialogTitle>
-                  <DialogDescription>
-                    Enter a new tag for your blog post. Click add when you're
-                    done.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <Input
-                    placeholder="Enter tag name"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddTag();
-                      }
-                    }}
+              </CardHeader>
+              <CardContent>
+                <div
+                  className="flex justify-center items-center px-6 pt-5 pb-6 border-2 border-dashed border-zinc-700 rounded-xl cursor-pointer h-64 bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                  onClick={() => cardImageInputRef.current?.click()}
+                >
+                  <div className="space-y-2 text-center">
+                    {cardImagePreview ? (
+                      <img
+                        src={cardImagePreview || "/placeholder.svg"}
+                        alt="Card preview"
+                        className="mx-auto h-48 object-contain rounded-lg"
+                      />
+                    ) : (
+                      <UploadCloud className="mx-auto h-12 w-12 text-zinc-400" />
+                    )}
+                    <div className="text-sm text-zinc-400">
+                      <span className="font-medium text-zinc-300 hover:text-zinc-100 transition-colors">
+                        {cardImage ? "Change image" : "Upload an image"}
+                      </span>
+                      <input
+                        id="cardImageUpload"
+                        name="cardImageUpload"
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        ref={cardImageInputRef}
+                        onChange={handleCardImageChange}
+                      />
+                    </div>
+                    {!cardImagePreview && (
+                      <p className="text-xs text-zinc-500">
+                        PNG, JPG, GIF up to 10MB
+                      </p>
+                    )}
+                    {cardImage && (
+                      <p className="text-xs text-zinc-400 mt-1">
+                        {cardImage.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {cardImageUrl && (
+                  <div className="mt-3 p-3 bg-green-900/20 border border-green-800/50 rounded-lg">
+                    <div className="text-sm text-green-300 flex items-center">
+                      <ImageIcon size={16} className="mr-2" />
+                      Image uploaded successfully
+                    </div>
+                  </div>
+                )}
+                {isUploadingCardImage && (
+                  <div className="mt-3 p-3 bg-zinc-800 border border-zinc-700 rounded-lg">
+                    <p className="text-sm text-zinc-300">
+                      Uploading card image...
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Content Section */}
+            <Card className="bg-zinc-900/20 border-zinc-800 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-zinc-100 flex items-center">
+                  <FileText className="mr-2 h-5 w-5 text-zinc-400" />
+                  Blog Content
+                </CardTitle>
+                <p className="text-sm text-zinc-400">
+                  Write your blog content using the rich text editor
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="blog-content-editor-wrapper rounded-lg overflow-hidden border border-zinc-700">
+                  <ReactQuill
+                    ref={quillRef}
+                    theme="snow"
+                    value={content}
+                    onChange={setContent}
+                    modules={modules}
+                    formats={formats}
+                    placeholder="Write your masterpiece here..."
+                    id="blogContent"
+                    bounds={".blog-content-editor-wrapper"}
                   />
                 </div>
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setIsDialogOpen(false);
-                      setNewTag("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="button" onClick={handleAddTag}>
-                    Add Tag
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+              </CardContent>
+            </Card>
 
-          <div className="flex justify-end space-x-4 pt-4 border-t border-border mt-8">
-            <Button type="button" variant="ghost" onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isUploadingCardImage}>
-              Publish Post
-            </Button>
-          </div>
-        </form>
+            {/* Tags Section */}
+            <Card className="bg-zinc-900/20 border-zinc-800 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-zinc-100 flex items-center">
+                  <Tag className="mr-2 h-5 w-5 text-zinc-400" />
+                  Tags
+                </CardTitle>
+                <p className="text-sm text-zinc-400">
+                  Add relevant tags to help readers discover your content
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2 mb-4 min-h-[2.5rem]">
+                  {tags.length > 0 ? (
+                    tags.map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant="secondary"
+                        className="px-3 py-1.5 text-sm bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(tag)}
+                          className="ml-2 text-zinc-400 hover:text-red-400 transition-colors"
+                          aria-label={`Remove ${tag} tag`}
+                        >
+                          <X size={14} />
+                        </button>
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-zinc-500 py-2">
+                      No tags added yet. Click 'Add Tags' to get started.
+                    </p>
+                  )}
+                </div>
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                    >
+                      <Tag className="mr-2 h-4 w-4" />
+                      Add Tags
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px] bg-zinc-950 border-zinc-800">
+                    <DialogHeader>
+                      <DialogTitle className="text-zinc-100">
+                        Add a new tag
+                      </DialogTitle>
+                      <DialogDescription className="text-zinc-400">
+                        Enter a new tag for your blog post. Click add when
+                        you're done.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <Input
+                        placeholder="Enter tag name"
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        className="bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddTag();
+                          }
+                        }}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-zinc-700 text-zinc-300"
+                        onClick={() => {
+                          setIsDialogOpen(false);
+                          setNewTag("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleAddTag}
+                        className="bg-zinc-300 hover:bg-zinc-400"
+                      >
+                        Add Tag
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-end gap-4 pt-6 border-t border-zinc-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUploadingCardImage}
+                className="bg-zinc-300 hover:bg-zinc-400 text-zinc-900"
+              >
+                {isUploadingCardImage ? "Uploading..." : "Publish Post"}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
