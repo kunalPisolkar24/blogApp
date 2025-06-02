@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "../utils";
+import { ViewBlogPageSkeleton } from "@/components/skeletons";
 import { toast } from "../../hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import {
@@ -440,11 +440,15 @@ const ViewBlogPage: React.FC = () => {
     "background",
   ];
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading) return <ViewBlogPageSkeleton />;
+
   if (!blog)
     return (
-      <div className="container mx-auto px-4 py-8 text-center text-zinc-400">
-        Blog post not found.
+      <div className="min-h-screen bg-zinc-950/20">
+        <StickyNavbar />
+        <div className="container mx-auto px-4 py-8 mt-[70px] text-center text-zinc-400">
+          Blog post not found.
+        </div>
       </div>
     );
 
@@ -730,7 +734,7 @@ const ViewBlogPage: React.FC = () => {
                           AI-Generated Summary
                         </AlertDialogTitle>
                       </AlertDialogHeader>
-                      <div className="px-2 pb-4">
+                      <div className="px-6 pb-4">
                         {(() => {
                           if (
                             blog.summary &&
