@@ -77,15 +77,17 @@ html, body {
 }
 
 ::-webkit-scrollbar {
-  width: 0.5px;
+  width: 0.5px; /* Adjusted for visibility in example, your 0.5px might be too thin */
+  /* Consider a slightly larger width if 0.5px is not rendering as expected */
+  /* width: 8px; */
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #71717a;
+  background-color: #71717a; /* zinc-500 */
   border-radius: 10px;
-  border: 3px solid #09090b;
+  border: 3px solid #09090b; /* zinc-950 */
 }
 
 .blog-summary-alert{
@@ -94,7 +96,7 @@ html, body {
   font-size: 13px;
 }
 
-.blog-title-input, 
+.blog-title-input,
 .view-blog-title {
   font-family: 'Merriweather', serif;
 }
@@ -114,11 +116,11 @@ html, body {
 .prose h6 {
   font-family: 'Merriweather', serif;
   color: hsl(var(--foreground));
-  font-weight: 700; /* Ensure headings are bold with Merriweather */
+  font-weight: 700;
 }
 
 .prose h1 {
-  font-size: 2.25em; /* Example: adjust based on Tailwind's prose defaults if needed */
+  font-size: 2.25em;
   margin-bottom: 0.8em;
 }
 .prose h2 {
@@ -192,7 +194,7 @@ html, body {
   overflow-x: auto;
 }
 
-.prose code:not(pre > code) { /* Inline code */
+.prose code:not(pre > code) {
   background-color: hsl(var(--muted) / 0.7);
   padding: 0.2em 0.4em;
   border-radius: calc(var(--radius) / 2);
@@ -201,7 +203,7 @@ html, body {
 
 
 .dark .prose {
-  color: hsl(var(--foreground)); 
+  color: hsl(var(--foreground));
 }
 
 .dark .prose h1,
@@ -210,7 +212,7 @@ html, body {
 .dark .prose h4,
 .dark .prose h5,
 .dark .prose h6 {
-  color: hsl(var(--foreground)); 
+  color: hsl(var(--foreground));
 }
 
 .dark .prose a {
@@ -253,6 +255,22 @@ html, body {
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 .dark .quill-content-view img {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* Styles for embedded videos */
+.quill-content-view iframe {
+  display: block;
+  width: 100%;
+  max-width: 720px; /* Or your preferred max-width for videos */
+  aspect-ratio: 16 / 9;
+  margin: 1.5em auto; /* Centers the iframe if its max-width is less than container */
+  border-radius: var(--radius);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border: none; /* Removes default iframe border */
+}
+
+.dark .quill-content-view iframe {
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
