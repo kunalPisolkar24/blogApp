@@ -1,8 +1,10 @@
 {
   "name": "blogapp",
   "scripts": {
-    "dev": "wrangler dev src/index.ts --ip 0.0.0.0",
-    "deploy": "wrangler deploy --minify src/index.ts"
+    "dev": "wrangler dev --ip 0.0.0.0",
+    "deploy": "wrangler deploy --minify src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@kunalpisolkar24/blogapp-common": "^1.0.0",
@@ -12,8 +14,10 @@
     "hono": "^4.5.4"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.34",
     "@cloudflare/workers-types": "^4.20240529.0",
     "prisma": "^6.7.0",
+    "vitest": "~3.1.4",
     "wrangler": "^4.14.1"
   }
 }

@@ -10,5 +10,4 @@ COPY . .
 
 EXPOSE 8787
 
-
-CMD ["npm", "run", "dev"]
+CMD ["npm","run","test:watch"]
