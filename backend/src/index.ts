@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { userRouter } from './routes/user';
 import { postRouter } from './routes/posts';
 import { tagRouter } from './routes/tags';
+import { rateLimitMiddleware } from './middleware/rate-limit';
 
 const app = new Hono<{
   Bindings: {
@@ -13,7 +14,9 @@ const app = new Hono<{
     UPSTASH_REDIS_REST_URL: string,
     UPSTASH_REDIS_REST_TOKEN: string,
     RAILWAY_CONSUMER_WAKEUP_URL: string,
-    RAILWAY_WAKEUP_SECRET: string
+    RAILWAY_WAKEUP_SECRET: string,
+    UPSTASH_RATELIMIT_REDIS_REST_URL: string,
+    UPSTASH_RATELIMIT_REDIS_REST_TOKEN: string
   };
 }>();
 
@@ -22,6 +25,8 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.use('*', rateLimitMiddleware);
 
 app.get('/ping', (c) => {
   return c.json({

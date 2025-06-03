@@ -33,6 +33,8 @@ type HonoEnv = {
     UPSTASH_REDIS_REST_TOKEN: string;
     RAILWAY_CONSUMER_WAKEUP_URL: string;
     RAILWAY_WAKEUP_SECRET: string;
+    UPSTASH_RATELIMIT_REDIS_REST_URL: string;
+    UPSTASH_RATELIMIT_REDIS_REST_TOKEN: string;
   };
   Variables: {
     user: {
