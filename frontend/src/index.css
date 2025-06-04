@@ -77,17 +77,15 @@ html, body {
 }
 
 ::-webkit-scrollbar {
-  width: 0.5px; /* Adjusted for visibility in example, your 0.5px might be too thin */
-  /* Consider a slightly larger width if 0.5px is not rendering as expected */
-  /* width: 8px; */
+  width: 0.5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #71717a; /* zinc-500 */
+  background-color: #71717a;
   border-radius: 10px;
-  border: 3px solid #09090b; /* zinc-950 */
+  border: 3px solid #09090b;
 }
 
 .blog-summary-alert{
@@ -258,16 +256,15 @@ html, body {
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
-/* Styles for embedded videos */
 .quill-content-view iframe {
   display: block;
   width: 100%;
-  max-width: 720px; /* Or your preferred max-width for videos */
+  max-width: 720px;
   aspect-ratio: 16 / 9;
-  margin: 1.5em auto; /* Centers the iframe if its max-width is less than container */
+  margin: 1.5em auto;
   border-radius: var(--radius);
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  border: none; /* Removes default iframe border */
+  border: none;
 }
 
 .dark .quill-content-view iframe {
@@ -405,4 +402,88 @@ html, body {
 .blog-content-editor-wrapper .ql-editor,
 .blog-content-editor-wrapper .ql-container {
   min-height: 400px;
+}
+
+@media (max-width: 768px) {
+  .blog-summary-alert {
+    font-size: 12px;
+    letter-spacing: 0.15px;
+  }
+
+  .prose {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    letter-spacing: 0.4px;
+  }
+
+  .prose h1 {
+    font-size: 1.8em;
+    margin-bottom: 0.6em;
+  }
+  .prose h2 {
+    font-size: 1.5em;
+    margin-bottom: 0.5em;
+  }
+  .prose h3 {
+    font-size: 1.25em;
+    margin-bottom: 0.4em;
+  }
+  
+  .prose p,
+  .prose li {
+     letter-spacing: 0.2px;
+  }
+
+  .prose blockquote {
+    padding-left: 0.8em;
+  }
+
+  .prose pre {
+    padding: 0.8em;
+  }
+  
+  .prose code:not(pre > code) {
+    font-size: 0.85em; 
+  }
+
+  .quill-content-view img,
+  .quill-content-view iframe {
+    margin-top: 1em;
+    margin-bottom: 1em;
+  }
+
+  .ql-container.ql-snow {
+    min-height: 300px;
+  }
+
+  .ql-editor {
+    min-height: 300px;
+    font-size: 0.9rem;
+    letter-spacing: 0.3px;
+    line-height: 1.7;
+    padding: 12px 14px;
+  }
+
+  .ql-editor.ql-blank::before {
+    left: 14px;
+  }
+
+  .ql-toolbar.ql-snow {
+    padding: 6px;
+  }
+  
+  .ql-snow .ql-tooltip {
+    padding: 6px 10px;
+  }
+
+  .ql-snow .ql-tooltip input[type=text] {
+    min-width: 120px;
+    max-width: 200px;
+    padding: 5px;
+  }
+
+  .blog-content-editor-wrapper .ql-editor,
+  .blog-content-editor-wrapper .ql-container {
+    min-height: 300px;
+  }
 }

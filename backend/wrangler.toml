@@ -3,6 +3,18 @@ main = "src/index.ts"
 compatibility_date = "2024-08-07"
 
 [vars]
+DATABASE_URL="a"
+DATABASE_URL_MIGRATE="b"
+JWT_SECRET="my_secret_pass"
+
+UPSTASH_REDIS_REST_URL="c"
+UPSTASH_REDIS_REST_TOKEN="d"
+
+RAILWAY_CONSUMER_WAKEUP_URL="d"
+RAILWAY_WAKEUP_SECRET="e"
+
+UPSTASH_RATELIMIT_REDIS_REST_URL="f"
+UPSTASH_RATELIMIT_REDIS_REST_TOKEN="g"
 
 # [[kv_namespaces]]
 # binding = "MY_KV_NAMESPACE"

@@ -684,10 +684,10 @@ const ViewBlogPage: React.FC = () => {
               </form>
             ) : (
               <>
-                <h1 className="text-4xl lg:text-5xl font-bold mb-4 text-zinc-100 view-blog-title">
+                <h1 className="text-3xl lg:text-5xl font-bold mb-4 text-zinc-100 view-blog-title">
                   {blog.title}
                 </h1>
-                <div className="flex items-center space-x-2 text-sm text-zinc-400 mb-6">
+                <div className="flex items-center space-x-2 text-xs text-zinc-400 mb-6">
                   <Clock className="h-4 w-4" />
                   <span>
                     Published on{" "}
@@ -726,7 +726,7 @@ const ViewBlogPage: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-zinc-800">
+                <div className="mt-8 pt-3 border-t border-zinc-800">
                   <AlertDialog
                     open={isSummaryDialogOpen}
                     onOpenChange={setIsSummaryDialogOpen}
@@ -742,13 +742,13 @@ const ViewBlogPage: React.FC = () => {
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="w-[90vw] max-w-xl md:max-w-2xl bg-zinc-950 border-zinc-800 text-zinc-100 rounded-xl shadow-2xl">
-                      <AlertDialogHeader className="pb-3 pt-5 px-6">
-                        <AlertDialogTitle className="text-xl sm:text-2xl font-semibold text-zinc-100 flex items-center">
+                      <AlertDialogHeader className="pb-1 pt-2 px-6">
+                        <AlertDialogTitle className="text-xl sm:text-2xl font-semibold text-zinc-100 flex items-center prose">
                           <Sparkles className="mr-2 h-5 w-5 text-zinc-400" />
                           AI-Generated Summary
                         </AlertDialogTitle>
                       </AlertDialogHeader>
-                      <div className="px-6 pb-4">
+                      <div className="pb-2">
                         {(() => {
                           if (
                             blog.summary &&
@@ -757,7 +757,7 @@ const ViewBlogPage: React.FC = () => {
                           ) {
                             return (
                               <div className="max-h-[60vh] overflow-y-auto py-2 my-2 scrollbar-thin scrollbar-thumb-zinc-600 scrollbar-track-zinc-800 pr-3 -mr-1">
-                                <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                                <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
                                   <p className="whitespace-pre-wrap text-base sm:text-lg text-justify leading-relaxed text-zinc-200 selection:bg-zinc-600/30 prose">
                                     {blog.summary}
                                   </p>
