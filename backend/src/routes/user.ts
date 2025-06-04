@@ -7,12 +7,26 @@ import { StatusCode } from '../constants/status-code';
 import { authMiddleware } from '../middleware/auth';
 import { signupSchema, signinSchema, userIdSchema } from '@kunalpisolkar24/blogapp-common';
 
-export const userRouter = new Hono<{
+export type UserHonoEnv = {
   Bindings: {
-    DATABASE_URL: string,
-    JWT_SECRET: string,
-  }
-}>();
+    DATABASE_URL: string;
+    JWT_SECRET: string;
+    DATABASE_URL_MIGRATE: string;
+    UPSTASH_REDIS_REST_URL: string;
+    UPSTASH_REDIS_REST_TOKEN: string;
+    RAILWAY_CONSUMER_WAKEUP_URL: string;
+    RAILWAY_WAKEUP_SECRET: string;
+    UPSTASH_RATELIMIT_REDIS_REST_URL: string;
+    UPSTASH_RATELIMIT_REDIS_REST_TOKEN: string;
+  };
+  Variables: {
+    user: {
+      id: number;
+    };
+  };
+};
+
+export const userRouter = new Hono<UserHonoEnv>();
 
 userRouter.post('/signup', async (c) => {
   const prisma = new PrismaClient({ datasourceUrl: c.env?.DATABASE_URL }).$extends(withAccelerate());
@@ -88,7 +102,7 @@ userRouter.post('/signin', async (c) => {
   }
 });
 
-userRouter.use('/users', authMiddleware);
+userRouter.use('/users/*', authMiddleware);
 
 userRouter.get('/users/:id', async (c) => {
   const prisma = new PrismaClient({ datasourceUrl: c.env?.DATABASE_URL }).$extends(withAccelerate());

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const LoadingSpinner: React.FC = () => {
+export const LoadingSpinner: React.FC = () => {
   return (
     <div className="flex items-center justify-center h-screen">
       <div role="status">
@@ -26,4 +26,3 @@ const LoadingSpinner: React.FC = () => {
   );
 };
 
-export default LoadingSpinner;

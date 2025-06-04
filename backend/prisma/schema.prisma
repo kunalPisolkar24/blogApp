@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_MIGRATE")
 }
 
 model User {
@@ -16,12 +17,17 @@ model User {
 }
 
 model Post {
-  id       Int       @id @default(autoincrement())
-  title    String
-  body     String
-  author   User      @relation(fields: [authorId], references: [id])
-  authorId Int
-  tags     PostTag[]
+  id            Int       @id @default(autoincrement())
+  title         String
+  body          String
+  imageUrl      String?
+  author        User      @relation(fields: [authorId], references: [id])
+  authorId      Int
+  tags          PostTag[]
+  summary       String?
+  summaryStatus String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Tag {

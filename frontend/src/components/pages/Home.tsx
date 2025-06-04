@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import StickyNavbar from './StickyNavbar';
-import BlogList from './BlogList';
-import SearchBar from './SearchBar';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { StickyNavbar } from "../layouts";
+import { BlogList } from "../blog";
+import { SearchBar } from "../blog";
 
-import ErrorBoundary from './ErrorBoundary';
+import { ErrorBoundary } from "../utils/";
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   useEffect(() => {
-    const jwt = localStorage.getItem('jwt');
+    const jwt = localStorage.getItem("jwt");
     if (!jwt) {
-      navigate('/signin');
+      navigate("/signin");
     }
   }, [navigate]);
 
@@ -22,14 +22,17 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-zinc-900/20">
       <StickyNavbar />
-      <ErrorBoundary>
-        <SearchBar onTagSelect={handleTagSelect} />
-      </ErrorBoundary>
-      <ErrorBoundary>
-        <BlogList filterTag={selectedTag || ''} />
-      </ErrorBoundary>
+
+      <main className=" mx-auto md:pt-4 pt-8">
+        <ErrorBoundary>
+          <SearchBar onTagSelect={handleTagSelect} />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <BlogList filterTag={selectedTag || ""} />
+        </ErrorBoundary>
+      </main>
     </div>
   );
 };

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -70,20 +72,337 @@
 
 html, body {
   overflow-y: scroll;
-  background-color: #09090b;
   margin: 0;
   padding: 0;
 }
 
-/* Webkit scrollbar styling */
 ::-webkit-scrollbar {
-  width: 12px;
+  width: 0.5px; /* Adjusted for visibility in example, your 0.5px might be too thin */
+  /* Consider a slightly larger width if 0.5px is not rendering as expected */
+  /* width: 8px; */
 }
 ::-webkit-scrollbar-track {
-  background: #09090b; /* Same as your background color */
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #71717a;
+  background-color: #71717a; /* zinc-500 */
   border-radius: 10px;
-  border: 3px solid #09090b;
+  border: 3px solid #09090b; /* zinc-950 */
+}
+
+.blog-summary-alert{
+  font-family: 'Merriweather', serif;
+  letter-spacing:0.2px;
+  font-size: 13px;
+}
+
+.blog-title-input,
+.view-blog-title {
+  font-family: 'Merriweather', serif;
+}
+
+.prose {
+  font-family: 'Merriweather', serif;
+  color: hsl(var(--foreground));
+  line-height: 1.8;
+  letter-spacing: 0.3px;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-family: 'Merriweather', serif;
+  color: hsl(var(--foreground));
+  font-weight: 700;
+}
+
+.prose h1 {
+  font-size: 2.25em;
+  margin-bottom: 0.8em;
+}
+.prose h2 {
+  font-size: 1.8em;
+  margin-bottom: 0.7em;
+}
+.prose h3 {
+  font-size: 1.5em;
+  margin-bottom: 0.6em;
+}
+
+
+.prose p,
+.prose li,
+.prose blockquote,
+.prose td,
+.prose th,
+.prose caption,
+.prose figcaption,
+.prose strong,
+.prose b,
+.prose em,
+.prose i,
+.prose a,
+.prose ul,
+.prose ol,
+.prose dl {
+  font-family: 'Merriweather', serif;
+  color: hsl(var(--foreground));
+}
+
+.prose a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+.prose a:hover {
+  color: hsl(var(--primary) / 0.8);
+}
+
+.prose strong,
+.prose b {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.prose blockquote {
+  font-family: 'Merriweather', serif;
+  border-left-color: hsl(var(--primary));
+  color: hsl(var(--muted-foreground));
+  padding-left: 1em;
+  font-style: italic;
+}
+
+.prose blockquote p {
+ color: hsl(var(--muted-foreground));
+}
+
+.prose pre,
+.prose code,
+.prose kbd,
+.prose samp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: hsl(var(--foreground));
+}
+
+.prose pre {
+  background-color: hsl(var(--muted) / 0.5);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1em;
+  overflow-x: auto;
+}
+
+.prose code:not(pre > code) {
+  background-color: hsl(var(--muted) / 0.7);
+  padding: 0.2em 0.4em;
+  border-radius: calc(var(--radius) / 2);
+  font-size: 0.875em;
+}
+
+
+.dark .prose {
+  color: hsl(var(--foreground));
+}
+
+.dark .prose h1,
+.dark .prose h2,
+.dark .prose h3,
+.dark .prose h4,
+.dark .prose h5,
+.dark .prose h6 {
+  color: hsl(var(--foreground));
+}
+
+.dark .prose a {
+  color: hsl(var(--primary));
+}
+.dark .prose a:hover {
+   color: hsl(var(--primary) / 0.8);
+}
+
+.dark .prose strong,
+.dark .prose b {
+  color: hsl(var(--foreground));
+}
+
+.dark .prose blockquote {
+  border-left-color: hsl(var(--primary));
+  color: hsl(var(--muted-foreground));
+}
+.dark .prose blockquote p {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .prose pre {
+  background-color: hsl(var(--secondary));
+  border-color: hsl(var(--border));
+}
+.dark .prose code {
+ color: hsl(var(--foreground));
+}
+.dark .prose code:not(pre > code) {
+  background-color: hsl(var(--muted));
+}
+
+.quill-content-view img {
+  max-width: 100%;
+  height: auto;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.dark .quill-content-view img {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* Styles for embedded videos */
+.quill-content-view iframe {
+  display: block;
+  width: 100%;
+  max-width: 720px; /* Or your preferred max-width for videos */
+  aspect-ratio: 16 / 9;
+  margin: 1.5em auto; /* Centers the iframe if its max-width is less than container */
+  border-radius: var(--radius);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  border: none; /* Removes default iframe border */
+}
+
+.dark .quill-content-view iframe {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+
+.ql-container.ql-snow {
+  border: 1px solid hsl(var(--input));
+  border-top: none;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  min-height: 400px;
+}
+
+.ql-editor {
+  font-family: 'Merriweather', serif;
+  min-height: 400px;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  line-height: 1.8;
+  padding: 16px 18px;
+}
+
+.ql-editor.ql-blank::before {
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
+  left: 18px;
+  font-family: 'Merriweather', serif;
+}
+
+.ql-toolbar.ql-snow {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--input));
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+  padding: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label,
+.ql-toolbar.ql-snow .ql-picker-item,
+.ql-toolbar.ql-snow .ql-stroke,
+.ql-toolbar.ql-snow .ql-fill {
+  color: hsl(var(--foreground)) !important;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label:hover,
+.ql-toolbar.ql-snow .ql-picker-item:hover,
+.ql-toolbar.ql-snow button:hover .ql-stroke,
+.ql-toolbar.ql-snow button:hover .ql-fill {
+  color: hsl(var(--primary)) !important;
+}
+
+.ql-toolbar.ql-snow button:hover {
+  background-color: hsl(var(--muted));
+}
+
+.ql-toolbar.ql-snow .ql-picker-label.ql-active,
+.ql-toolbar.ql-snow .ql-picker-item.ql-selected,
+.ql-toolbar.ql-snow button.ql-active .ql-stroke,
+.ql-toolbar.ql-snow button.ql-active .ql-fill {
+    color: hsl(var(--primary)) !important;
+}
+
+.ql-snow .ql-picker.ql-expanded .ql-picker-label {
+  border-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary)) !important;
+}
+
+.ql-snow .ql-picker.ql-expanded .ql-picker-options {
+  background-color: hsl(var(--popover))  !important;
+  border-color: hsl(var(--border)) !important;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.ql-snow .ql-picker-options .ql-picker-item {
+    color: hsl(var(--popover-foreground)) !important;
+}
+
+.ql-snow .ql-picker-options .ql-picker-item:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+.ql-snow .ql-tooltip {
+  background-color: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.15);
+  color: hsl(var(--popover-foreground));
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  z-index: 10000 !important;
+}
+
+.ql-snow .ql-tooltip input[type=text] {
+  background-color: hsl(var(--input));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  padding: 6px;
+  border-radius: calc(var(--radius) - 2px);
+  width: auto;
+  min-width: 150px;
+  max-width: 250px;
+}
+
+.ql-snow .ql-tooltip a.ql-action::before {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+  margin-left: 8px;
+}
+.ql-snow .ql-tooltip a.ql-remove::before {
+  background-color: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.ql-snow .ql-toolbar button svg .ql-stroke {
+  stroke: hsl(var(--foreground));
+}
+.ql-snow .ql-toolbar button:hover svg .ql-stroke {
+  stroke: hsl(var(--primary));
+}
+.ql-snow .ql-toolbar button.ql-active svg .ql-stroke {
+  stroke: hsl(var(--primary));
+}
+
+.blog-content-editor-wrapper .ql-editor,
+.blog-content-editor-wrapper .ql-container {
+  min-height: 400px;
 }
