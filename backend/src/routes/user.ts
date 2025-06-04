@@ -7,7 +7,7 @@ import { StatusCode } from '../constants/status-code';
 import { authMiddleware } from '../middleware/auth';
 import { signupSchema, signinSchema, userIdSchema } from '@kunalpisolkar24/blogapp-common';
 
-type UserHonoEnv = {
+export type UserHonoEnv = {
   Bindings: {
     DATABASE_URL: string;
     JWT_SECRET: string;
