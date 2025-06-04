@@ -3,7 +3,7 @@ import { withAccelerate } from "@prisma/extension-accelerate";
 import { Hono } from "hono";
 import { StatusCode } from "../constants/status-code";
 
-type TagHonoEnv = {
+export type TagHonoEnv = {
   Bindings: {
     DATABASE_URL: string;
     JWT_SECRET: string;
