@@ -684,10 +684,10 @@ const ViewBlogPage: React.FC = () => {
               </form>
             ) : (
               <>
-                <h1 className="text-4xl lg:text-5xl font-bold mb-4 text-zinc-100 view-blog-title">
+                <h1 className="text-3xl lg:text-5xl font-bold mb-4 text-zinc-100 view-blog-title">
                   {blog.title}
                 </h1>
-                <div className="flex items-center space-x-2 text-sm text-zinc-400 mb-6">
+                <div className="flex items-center space-x-2 text-xs text-zinc-400 mb-6">
                   <Clock className="h-4 w-4" />
                   <span>
                     Published on{" "}
