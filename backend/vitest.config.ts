@@ -13,5 +13,18 @@ export default defineWorkersConfig({
         }
       },
     },
+    coverage: {
+      provider: 'istanbul',
+      reporter: ['text', 'json', 'html', 'json-summary'],
+      include: ['src/**/*.ts'],
+      exclude: [
+        'node_modules/',
+        'test/**',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        'wrangler.toml',
+      ],
+      reportOnFailure: true,
+    },
   },
 });
