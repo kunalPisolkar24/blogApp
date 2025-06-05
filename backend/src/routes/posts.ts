@@ -25,7 +25,7 @@ const internalPostIdSchema = z.object({
   id: z.number().int().positive("Post ID must be a positive integer"),
 });
 
-type HonoEnv = {
+export type HonoEnv = {
   Bindings: {
     DATABASE_URL: string;
     JWT_SECRET: string;
