@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    env_file:
+      - ./backend/.env
+      - ./backend/.dev.vars 
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - app-network
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend/.env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend 
+    networks:
+      - app-network
+
+  summary_api:
+    build:
+      context: ./summary-api
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./summary-api:/app
+    networks:
+      - app-network
+
+  summary_worker:
+    build:
+      context: ./summary-worker
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./summary-worker:/app
+    env_file:
+      - ./summary-worker/.env
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
