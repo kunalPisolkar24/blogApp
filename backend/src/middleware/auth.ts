@@ -21,5 +21,3 @@ export const authMiddleware = async (c: any, next: Next) => {
     return c.json({ error: 'Unauthorized' }, StatusCode.UNAUTHORIZED);
   }
 };
-
-// not much at all
