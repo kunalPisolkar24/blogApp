@@ -8,14 +8,19 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def serve() -> None:
+def create_server() -> grpc.aio.Server:
     server = grpc.aio.server()
-    listen_addr = f"[::]:{settings.PORT}"
-    server.add_insecure_port(listen_addr)
+    server.add_insecure_port(f"[::]:{settings.PORT}")
+    return server
 
-    logger.info("AI service starting on %s", listen_addr)
-    await server.start()
-    await server.wait_for_termination()
+
+async def serve() -> None:
+    server = create_server()
+    try:
+        await server.start()
+        await server.wait_for_termination()
+    finally:
+        await server.stop(grace=None)
 
 
 if __name__ == "__main__":
