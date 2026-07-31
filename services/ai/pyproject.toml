@@ -9,7 +9,8 @@ requires-python = "^3.12"
 dependencies = [
     "grpcio (>=1.83.0,<2.0.0)",
     "grpcio-tools (>=1.83.0,<2.0.0)",
-    "grpcio-health-checking (>=1.83.0,<2.0.0)"
+    "grpcio-health-checking (>=1.83.0,<2.0.0)",
+    "pydantic-settings (>=2.14.2,<3.0.0)"
 ]
 
 
