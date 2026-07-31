@@ -11,9 +11,9 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
-def create_server() -> tuple[grpc.aio.Server, HealthServicer]:
+def create_server(port: str = settings.PORT) -> tuple[grpc.aio.Server, HealthServicer]:
     server = grpc.aio.server()
-    server.add_insecure_port(f"[::]:{settings.PORT}")
+    server.add_insecure_port(f"[::]:{port}")
 
     health_servicer = HealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
