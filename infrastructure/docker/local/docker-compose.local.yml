@@ -5,7 +5,7 @@ include:
   - path: ../../../services/content/compose.local.yml
   - path: ../../../services/user/compose.local.yml
   - path: ../../../services/search/compose.local.yml
-  - path: ../../../services/ai/compose.local.yml
+  # - path: ../../../services/ai/compose.local.yml
   - path: ../../../gateway/compose.local.yml
   - path: ../../../frontend/compose.local.yml
 

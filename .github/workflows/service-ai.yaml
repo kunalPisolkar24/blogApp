@@ -1,21 +1,23 @@
 name: Service - AI
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-      - staging
-    paths:
-      - "services/ai/**"
-      - ".github/workflows/service-ai.yaml"
-  pull_request:
-    branches:
-      - main
-      - staging
-    paths:
-      - "services/ai/**"
-      - ".github/workflows/service-ai.yaml"
+# Disabled during AI service rewrite — source code moved to services/ai/trash (gitignored).
+# Re-enable when the new implementation lands.
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches:
+#       - main
+#       - staging
+#     paths:
+#       - "services/ai/**"
+#       - ".github/workflows/service-ai.yaml"
+#   pull_request:
+#     branches:
+#       - main
+#       - staging
+#     paths:
+#       - "services/ai/**"
+#       - ".github/workflows/service-ai.yaml"
 
 env:
   DOCKER_IMAGE_NAME: kunalpisolkar/topos-ai
