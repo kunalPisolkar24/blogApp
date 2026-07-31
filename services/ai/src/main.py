@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import signal
 
 import grpc
 
@@ -14,8 +15,15 @@ def create_server() -> grpc.aio.Server:
     return server
 
 
+def handle_graceful_shutdown(server: grpc.aio.Server, grace: int = settings.GRACE_SECONDS) -> None:
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(server.stop(grace=grace)))
+
+
 async def serve() -> None:
     server = create_server()
+    handle_graceful_shutdown(server)
     try:
         await server.start()
         await server.wait_for_termination()
