@@ -1,0 +1,18 @@
+[project]
+name = "ai-service"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Kunal Pisolkar",email = "55585892+kunalPisolkar24@users.noreply.github.com"}
+]
+requires-python = "^3.12"
+dependencies = [
+    "grpcio (>=1.83.0,<2.0.0)",
+    "grpcio-tools (>=1.83.0,<2.0.0)",
+    "grpcio-health-checking (>=1.83.0,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
