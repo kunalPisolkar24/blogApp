@@ -10,7 +10,9 @@
   "license": "ISC",
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "hono": "^4.12.33"
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.33",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
