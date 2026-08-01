@@ -18,6 +18,7 @@ async def running_server(unused_tcp_port: int, fake_llm: FakeLLM):
     )
     await server.start()
     channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
+    await channel.channel_ready()
 
     yield channel, health_servicer
 
