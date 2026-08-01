@@ -1,4 +1,4 @@
-.PHONY: install run test test-coverage clean
+.PHONY: install run test test-coverage lint format format-check clean
 
 install:
 	poetry install
@@ -11,6 +11,15 @@ test:
 
 test-coverage:
 	poetry run pytest --cov=src --cov-report=term-missing
+
+lint:
+	poetry run ruff check .
+
+format:
+	poetry run ruff format .
+
+format-check:
+	poetry run ruff format --check .
 
 clean:
 	rm -rf src/generated
