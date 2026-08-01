@@ -4,7 +4,6 @@ import grpc
 import pytest
 from prometheus_client.registry import REGISTRY
 
-from src import metrics
 from src.generated import ai_service_pb2
 from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.llm import LLMError
@@ -12,11 +11,16 @@ from tests.fakes import FakeHTTPClient, FakeResponse, make_client, no_sleep, ok_
 
 
 def _llm_counter(status: str) -> float:
-    return metrics.LLM_REQUESTS.labels(status=status)._value.get()
+    return REGISTRY.get_sample_value("llm_requests_total", {"status": status}) or 0.0
 
 
 def _grpc_counter(method: str, status: str) -> float:
-    return metrics.GRPC_REQUESTS.labels(method=method, status=status)._value.get()
+    return (
+        REGISTRY.get_sample_value(
+            "grpc_requests_total", {"method": method, "status": status}
+        )
+        or 0.0
+    )
 
 
 async def test_grpc_metrics_record_success_status(running_server, fake_llm) -> None:
@@ -86,14 +90,14 @@ async def test_metrics_llm_success_and_error(monkeypatch) -> None:
 
 async def test_metrics_llm_retries_increment(monkeypatch) -> None:
     monkeypatch.setattr(asyncio, "sleep", no_sleep)
-    before = metrics.LLM_RETRIES._value.get()
+    before = REGISTRY.get_sample_value("llm_retries_total") or 0.0
     client = make_client(
         monkeypatch, FakeHTTPClient(responses=[FakeResponse(500, {}), ok_response()])
     )
 
     await client.generate_completion("s", "u")
 
-    assert metrics.LLM_RETRIES._value.get() == before + 1
+    assert (REGISTRY.get_sample_value("llm_retries_total") or 0.0) == before + 1
 
 
 async def test_metrics_llm_duration_observed(monkeypatch) -> None:

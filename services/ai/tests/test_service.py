@@ -6,14 +6,11 @@ import pytest
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 from src.generated import ai_service_pb2
-from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.llm import LLMError
 from tests.fake_llm import FakeLLM
 
 
-async def test_generate_summary(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_summary(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = "A short summary."
 
     response = await stub.GenerateSummary(ai_service_pb2.ContentRequest(text="hello"))
@@ -22,21 +19,14 @@ async def test_generate_summary(running_server, fake_llm: FakeLLM) -> None:
     assert fake_llm.calls[0][1] == "hello"
 
 
-async def test_generate_summary_skips_empty_text(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
-
+async def test_generate_summary_skips_empty_text(stub, fake_llm: FakeLLM) -> None:
     response = await stub.GenerateSummary(ai_service_pb2.ContentRequest(text="  "))
 
     assert response.summary == ""
     assert fake_llm.calls == []
 
 
-async def test_generate_summary_cleans_html(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_summary_cleans_html(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = "sum"
 
     await stub.GenerateSummary(
@@ -46,12 +36,7 @@ async def test_generate_summary_cleans_html(running_server, fake_llm: FakeLLM) -
     assert fake_llm.calls[0][1] == "Hello world"
 
 
-async def test_generate_summary_too_long_rejected(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
-
+async def test_generate_summary_too_long_rejected(stub, fake_llm: FakeLLM) -> None:
     with pytest.raises(grpc.aio.AioRpcError) as exc_info:
         await stub.GenerateSummary(ai_service_pb2.ContentRequest(text="x" * 5001))
 
@@ -59,9 +44,7 @@ async def test_generate_summary_too_long_rejected(
     assert fake_llm.calls == []
 
 
-async def test_generate_tags_fenced_json(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_fenced_json(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '```json\n["ai", "tech"]\n```'
 
     response = await stub.GenerateTags(
@@ -71,9 +54,7 @@ async def test_generate_tags_fenced_json(running_server, fake_llm: FakeLLM) -> N
     assert list(response.tags) == ["ai", "tech"]
 
 
-async def test_generate_tags_plain_json(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_plain_json(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '["ai", "tech"]'
 
     response = await stub.GenerateTags(
@@ -83,9 +64,7 @@ async def test_generate_tags_plain_json(running_server, fake_llm: FakeLLM) -> No
     assert list(response.tags) == ["ai", "tech"]
 
 
-async def test_generate_tags_object_form(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_object_form(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '{"tags": ["ai", "tech"]}'
 
     response = await stub.GenerateTags(
@@ -95,11 +74,7 @@ async def test_generate_tags_object_form(running_server, fake_llm: FakeLLM) -> N
     assert list(response.tags) == ["ai", "tech"]
 
 
-async def test_generate_tags_filters_non_strings(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_filters_non_strings(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '["ai", 42, "tech"]'
 
     response = await stub.GenerateTags(
@@ -109,9 +84,7 @@ async def test_generate_tags_filters_non_strings(
     assert list(response.tags) == ["ai", "tech"]
 
 
-async def test_generate_tags_invalid_json(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_invalid_json(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = "not json at all"
 
     with pytest.raises(grpc.aio.AioRpcError) as exc_info:
@@ -120,9 +93,7 @@ async def test_generate_tags_invalid_json(running_server, fake_llm: FakeLLM) -> 
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
 
 
-async def test_generate_post(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_post(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = json.dumps(
         {
             "title": "My Post",
@@ -143,9 +114,7 @@ async def test_generate_post(running_server, fake_llm: FakeLLM) -> None:
     assert "topic" in fake_llm.calls[0][1]
 
 
-async def test_generate_post_sanitizes_body(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_post_sanitizes_body(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = json.dumps(
         {
             "title": "My Post",
@@ -163,9 +132,7 @@ async def test_generate_post_sanitizes_body(running_server, fake_llm: FakeLLM) -
     assert response.body.startswith("<p>ok</p>")
 
 
-async def test_generate_post_invalid_schema(running_server, fake_llm: FakeLLM) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_post_invalid_schema(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '{"title": "missing fields"}'
 
     with pytest.raises(grpc.aio.AioRpcError) as exc_info:
@@ -174,12 +141,7 @@ async def test_generate_post_invalid_schema(running_server, fake_llm: FakeLLM) -
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
 
 
-async def test_generate_post_too_long_rejected(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
-
+async def test_generate_post_too_long_rejected(stub, fake_llm: FakeLLM) -> None:
     with pytest.raises(grpc.aio.AioRpcError) as exc_info:
         await stub.GeneratePost(ai_service_pb2.PostGenerationRequest(prompt="x" * 5001))
 
@@ -187,11 +149,7 @@ async def test_generate_post_too_long_rejected(
     assert fake_llm.calls == []
 
 
-async def test_generate_tags_truncates_long_body(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_truncates_long_body(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '["ai"]'
     long_body = "a" * 5000
 
@@ -200,11 +158,15 @@ async def test_generate_tags_truncates_long_body(
     assert fake_llm.calls[0][1] == f"Title: t\nBody: {'a' * 3000}"
 
 
-async def test_generate_tags_cleans_html_body(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
+async def test_generate_tags_truncates_long_title(stub, fake_llm: FakeLLM) -> None:
+    fake_llm.response = '["ai"]'
+
+    await stub.GenerateTags(ai_service_pb2.ContextRequest(title="x" * 5000, body="b"))
+
+    assert fake_llm.calls[0][1] == f"Title: {'x' * 200}\nBody: b"
+
+
+async def test_generate_tags_cleans_html_body(stub, fake_llm: FakeLLM) -> None:
     fake_llm.response = '["ai"]'
 
     await stub.GenerateTags(
@@ -214,12 +176,7 @@ async def test_generate_tags_cleans_html_body(
     assert fake_llm.calls[0][1] == "Title: t\nBody: Hello world"
 
 
-async def test_generate_tags_too_long_rejected(
-    running_server, fake_llm: FakeLLM
-) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
-
+async def test_generate_tags_too_long_rejected(stub, fake_llm: FakeLLM) -> None:
     with pytest.raises(grpc.aio.AioRpcError) as exc_info:
         await stub.GenerateTags(
             ai_service_pb2.ContextRequest(title="t", body="x" * 5001)
@@ -231,10 +188,8 @@ async def test_generate_tags_too_long_rejected(
 
 @pytest.mark.parametrize("method", ["GenerateSummary", "GenerateTags", "GeneratePost"])
 async def test_llm_error_maps_to_unavailable(
-    running_server, fake_llm: FakeLLM, method: str
+    stub, fake_llm: FakeLLM, method: str
 ) -> None:
-    channel, _ = running_server
-    stub = ai_stubs.AIServiceStub(channel)
     fake_llm.error = LLMError("boom")
 
     callable_rpc = getattr(stub, method)

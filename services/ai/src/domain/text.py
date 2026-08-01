@@ -24,10 +24,14 @@ class _TextExtractor(HTMLParser):
             self._parts.append(data)
 
 
+def _collapse_whitespace(text: str) -> str:
+    return " ".join(text.split())
+
+
 def clean_html(html_text: str) -> str:
     """Extract plain text from HTML, dropping scripts, styles, and markup."""
     if not html_text.strip():
         return ""
     extractor = _TextExtractor()
     extractor.feed(html_text)
-    return " ".join(" ".join(extractor._parts).split())
+    return _collapse_whitespace(" ".join(extractor._parts))

@@ -2,6 +2,7 @@ import grpc
 import pytest
 
 from src.api.service import AIService
+from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.main import create_server
 from tests.fake_llm import FakeLLM
 
@@ -24,3 +25,9 @@ async def running_server(unused_tcp_port: int, fake_llm: FakeLLM):
 
     await channel.close()
     await server.stop(grace=None)
+
+
+@pytest.fixture
+def stub(running_server) -> ai_stubs.AIServiceStub:
+    channel, _ = running_server
+    return ai_stubs.AIServiceStub(channel)

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     MAX_POST_CHARS: int = 5000
     MAX_INPUT_CHARS: int = 5000
     MAX_BODY_CHARS: int = 3000
+    MAX_TITLE_CHARS: int = 200
     OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
     OTEL_SERVICE_NAME: str = "ai-service"
 

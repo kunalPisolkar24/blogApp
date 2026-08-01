@@ -124,7 +124,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             raise TooLargeError(settings.MAX_INPUT_CHARS)
 
         content = (
-            f"Title: {request.title}\nBody: "
+            f"Title: {request.title[: settings.MAX_TITLE_CHARS]}\nBody: "
             f"{clean_html(request.body).strip()[: settings.MAX_BODY_CHARS]}"
         )
 
