@@ -76,7 +76,7 @@ class LLMClient:
             data = await self._post(payload, headers)
             result = data["choices"][0]["message"]["content"]
             status = "success"
-        except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMError(str(exc)) from exc
         finally:
             metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
