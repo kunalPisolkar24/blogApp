@@ -6,10 +6,15 @@ import grpc
 from pydantic import ValidationError
 
 from src.config import settings
+from src.domain.models import GeneratedPost
+from src.domain.prompts import (
+    POST_PROMPT,
+    SUMMARY_PROMPT,
+    TAGS_PROMPT,
+    post_user_prompt,
+)
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMError, LLMProvider
-from src.models import GeneratedPost
-from src.prompts import POST_PROMPT, SUMMARY_PROMPT, TAGS_PROMPT, post_user_prompt
 
 MAX_BODY_CHARS = 3000
 
