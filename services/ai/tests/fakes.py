@@ -45,7 +45,7 @@ class FakeHTTPClient:
     def __init__(
         self,
         responses: list[FakeResponse] | None = None,
-        error: Exception | None = None,
+        error: BaseException | None = None,
     ) -> None:
         self.responses = responses or [ok_response()]
         self.error = error
