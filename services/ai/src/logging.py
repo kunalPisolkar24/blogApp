@@ -5,12 +5,14 @@ import sys
 from pythonjsonlogger.json import JsonFormatter
 
 from src.config import settings
+from src.tracing import get_span_ids
 
 NOISY_LOGGERS = ("httpx", "grpc", "asyncio")
 
 # Stable JSON schema for log consumers (Loki/ELK):
 # timestamp (RFC3339), level, logger, message, service.
-# Future fields (added without schema break): method, request_id, trace_id, span_id.
+# Optional fields (added without schema break): method, request_id, trace_id,
+# span_id (trace_id/span_id present when a trace span is active).
 JSON_LOG_FIELDS = "%(timestamp)s %(level)s %(name)s %(message)s"
 
 
@@ -26,6 +28,9 @@ class JsonLogFormatter(JsonFormatter):
         if "name" in log_record and "logger" not in log_record:
             log_record["logger"] = log_record.pop("name")
         log_record.setdefault("service", "ai")
+        span_ids = get_span_ids()
+        if span_ids is not None:
+            log_record["trace_id"], log_record["span_id"] = span_ids
         log_record.pop("exc_info", None)
         if record.exc_info and record.exc_info[0]:
             log_record["stacktrace"] = self.formatException(record.exc_info)
