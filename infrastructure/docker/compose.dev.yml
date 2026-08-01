@@ -9,7 +9,7 @@ include:
   # - path: ../../services/content/compose.yml
   # - path: ../../services/summary/compose.yml
   - path: ../../services/search/compose.yml
-  # - path: ../../services/ai/compose.yml
+  - path: ../../services/ai/compose.yml
 
 networks:
   app-network:

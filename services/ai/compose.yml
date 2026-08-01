@@ -1,0 +1,46 @@
+x-ai-service-env: &ai-service-env
+  PORT: ${AI_SERVICE_INT_PORT:-50051}
+  METRICS_PORT: ${AI_METRICS_INT_PORT:-12666}
+  LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+  LLM_API_URL: ${AI_LLM_API_URL:-https://lightning.ai/api/v1/chat/completions}
+  LLM_API_KEY: ${LIGHTNING_AI_API_KEY:-}
+  LLM_MODEL: ${AI_LIGHTNING_MODEL:-lightning-ai/gpt-oss-20b}
+  LLM_MODE: ${AI_LLM_MODE:-fake}
+  LLM_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${AI_OTLP_ENDPOINT:-}
+
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${AI_SERVICE_CONTAINER:-local-ai-service}
+    restart: unless-stopped
+    ports:
+      - "${AI_SERVICE_EXT_PORT:-50051}:${AI_SERVICE_INT_PORT:-50051}"
+      - "${AI_METRICS_EXT_PORT:-12666}:${AI_METRICS_INT_PORT:-12666}"
+    environment: *ai-service-env
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import grpc, os, sys
+          from grpc_health.v1 import health_pb2, health_pb2_grpc
+          channel = grpc.insecure_channel(f"127.0.0.1:{os.environ['PORT']}")
+          status = health_pb2_grpc.HealthStub(channel).Check(
+              health_pb2.HealthCheckRequest(service="ai.AIService"), timeout=5
+          ).status
+          sys.exit(0 if status == health_pb2.HealthCheckResponse.SERVING else 1)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK:-topos_local_network}
