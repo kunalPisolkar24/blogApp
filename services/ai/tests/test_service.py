@@ -82,6 +82,32 @@ async def test_generate_tags_plain_json(running_server, fake_llm: FakeLLM) -> No
     assert list(response.tags) == ["ai", "tech"]
 
 
+async def test_generate_tags_object_form(running_server, fake_llm: FakeLLM) -> None:
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+    fake_llm.response = '{"tags": ["ai", "tech"]}'
+
+    response = await stub.GenerateTags(
+        ai_service_pb2.ContextRequest(title="t", body="b")
+    )
+
+    assert list(response.tags) == ["ai", "tech"]
+
+
+async def test_generate_tags_filters_non_strings(
+    running_server, fake_llm: FakeLLM
+) -> None:
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+    fake_llm.response = '["ai", 42, "tech"]'
+
+    response = await stub.GenerateTags(
+        ai_service_pb2.ContextRequest(title="t", body="b")
+    )
+
+    assert list(response.tags) == ["ai", "tech"]
+
+
 async def test_generate_tags_invalid_json(running_server, fake_llm: FakeLLM) -> None:
     channel, _ = running_server
     stub = ai_stubs.AIServiceStub(channel)

@@ -70,13 +70,14 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         try:
             raw = await self._llm.generate_completion(TAGS_PROMPT, content)
             tags = json.loads(_extract_json(raw))
-            if not isinstance(tags, list) or not all(
-                isinstance(tag, str) for tag in tags
-            ):
-                raise ValueError("expected a list of strings")
+            if isinstance(tags, dict):
+                tags = tags.get("tags", [])
+            if not isinstance(tags, list):
+                raise TypeError("expected a list of strings")
+            tags = [t for t in tags if isinstance(t, str)]
         except LLMError:
             await _abort_unavailable(context)
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, TypeError):
             await context.abort(grpc.StatusCode.INTERNAL, "Invalid tags response")
         return ai_service_pb2.TagsResponse(tags=tags)
 
