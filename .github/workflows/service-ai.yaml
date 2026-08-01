@@ -1,23 +1,21 @@
 name: Service - AI
 
-# Disabled during AI service rewrite — source code moved to services/ai/trash (gitignored).
-# Re-enable when the new implementation lands.
-# on:
-#   workflow_dispatch:
-#   push:
-#     branches:
-#       - main
-#       - staging
-#     paths:
-#       - "services/ai/**"
-#       - ".github/workflows/service-ai.yaml"
-#   pull_request:
-#     branches:
-#       - main
-#       - staging
-#     paths:
-#       - "services/ai/**"
-#       - ".github/workflows/service-ai.yaml"
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - staging
+    paths:
+      - "services/ai/**"
+      - ".github/workflows/service-ai.yaml"
+  pull_request:
+    branches:
+      - main
+      - staging
+    paths:
+      - "services/ai/**"
+      - ".github/workflows/service-ai.yaml"
 
 env:
   DOCKER_IMAGE_NAME: kunalpisolkar/topos-ai
@@ -62,18 +60,15 @@ jobs:
         run: |
           mkdir -p src/generated
           touch src/generated/__init__.py
-          poetry run python -m grpc_tools.protoc -Iproto --python_out=src/generated --grpc_python_out=src/generated ai_service.proto
+          poetry run python -m grpc_tools.protoc -I proto/ai --python_out=src/generated --grpc_python_out=src/generated ai_service.proto
           find src/generated -type f -name "*.py" -exec sed -i 's/^import ai_service_pb2/from . import ai_service_pb2/' {} +
 
       - name: Run Linting
-        run: poetry run flake8 src
+        run: poetry run ruff check .
 
       - name: Run Tests
         run: |
-          PYTHONPATH=. poetry run pytest tests -v \
-            --cov=src \
-            --cov-report=term-missing \
-            --asyncio-mode=auto
+          PYTHONPATH=. poetry run pytest tests -v --cov=src --cov-report=term-missing
 
   build-and-push:
     name: Build & Push Docker Image
