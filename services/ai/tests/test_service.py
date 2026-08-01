@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import grpc
 import pytest
@@ -251,7 +252,7 @@ async def test_llm_error_maps_to_unavailable(
 
 async def test_ai_service_health_serving(running_server) -> None:
     channel, _ = running_server
-    stub = health_pb2_grpc.HealthStub(channel)
+    stub: Any = health_pb2_grpc.HealthStub(channel)
 
     response = await stub.Check(health_pb2.HealthCheckRequest(service="ai.AIService"))
 
