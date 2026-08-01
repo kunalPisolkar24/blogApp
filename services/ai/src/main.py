@@ -1,74 +1,55 @@
 import asyncio
 import logging
+import signal
+
 import grpc
-import httpx
+from grpc_health.v1._async import HealthServicer
 from prometheus_client import start_http_server
-from src.config.settings import settings
-from src.api.handlers import AIHandler
-from src.generated import ai_service_pb2_grpc
-from src.infrastructure.llm.lightning_client import LightningClient
-from src.infrastructure.llm.mock_provider import MockLLMProvider
-from src.infrastructure.logging.config import setup_logging
-from src.infrastructure.monitoring.interceptors import PrometheusInterceptor
-from src.usecases.content_logic import ContentLogic
+
+from src.api.server import create_server
+from src.api.service import AIService
+from src.config import settings
+from src.llm import FakeLLMClient, LLMClient
+from src.observability.logging import setup_logging
+from src.observability.tracing import setup_tracing
+
+logger = logging.getLogger(__name__)
 
 
-async def serve():
+def handle_graceful_shutdown(
+    server: grpc.aio.Server,
+    health_servicer: HealthServicer,
+    grace: int = settings.GRACE_SECONDS,
+) -> None:
+    async def _shutdown() -> None:
+        await health_servicer.enter_graceful_shutdown()
+        await server.stop(grace=grace)
+
+    def shutdown() -> None:
+        asyncio.create_task(_shutdown())
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, shutdown)
+
+
+async def serve() -> None:
     setup_logging()
-    logger = logging.getLogger("Main")
+    setup_tracing()
+    logger.info("AI service starting")
 
     start_http_server(settings.METRICS_PORT)
-    logger.info(f"Prometheus metrics exposed on port {settings.METRICS_PORT}")
+    logger.info("prometheus metrics exposed on port %s", settings.METRICS_PORT)
 
-    if settings.LOAD_TEST_MODE:
-        logger.info("Running in load test mode with mock LLM provider")
-        llm_provider = MockLLMProvider()
-        content_logic = ContentLogic(llm_provider)
-        handler = AIHandler(content_logic)
-
-        interceptors = [PrometheusInterceptor()]
-        server = grpc.aio.server(interceptors=interceptors)
-
-        ai_service_pb2_grpc.add_AIServiceServicer_to_server(handler, server)
-
-        listen_addr = f"[::]:{settings.PORT}"
-        server.add_insecure_port(listen_addr)
-
-        logger.info(
-            f"AI Intelligence Service (load test mode) starting on {listen_addr}"
-        )
-        await server.start()
-        await server.wait_for_termination()
-        return
-
-    http_client = httpx.AsyncClient(
-        timeout=settings.TIMEOUT_SECONDS,
-        limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
-    )
-
+    llm = FakeLLMClient() if settings.LLM_MODE == "fake" else LLMClient()
+    server, health_servicer = await create_server(AIService(llm))
+    handle_graceful_shutdown(server, health_servicer)
     try:
-        llm_provider = LightningClient(http_client)
-        content_logic = ContentLogic(llm_provider)
-        handler = AIHandler(content_logic)
-
-        interceptors = [PrometheusInterceptor()]
-        server = grpc.aio.server(interceptors=interceptors)
-
-        ai_service_pb2_grpc.add_AIServiceServicer_to_server(handler, server)
-
-        listen_addr = f"[::]:{settings.PORT}"
-        server.add_insecure_port(listen_addr)
-
-        logger.info(f"AI Intelligence Service starting on {listen_addr}")
         await server.start()
         await server.wait_for_termination()
-
-    except Exception:
-        logger.exception("Server crashed")
-        raise
     finally:
-        logger.info("Shutting down HTTP client...")
-        await http_client.aclose()
+        await llm.close()
+        await server.stop(grace=None)
 
 
 if __name__ == "__main__":

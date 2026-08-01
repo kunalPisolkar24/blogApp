@@ -12,5 +12,7 @@ htmlcov
 .vscode
 .idea
 *.log
-src/generated
+src/generated/*
+!src/generated/__init__.py
+!src/generated/*.pyi
 .venv

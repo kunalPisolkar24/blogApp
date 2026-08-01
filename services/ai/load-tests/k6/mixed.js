@@ -1,30 +1,52 @@
-import { getDefaultOptions, getClient, checkResponse, TEST_HTML, TEST_TITLE, TEST_BODY, TEST_PROMPT } from './shared.js';
+import {
+    checkOk,
+    client,
+    ensureConnected,
+    getDefaultOptions,
+    parseWeights,
+    pickWeighted,
+    postDuration,
+    postPayload,
+    summaryDuration,
+    summaryText,
+    tagsDuration,
+    tagsPayload,
+} from './shared.js';
 
-const vus = parseInt(__ENV.VUS) || 5;
+const vus = parseInt(__ENV.VUS) || 20;
 const duration = __ENV.DURATION || '30s';
-const rps = parseInt(__ENV.RPS) || 10;
+const rps = parseInt(__ENV.RPS) || 100;
+const weights = parseWeights(__ENV.WEIGHTS || 'summary:40,tags:30,post:30');
 
-export const options = getDefaultOptions(vus, duration, rps);
+export const options = getDefaultOptions({ vus, duration, rps });
 
 export default function () {
-  const client = getClient();
-  const r = Math.random();
+    ensureConnected();
+    const op = pickWeighted(weights, Math.random());
 
-  if (r < 0.4) {
-    const response = client.invoke('ai.AIService/GenerateSummary', {
-      text: TEST_HTML,
-    });
-    checkResponse(response, 'GenerateSummary');
-  } else if (r < 0.7) {
-    const response = client.invoke('ai.AIService/GenerateTags', {
-      title: TEST_TITLE,
-      body: TEST_BODY,
-    });
-    checkResponse(response, 'GenerateTags');
-  } else {
-    const response = client.invoke('ai.AIService/GeneratePost', {
-      prompt: TEST_PROMPT,
-    });
-    checkResponse(response, 'GeneratePost');
-  }
+    let res;
+    switch (op) {
+        case 'tags': {
+            const start = Date.now();
+            res = client.invoke('ai.AIService/GenerateTags', tagsPayload(__ITER));
+            tagsDuration.add(Date.now() - start);
+            checkOk(res, 'tags');
+            break;
+        }
+        case 'post': {
+            const start = Date.now();
+            res = client.invoke('ai.AIService/GeneratePost', postPayload(__ITER));
+            postDuration.add(Date.now() - start);
+            checkOk(res, 'post');
+            break;
+        }
+        default: {
+            const start = Date.now();
+            res = client.invoke('ai.AIService/GenerateSummary', {
+                text: summaryText(__ITER),
+            });
+            summaryDuration.add(Date.now() - start);
+            checkOk(res, 'summary');
+        }
+    }
 }

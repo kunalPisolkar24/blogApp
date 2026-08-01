@@ -1,0 +1,135 @@
+import json
+import logging
+import time
+from typing import Protocol
+
+import httpx
+from tenacity import retry, retry_if_exception, stop_after_attempt
+
+from src.config import settings
+from src.domain.prompts import POST_PROMPT, SUMMARY_PROMPT, TAGS_PROMPT
+from src.observability import metrics
+
+logger = logging.getLogger(__name__)
+
+MAX_ATTEMPTS = 3
+RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+
+class LLMError(Exception):
+    """Raised when the LLM provider fails or returns an unexpected shape."""
+
+
+class LLMProvider(Protocol):
+    """Anything that turns a system + user prompt into a completion string."""
+
+    async def generate_completion(self, system: str, user: str) -> str: ...
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.RequestError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in RETRYABLE_STATUSES
+    return False
+
+
+def _before_retry(retry_state) -> None:
+    logger.warning("retrying LLM call after attempt %s", retry_state.attempt_number)
+    metrics.LLM_RETRIES.inc()
+
+
+def _wait_for_retry(retry_state) -> float:
+    exc = retry_state.outcome.exception()
+    if isinstance(exc, httpx.HTTPStatusError):
+        retry_after = exc.response.headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                return min(float(retry_after), 30)
+            except ValueError:
+                pass  # HTTP-date form — fall back to backoff
+    return min(2**retry_state.attempt_number, 10)
+
+
+class LLMClient:
+    """OpenAI-compatible chat completions client for the Lightning AI API."""
+
+    def __init__(self) -> None:
+        self._client = httpx.AsyncClient(timeout=settings.LLM_TIMEOUT_SECONDS)
+
+    async def generate_completion(self, system: str, user: str) -> str:
+        payload = {
+            "model": settings.LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2048,
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.LLM_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        start = time.perf_counter()
+        status = "error"
+        try:
+            data = await self._post(payload, headers)
+            result = data["choices"][0]["message"]["content"]
+            status = "success"
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
+            raise LLMError(str(exc)) from exc
+        finally:
+            metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
+            metrics.LLM_REQUESTS.labels(status=status).inc()
+        return result
+
+    @retry(
+        stop=stop_after_attempt(MAX_ATTEMPTS),
+        wait=_wait_for_retry,
+        retry=retry_if_exception(_is_retryable),
+        before_sleep=_before_retry,
+        reraise=True,
+    )
+    async def _post(self, payload: dict, headers: dict) -> dict:
+        response = await self._client.post(
+            settings.LLM_API_URL, headers=headers, json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+class FakeLLMClient:
+    """Returns canned responses without network calls, for local load testing."""
+
+    _SUMMARY = "A concise three-sentence summary generated for load testing."
+    _TAGS = '["loadtest", "capacity", "benchmark", "grpc", "performance"]'
+    _POST = json.dumps(
+        {
+            "title": "Load Test Post",
+            "body": (
+                "<h2>Introduction</h2><p>Generated HTML content for load "
+                "testing.</p><ul><li>Point one</li><li>Point two</li></ul>"
+                "<h2>Conclusion</h2><p>Wrapping up the load test post.</p>"
+            ),
+            "summary": "A short summary of the load test post.",
+            "tags": ["loadtest", "capacity"],
+        }
+    )
+
+    def __init__(self) -> None:
+        self._responses = {
+            SUMMARY_PROMPT: self._SUMMARY,
+            TAGS_PROMPT: self._TAGS,
+            POST_PROMPT: self._POST,
+        }
+
+    async def generate_completion(self, system: str, user: str) -> str:
+        return self._responses.get(system, self._SUMMARY)
+
+    async def close(self) -> None:
+        return None

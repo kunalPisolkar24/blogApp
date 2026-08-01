@@ -1,3 +1,17 @@
+# syntax=docker/dockerfile:1.7
+
+FROM python:3.12-slim AS codegen
+
+WORKDIR /gen
+
+COPY proto/ai/ai_service.proto ./proto/ai/
+
+RUN pip install --no-cache-dir grpcio-tools
+
+RUN mkdir -p src/generated && touch src/generated/__init__.py && \
+    python -m grpc_tools.protoc -I proto/ai --python_out=src/generated --pyi_out=src/generated --grpc_python_out=src/generated ai_service.proto && \
+    find src/generated -type f -name "*.py" -exec sed -i 's/^import ai_service_pb2/from . import ai_service_pb2/' {} +
+
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -5,39 +19,38 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
 RUN pip install --no-cache-dir poetry
 
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml poetry.lock ./
+
 RUN poetry config virtualenvs.in-project true && \
     poetry install --no-root --without dev --no-interaction
 
-COPY . .
+COPY src ./src
+COPY --from=codegen /gen/src/generated ./src/generated
 
-RUN mkdir -p src/generated && touch src/generated/__init__.py && \
-    .venv/bin/python -m grpc_tools.protoc -Iproto --python_out=src/generated --grpc_python_out=src/generated ai_service.proto && \
-    find src/generated -type f -name "*.py" -exec sed -i 's/^import ai_service_pb2/from . import ai_service_pb2/' {} +
+FROM python:3.12-slim AS runtime
 
-FROM python:3.12-slim
+ARG GIT_REVISION=unknown
+
+LABEL org.opencontainers.image.title="topos-ai" \
+      org.opencontainers.image.source="https://github.com/kunalPisolkar24/topos" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PATH="/app/.venv/bin:${PATH}"
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
-
-ENV PATH="/app/.venv/bin:$PATH"
 
 USER appuser
 
-EXPOSE 50051
-EXPOSE 9090
+EXPOSE 50051 12666
 
-CMD ["python3", "-m", "src.main"]
+CMD ["python", "-m", "src.main"]

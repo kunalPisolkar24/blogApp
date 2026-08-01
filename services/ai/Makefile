@@ -1,7 +1,4 @@
-.PHONY: install generate run clean lint test
-.PHONY: load-test build-load-test-image load-test-stop
-
-# --- Python targets ---
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -9,64 +6,106 @@ install:
 generate:
 	mkdir -p src/generated
 	touch src/generated/__init__.py
-	poetry run python -m grpc_tools.protoc -Iproto --python_out=src/generated --grpc_python_out=src/generated ai_service.proto
+	poetry run python -m grpc_tools.protoc -I proto/ai --python_out=src/generated --pyi_out=src/generated --grpc_python_out=src/generated ai_service.proto
 	find src/generated -type f -name "*.py" -exec sed -i 's/^import ai_service_pb2/from . import ai_service_pb2/' {} +
 
 run:
 	poetry run python -m src.main
 
-clean:
-	rm -rf src/generated
-	rm -rf .venv
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	rm -f .coverage
-	rm -rf htmlcov
-	rm -rf .pytest_cache
-
-lint:
-	poetry run flake8 src
+test:
+	poetry run pytest -m "not container"
 
 test-coverage:
-	PYTHONPATH=. poetry run pytest tests -v --cov=src --cov-report=term-missing --asyncio-mode=auto
+	poetry run pytest -m "not container" --cov=src --cov-report=term-missing
 
-test:
-	PYTHONPATH=. poetry run pytest tests -v \
-		--cov=src \
-		--cov-report=term-missing \
-		--cov-fail-under=80 \
-		--asyncio-mode=auto
+# --- Container Integration Tests ---
 
-# --- Load testing (Docker only, no host installs) ---
+integration:
+	poetry run pytest tests/integration -v
 
-RPS ?= 10
-DURATION ?= 30s
-VUS ?= 5
-SCRIPT ?= mixed
+integration-clean:
+	docker image rm -f topos-ai:integration || true
 
-build-load-test-image:
-	docker build -t topos-ai-service .
+lint:
+	poetry run ruff check .
 
-load-test: build-load-test-image
-	docker network create load-test-net 2>/dev/null || true
-	docker rm -f ai-service 2>/dev/null || true
-	docker run -d --rm --name ai-service \
-		--network load-test-net \
-		-e LOAD_TEST_MODE=true \
-		topos-ai-service
-	sleep 3
-	docker run --rm --network load-test-net \
-		-e PROTO_DIR=/load-tests/proto \
-		-e TARGET=ai-service:50051 \
-		-e VUS=$(VUS) -e DURATION=$(DURATION) -e RPS=$(RPS) \
-		-v "$(PWD)/load-tests:/load-tests" \
-		grafana/k6:latest run \
-		--vus $(VUS) --duration $(DURATION) --rps $(RPS) \
-		/load-tests/k6/$(SCRIPT).js; \
-		EXIT_CODE=$$?; \
-		docker rm -f ai-service 2>/dev/null || true; \
-		docker network rm load-test-net 2>/dev/null || true; \
-		exit $$EXIT_CODE
+format:
+	poetry run ruff format .
+
+format-check:
+	poetry run ruff format --check .
+
+clean:
+	rm -rf src/generated
+	rm -rf .pytest_cache
+	rm -f .coverage
+	rm -rf htmlcov
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+docker-build:
+	docker build -t topos-ai .
+
+docker-run:
+	docker run -d --name topos-ai -p 50051:50051 -p 12666:12666 \
+		-e LLM_API_KEY="$(LLM_API_KEY)" \
+		-e LLM_API_URL="$(LLM_API_URL)" \
+		-e LLM_MODEL="$(LLM_MODEL)" \
+		-e METRICS_PORT="$(METRICS_PORT)" \
+		-e OTEL_EXPORTER_OTLP_ENDPOINT="$(OTEL_EXPORTER_OTLP_ENDPOINT)" \
+		topos-ai
+
+docker-stop:
+	docker rm -f topos-ai
+
+docker-logs:
+	docker logs -f topos-ai
+
+# --- Load Test Targets ---
+
+COMPOSE_LT := docker compose -f load-tests/compose.loadtest.yml --project-name topos-ai-loadtest
+
+RPS       ?= 100
+VUS       ?= 20
+DURATION  ?= 30s
+SCRIPT    ?= mixed
+WEIGHTS   ?= summary:40,tags:30,post:30
+LLM_MODE  ?= fake
+LOG_LEVEL ?= WARNING
+SVC_MEM   ?= 512M
+K6_MEM    ?= 384M
+
+LT_VARS := SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
+	WEIGHTS=$(WEIGHTS) LLM_MODE=$(LLM_MODE) LOG_LEVEL=$(LOG_LEVEL) \
+	SVC_MEM=$(SVC_MEM) K6_MEM=$(K6_MEM)
+
+VALID_SCRIPTS := mixed generate-summary generate-tags generate-post
+
+load-test-build:
+	$(LT_VARS) $(COMPOSE_LT) build
+
+load-test: load-test-build
+	@if echo " $(VALID_SCRIPTS) " | grep -q " $(SCRIPT) "; then :; else \
+		echo "unknown SCRIPT=$(SCRIPT). valid: $(VALID_SCRIPTS)"; exit 2; \
+	fi
+	$(LT_VARS) $(COMPOSE_LT) up -d --wait ai-service
+	$(LT_VARS) $(COMPOSE_LT) run --rm k6
+	@EXIT=$$?; \
+	$(MAKE) --no-print-directory load-test-stop; \
+	exit $$EXIT
+
+load-test-summary: SCRIPT = generate-summary
+load-test-summary: load-test
+
+load-test-tags: SCRIPT = generate-tags
+load-test-tags: load-test
+
+load-test-post: SCRIPT = generate-post
+load-test-post: load-test
 
 load-test-stop:
-	docker rm -f ai-service 2>/dev/null || true
-	docker network rm load-test-net 2>/dev/null || true
+	$(LT_VARS) $(COMPOSE_LT) down -v --remove-orphans
+
+load-test-clean: load-test-stop
+
+load-test-tail:
+	$(COMPOSE_LT) logs -f
