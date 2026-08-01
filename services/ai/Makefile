@@ -1,7 +1,13 @@
-.PHONY: install run test test-coverage lint format format-check clean
+.PHONY: install generate run test test-coverage lint format format-check clean
 
 install:
 	poetry install
+
+generate:
+	mkdir -p src/generated
+	touch src/generated/__init__.py
+	poetry run python -m grpc_tools.protoc -I proto/ai --python_out=src/generated --grpc_python_out=src/generated ai_service.proto
+	find src/generated -type f -name "*.py" -exec sed -i 's/^import ai_service_pb2/from . import ai_service_pb2/' {} +
 
 run:
 	poetry run python -m src.main

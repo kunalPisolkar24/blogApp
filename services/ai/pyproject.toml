@@ -30,3 +30,9 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+exclude = ["src/generated"]
+
+[tool.coverage.run]
+omit = ["src/generated/*"]
