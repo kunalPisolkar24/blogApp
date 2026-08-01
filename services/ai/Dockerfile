@@ -51,6 +51,6 @@ COPY --from=builder --chown=appuser:appuser /app/src /app/src
 
 USER appuser
 
-EXPOSE 50051
+EXPOSE 50051 12666
 
 CMD ["python", "-m", "src.main"]

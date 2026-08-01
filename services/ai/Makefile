@@ -38,10 +38,12 @@ docker-build:
 	docker build -t topos-ai .
 
 docker-run:
-	docker run -d --name topos-ai -p 50051:50051 \
+	docker run -d --name topos-ai -p 50051:50051 -p 12666:12666 \
 		-e LLM_API_KEY="$(LLM_API_KEY)" \
 		-e LLM_API_URL="$(LLM_API_URL)" \
 		-e LLM_MODEL="$(LLM_MODEL)" \
+		-e METRICS_PORT="$(METRICS_PORT)" \
+		-e OTEL_EXPORTER_OTLP_ENDPOINT="$(OTEL_EXPORTER_OTLP_ENDPOINT)" \
 		topos-ai
 
 docker-stop:
