@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs load-test load-test-build load-test-summary load-test-tags load-test-post load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -13,10 +13,18 @@ run:
 	poetry run python -m src.main
 
 test:
-	poetry run pytest
+	poetry run pytest -m "not container"
 
 test-coverage:
-	poetry run pytest --cov=src --cov-report=term-missing
+	poetry run pytest -m "not container" --cov=src --cov-report=term-missing
+
+# --- Container Integration Tests ---
+
+integration:
+	poetry run pytest tests/integration -v
+
+integration-clean:
+	docker image rm -f topos-ai:integration || true
 
 lint:
 	poetry run ruff check .

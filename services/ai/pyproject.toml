@@ -33,13 +33,17 @@ dev = [
     "pytest-asyncio (>=1.4.0,<2.0.0)",
     "pytest-cov (>=7.1.0,<8.0.0)",
     "ruff (>=0.16.1,<0.17.0)",
-    "grpcio-tools (>=1.83.0,<2.0.0)"
+    "grpcio-tools (>=1.83.0,<2.0.0)",
+    "testcontainers (>=4.11,<5.0)"
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "container: integration tests that run the service inside a docker container",
+]
 
 [tool.ruff]
 exclude = ["src/generated"]
