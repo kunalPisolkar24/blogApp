@@ -1,11 +1,13 @@
+import asyncio
+import functools
 import json
 import logging
 import re
 import time
-from typing import NoReturn
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import grpc
-from pydantic import ValidationError
 
 from src import metrics
 from src.config import settings
@@ -24,22 +26,20 @@ from src.tracing import get_span_ids
 
 access_logger = logging.getLogger("access")
 
+Handler = Callable[..., Awaitable[Any]]
+
+
+class TooLargeError(Exception):
+    """Raised when a request exceeds its configured size limit."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+
 
 def _extract_json(raw: str) -> str:
     """Strip markdown code fences around a JSON response."""
     match = re.search(r"```(?:json)?\s*(.+?)\s*```", raw, re.DOTALL)
     return match.group(1).strip() if match else raw.strip()
-
-
-async def _abort_unavailable(context: grpc.aio.ServicerContext) -> NoReturn:
-    await context.abort(grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable")
-
-
-async def _abort_too_large(context: grpc.aio.ServicerContext, limit: int) -> NoReturn:
-    await context.abort(
-        grpc.StatusCode.INVALID_ARGUMENT,
-        f"Input exceeds the maximum length of {limit} characters",
-    )
 
 
 def _record_rpc(method: str, status: str, start: float) -> None:
@@ -59,101 +59,99 @@ def _record_rpc(method: str, status: str, start: float) -> None:
     )
 
 
+def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
+    """Track metrics and access logs around a gRPC method handler."""
+
+    def decorator(fn: Handler) -> Handler:
+        @functools.wraps(fn)
+        async def wrapper(
+            self: Any, request: Any, context: grpc.aio.ServicerContext
+        ) -> Any:
+            start = time.perf_counter()
+            status = "OK"
+            metrics.GRPC_ACTIVE_REQUESTS.inc()
+            try:
+                return await fn(self, request, context)
+            except TooLargeError as exc:
+                status = "INVALID_ARGUMENT"
+                await context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    f"Input exceeds the maximum length of {exc.limit} characters",
+                )
+            except LLMError:
+                status = "UNAVAILABLE"
+                await context.abort(
+                    grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable"
+                )
+            except asyncio.CancelledError:
+                status = "CANCELLED"
+                raise
+            except Exception:  # noqa: BLE001 - unexpected errors become INTERNAL
+                status = "INTERNAL"
+                await context.abort(grpc.StatusCode.INTERNAL, "Internal service error")
+            finally:
+                metrics.GRPC_ACTIVE_REQUESTS.dec()
+                _record_rpc(method, status, start)
+
+        return wrapper
+
+    return decorator
+
+
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
 
+    @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
         self, request: ai_service_pb2.ContentRequest, context: grpc.aio.ServicerContext
     ) -> ai_service_pb2.ContentResponse:
-        start = time.perf_counter()
-        status = "OK"
-        metrics.GRPC_ACTIVE_REQUESTS.inc()
-        try:
-            if len(request.text) > settings.MAX_INPUT_CHARS:
-                status = "INVALID_ARGUMENT"
-                await _abort_too_large(context, settings.MAX_INPUT_CHARS)
+        if len(request.text) > settings.MAX_INPUT_CHARS:
+            raise TooLargeError(settings.MAX_INPUT_CHARS)
 
-            text = clean_html(request.text).strip()
-            if not text:
-                return ai_service_pb2.ContentResponse(summary="")
+        text = clean_html(request.text).strip()
+        if not text:
+            return ai_service_pb2.ContentResponse(summary="")
 
-            try:
-                summary = await self._llm.generate_completion(SUMMARY_PROMPT, text)
-            except LLMError:
-                status = "UNAVAILABLE"
-                await _abort_unavailable(context)
-            return ai_service_pb2.ContentResponse(summary=summary)
-        finally:
-            metrics.GRPC_ACTIVE_REQUESTS.dec()
-            _record_rpc("/ai.AIService/GenerateSummary", status, start)
+        summary = await self._llm.generate_completion(SUMMARY_PROMPT, text)
+        return ai_service_pb2.ContentResponse(summary=summary)
 
+    @rpc_metrics("/ai.AIService/GenerateTags")
     async def GenerateTags(
         self, request: ai_service_pb2.ContextRequest, context: grpc.aio.ServicerContext
     ) -> ai_service_pb2.TagsResponse:
-        start = time.perf_counter()
-        status = "OK"
-        metrics.GRPC_ACTIVE_REQUESTS.inc()
-        try:
-            if len(request.body) > settings.MAX_INPUT_CHARS:
-                status = "INVALID_ARGUMENT"
-                await _abort_too_large(context, settings.MAX_INPUT_CHARS)
+        if len(request.body) > settings.MAX_INPUT_CHARS:
+            raise TooLargeError(settings.MAX_INPUT_CHARS)
 
-            content = (
-                f"Title: {request.title}\nBody: "
-                f"{clean_html(request.body).strip()[: settings.MAX_BODY_CHARS]}"
-            )
+        content = (
+            f"Title: {request.title}\nBody: "
+            f"{clean_html(request.body).strip()[: settings.MAX_BODY_CHARS]}"
+        )
 
-            try:
-                raw = await self._llm.generate_completion(TAGS_PROMPT, content)
-                tags = json.loads(_extract_json(raw))
-                if isinstance(tags, dict):
-                    tags = tags.get("tags", [])
-                if not isinstance(tags, list):
-                    raise TypeError("expected a list of strings")
-                tags = [t for t in tags if isinstance(t, str)]
-            except LLMError:
-                status = "UNAVAILABLE"
-                await _abort_unavailable(context)
-            except (json.JSONDecodeError, TypeError):
-                status = "INTERNAL"
-                await context.abort(grpc.StatusCode.INTERNAL, "Invalid tags response")
-            return ai_service_pb2.TagsResponse(tags=tags)
-        finally:
-            metrics.GRPC_ACTIVE_REQUESTS.dec()
-            _record_rpc("/ai.AIService/GenerateTags", status, start)
+        raw = await self._llm.generate_completion(TAGS_PROMPT, content)
+        parsed = json.loads(_extract_json(raw))
+        tags = parsed.get("tags") if isinstance(parsed, dict) else parsed
+        if not isinstance(tags, list):
+            raise TypeError("LLM response tags are not a list")
+        return ai_service_pb2.TagsResponse(tags=[t for t in tags if isinstance(t, str)])
 
+    @rpc_metrics("/ai.AIService/GeneratePost")
     async def GeneratePost(
         self,
         request: ai_service_pb2.PostGenerationRequest,
         context: grpc.aio.ServicerContext,
     ) -> ai_service_pb2.PostGenerationResponse:
-        start = time.perf_counter()
-        status = "OK"
-        metrics.GRPC_ACTIVE_REQUESTS.inc()
-        try:
-            if len(request.prompt) > settings.MAX_POST_CHARS:
-                status = "INVALID_ARGUMENT"
-                await _abort_too_large(context, settings.MAX_POST_CHARS)
+        if len(request.prompt) > settings.MAX_POST_CHARS:
+            raise TooLargeError(settings.MAX_POST_CHARS)
 
-            user_prompt = post_user_prompt(request.prompt)
-
-            try:
-                raw = await self._llm.generate_completion(POST_PROMPT, user_prompt)
-                post = GeneratedPost.model_validate_json(_extract_json(raw))
-            except LLMError:
-                status = "UNAVAILABLE"
-                await _abort_unavailable(context)
-            except ValidationError:
-                status = "INTERNAL"
-                await context.abort(grpc.StatusCode.INTERNAL, "Invalid post response")
-            post.body = sanitize_post_html(post.body)
-            return ai_service_pb2.PostGenerationResponse(
-                title=post.title,
-                body=post.body,
-                summary=post.summary,
-                tags=post.tags,
-            )
-        finally:
-            metrics.GRPC_ACTIVE_REQUESTS.dec()
-            _record_rpc("/ai.AIService/GeneratePost", status, start)
+        raw = await self._llm.generate_completion(
+            POST_PROMPT, post_user_prompt(request.prompt)
+        )
+        post = GeneratedPost.model_validate_json(_extract_json(raw))
+        post.body = sanitize_post_html(post.body)
+        return ai_service_pb2.PostGenerationResponse(
+            title=post.title,
+            body=post.body,
+            summary=post.summary,
+            tags=post.tags,
+        )
