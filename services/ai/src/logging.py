@@ -26,6 +26,7 @@ class JsonLogFormatter(JsonFormatter):
         if "name" in log_record and "logger" not in log_record:
             log_record["logger"] = log_record.pop("name")
         log_record.setdefault("service", "ai")
+        log_record.pop("exc_info", None)
         if record.exc_info and record.exc_info[0]:
             log_record["stacktrace"] = self.formatException(record.exc_info)
 
