@@ -8,7 +8,6 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "grpcio (>=1.83.0,<2.0.0)",
-    "grpcio-tools (>=1.83.0,<2.0.0)",
     "grpcio-health-checking (>=1.83.0,<2.0.0)",
     "pydantic-settings (>=2.14.2,<3.0.0)",
     "python-json-logger (>=4.1.0,<5.0.0)",
@@ -28,7 +27,8 @@ dev = [
     "pytest (>=9.1.1,<10.0.0)",
     "pytest-asyncio (>=1.4.0,<2.0.0)",
     "pytest-cov (>=7.1.0,<8.0.0)",
-    "ruff (>=0.16.1,<0.17.0)"
+    "ruff (>=0.16.1,<0.17.0)",
+    "grpcio-tools (>=1.83.0,<2.0.0)"
 ]
 
 [tool.pytest.ini_options]

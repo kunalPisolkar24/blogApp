@@ -184,7 +184,7 @@ version = "1.83.0"
 description = "HTTP/2-based RPC framework"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "grpcio-1.83.0-cp310-cp310-linux_armv7l.whl", hash = "sha256:fba099b716e73512d61b97f71ea3c31a72abb36904036e316bf4dd148ca8dcc8"},
     {file = "grpcio-1.83.0-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:6755ed67cc3e454d51ae9f6e1915b80d3942fa4de956ef48dacd45ab7f40b727"},
@@ -267,7 +267,7 @@ version = "1.83.0"
 description = "Protobuf code generator for gRPC"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["dev"]
 files = [
     {file = "grpcio_tools-1.83.0-cp310-cp310-linux_armv7l.whl", hash = "sha256:f281cb706999676bb841bcd57129a69091b9286236c89d6114c752ebf6cd5a1b"},
     {file = "grpcio_tools-1.83.0-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:3647c6adae9528dd56183061371151e3a96f71c299dc69c540318c3af2233a88"},
@@ -447,7 +447,7 @@ version = "7.35.1"
 description = ""
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["main", "dev"]
 files = [
     {file = "protobuf-7.35.1-cp310-abi3-macosx_10_9_universal2.whl", hash = "sha256:24f857477359a85c0c235261b8ba905fd51b2562f4a64ca1df5473f29850cbf6"},
     {file = "protobuf-7.35.1-cp310-abi3-manylinux2014_aarch64.whl", hash = "sha256:11d6b0ec246892d85215b0a13ca6e0233cf5284b68f0ac02646427f4ff88a799"},
@@ -779,7 +779,7 @@ version = "83.0.0"
 description = "Most extensible Python build backend with support for C/C++ extension modules"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["dev"]
 files = [
     {file = "setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"},
     {file = "setuptools-83.0.0.tar.gz", hash = "sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef"},
@@ -821,7 +821,6 @@ files = [
     {file = "typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"},
     {file = "typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5"},
 ]
-markers = {dev = "python_version == \"3.12\""}
 
 [[package]]
 name = "typing-inspection"
@@ -853,4 +852,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "07e50a7288a9820fa3e8ccde8ea3dde3a3c591a564ed22399c523c7f1c4bb15c"
+content-hash = "fd6769954cfddb0ca95aea7508e0dc9f15822a2700d3f5a04d315c84473aa333"
