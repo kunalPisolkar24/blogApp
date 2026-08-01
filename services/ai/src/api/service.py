@@ -13,10 +13,10 @@ from src.domain.prompts import (
     TAGS_PROMPT,
     post_user_prompt,
 )
+from src.domain.sanitize import sanitize_post_html
+from src.domain.text import clean_html
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMError, LLMProvider
-
-MAX_BODY_CHARS = 3000
 
 
 def _extract_json(raw: str) -> str:
@@ -29,6 +29,13 @@ async def _abort_unavailable(context: grpc.aio.ServicerContext) -> NoReturn:
     await context.abort(grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable")
 
 
+async def _abort_too_large(context: grpc.aio.ServicerContext, limit: int) -> NoReturn:
+    await context.abort(
+        grpc.StatusCode.INVALID_ARGUMENT,
+        f"Input exceeds the maximum length of {limit} characters",
+    )
+
+
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
@@ -36,7 +43,10 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
     async def GenerateSummary(
         self, request: ai_service_pb2.ContentRequest, context: grpc.aio.ServicerContext
     ) -> ai_service_pb2.ContentResponse:
-        text = request.text.strip()
+        if len(request.text) > settings.MAX_INPUT_CHARS:
+            await _abort_too_large(context, settings.MAX_INPUT_CHARS)
+
+        text = clean_html(request.text).strip()
         if not text:
             return ai_service_pb2.ContentResponse(summary="")
 
@@ -49,8 +59,12 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
     async def GenerateTags(
         self, request: ai_service_pb2.ContextRequest, context: grpc.aio.ServicerContext
     ) -> ai_service_pb2.TagsResponse:
+        if len(request.body) > settings.MAX_INPUT_CHARS:
+            await _abort_too_large(context, settings.MAX_INPUT_CHARS)
+
         content = (
-            f"Title: {request.title}\nBody: {request.body.strip()[:MAX_BODY_CHARS]}"
+            f"Title: {request.title}\nBody: "
+            f"{clean_html(request.body).strip()[: settings.MAX_BODY_CHARS]}"
         )
 
         try:
@@ -72,10 +86,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> ai_service_pb2.PostGenerationResponse:
         if len(request.prompt) > settings.MAX_POST_CHARS:
-            await context.abort(
-                grpc.StatusCode.INVALID_ARGUMENT,
-                f"Prompt exceeds the maximum length of {settings.MAX_POST_CHARS} characters",
-            )
+            await _abort_too_large(context, settings.MAX_POST_CHARS)
 
         user_prompt = post_user_prompt(request.prompt)
 
@@ -86,6 +97,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             await _abort_unavailable(context)
         except ValidationError:
             await context.abort(grpc.StatusCode.INTERNAL, "Invalid post response")
+        post.body = sanitize_post_html(post.body)
         return ai_service_pb2.PostGenerationResponse(
             title=post.title,
             body=post.body,

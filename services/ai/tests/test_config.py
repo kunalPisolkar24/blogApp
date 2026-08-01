@@ -42,10 +42,30 @@ def test_default_max_post_chars(isolated_settings: Settings) -> None:
     assert isolated_settings.MAX_POST_CHARS == 5000
 
 
+def test_default_max_input_chars(isolated_settings: Settings) -> None:
+    assert isolated_settings.MAX_INPUT_CHARS == 5000
+
+
+def test_default_max_body_chars(isolated_settings: Settings) -> None:
+    assert isolated_settings.MAX_BODY_CHARS == 3000
+
+
 def test_max_post_chars_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MAX_POST_CHARS", "10000")
 
     assert Settings().MAX_POST_CHARS == 10000
+
+
+def test_max_input_chars_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MAX_INPUT_CHARS", "10000")
+
+    assert Settings().MAX_INPUT_CHARS == 10000
+
+
+def test_max_body_chars_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MAX_BODY_CHARS", "1000")
+
+    assert Settings().MAX_BODY_CHARS == 1000
 
 
 def test_env_override(monkeypatch: pytest.MonkeyPatch) -> None:

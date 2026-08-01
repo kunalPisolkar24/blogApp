@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "lightning-ai/gpt-oss-20b"
     LLM_TIMEOUT_SECONDS: int = 60
     MAX_POST_CHARS: int = 5000
+    MAX_INPUT_CHARS: int = 5000
+    MAX_BODY_CHARS: int = 3000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
