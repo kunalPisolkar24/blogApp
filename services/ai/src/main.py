@@ -3,20 +3,27 @@ import logging
 import signal
 
 import grpc
-from grpc_health.v1 import health_pb2_grpc
+from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1._async import HealthServicer
 
 from src.config import settings
+from src.generated import ai_service_pb2_grpc
+from src.service import AIService
 
 logger = logging.getLogger(__name__)
 
 
-def create_server(port: str = settings.PORT) -> tuple[grpc.aio.Server, HealthServicer]:
+async def create_server(
+    port: str = settings.PORT,
+) -> tuple[grpc.aio.Server, HealthServicer]:
     server = grpc.aio.server()
     server.add_insecure_port(f"[::]:{port}")
 
     health_servicer = HealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+
+    ai_service_pb2_grpc.add_AIServiceServicer_to_server(AIService(), server)
+    await health_servicer.set("ai.AIService", health_pb2.HealthCheckResponse.SERVING)
 
     return server, health_servicer
 
@@ -39,7 +46,7 @@ def handle_graceful_shutdown(
 
 
 async def serve() -> None:
-    server, health_servicer = create_server()
+    server, health_servicer = await create_server()
     handle_graceful_shutdown(server, health_servicer)
     try:
         await server.start()
