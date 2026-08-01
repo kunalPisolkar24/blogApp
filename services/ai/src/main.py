@@ -6,11 +6,11 @@ import grpc
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1._async import HealthServicer
 
+from src.api.service import AIService
 from src.config import settings
 from src.generated import ai_service_pb2_grpc
 from src.llm import LLMClient
 from src.logging import setup_logging
-from src.service import AIService
 
 logger = logging.getLogger(__name__)
 

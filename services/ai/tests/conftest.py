@@ -1,8 +1,8 @@
 import grpc
 import pytest
 
+from src.api.service import AIService
 from src.main import create_server
-from src.service import AIService
 from tests.fake_llm import FakeLLM
 
 
