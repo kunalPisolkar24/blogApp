@@ -5,7 +5,7 @@ import sys
 from pythonjsonlogger.json import JsonFormatter
 
 from src.config import settings
-from src.tracing import get_span_ids
+from src.observability.tracing import get_span_ids
 
 NOISY_LOGGERS = ("httpx", "grpc", "asyncio")
 

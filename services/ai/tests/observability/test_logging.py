@@ -2,7 +2,7 @@ import json
 import logging
 
 from src.config import settings
-from src.logging import setup_logging
+from src.observability.logging import setup_logging
 
 
 def test_log_output_is_json_with_schema(capsys) -> None:

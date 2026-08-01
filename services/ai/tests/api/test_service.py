@@ -7,7 +7,7 @@ from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 from src.generated import ai_service_pb2
 from src.llm import LLMError
-from src.logging import setup_logging
+from src.observability.logging import setup_logging
 from tests.fake_llm import FakeLLM
 
 

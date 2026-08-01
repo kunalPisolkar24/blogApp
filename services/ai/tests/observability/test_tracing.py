@@ -11,8 +11,8 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from src.config import settings
 from src.generated import ai_service_pb2
 from src.generated import ai_service_pb2_grpc as ai_stubs
-from src.logging import setup_logging
-from src.tracing import get_span_ids, setup_tracing
+from src.observability.logging import setup_logging
+from src.observability.tracing import get_span_ids, setup_tracing
 
 
 def test_setup_tracing_disabled_without_endpoint(

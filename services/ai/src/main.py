@@ -3,34 +3,17 @@ import logging
 import signal
 
 import grpc
-from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1._async import HealthServicer
 from prometheus_client import start_http_server
 
+from src.api.server import create_server
 from src.api.service import AIService
 from src.config import settings
-from src.generated import ai_service_pb2_grpc
 from src.llm import FakeLLMClient, LLMClient
-from src.logging import setup_logging
-from src.tracing import setup_tracing
+from src.observability.logging import setup_logging
+from src.observability.tracing import setup_tracing
 
 logger = logging.getLogger(__name__)
-
-
-async def create_server(
-    service: AIService,
-    port: str | None = None,
-) -> tuple[grpc.aio.Server, HealthServicer]:
-    server = grpc.aio.server()
-    server.add_insecure_port(f"[::]:{port or settings.PORT}")
-
-    health_servicer = HealthServicer()
-    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-
-    ai_service_pb2_grpc.add_AIServiceServicer_to_server(service, server)
-    await health_servicer.set("ai.AIService", health_pb2.HealthCheckResponse.SERVING)
-
-    return server, health_servicer
 
 
 def handle_graceful_shutdown(

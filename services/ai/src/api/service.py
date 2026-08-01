@@ -9,7 +9,6 @@ from typing import Any
 
 import grpc
 
-from src import metrics
 from src.config import settings
 from src.domain.models import GeneratedPost
 from src.domain.prompts import (
@@ -22,7 +21,8 @@ from src.domain.sanitize import sanitize_post_html
 from src.domain.text import clean_html
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMError, LLMProvider
-from src.tracing import get_span_ids
+from src.observability import metrics
+from src.observability.tracing import get_span_ids
 
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("access")

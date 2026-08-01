@@ -1,9 +1,9 @@
 import grpc
 import pytest
 
+from src.api.server import create_server
 from src.api.service import AIService
 from src.generated import ai_service_pb2_grpc as ai_stubs
-from src.main import create_server
 from tests.fake_llm import FakeLLM
 
 

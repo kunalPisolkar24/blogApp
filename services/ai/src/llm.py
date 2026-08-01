@@ -6,9 +6,9 @@ from typing import Protocol
 import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt
 
-from src import metrics
 from src.config import settings
 from src.domain.prompts import POST_PROMPT, SUMMARY_PROMPT, TAGS_PROMPT
+from src.observability import metrics
 
 logger = logging.getLogger(__name__)
 
