@@ -1,8 +1,0 @@
-{
-  "name": "user-migrator",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "prisma": "7.4.1"
-  }
-}
