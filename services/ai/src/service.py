@@ -1,5 +1,6 @@
 import json
 import re
+from typing import NoReturn
 
 import grpc
 from pydantic import ValidationError
@@ -19,6 +20,10 @@ def _extract_json(raw: str) -> str:
     return match.group(1).strip() if match else raw.strip()
 
 
+async def _abort_unavailable(context: grpc.aio.ServicerContext) -> NoReturn:
+    await context.abort(grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable")
+
+
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
@@ -33,7 +38,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         try:
             summary = await self._llm.generate_completion(SUMMARY_PROMPT, text)
         except LLMError:
-            await context.abort(grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable")
+            await _abort_unavailable(context)
         return ai_service_pb2.ContentResponse(summary=summary)
 
     async def GenerateTags(
@@ -51,7 +56,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             ):
                 raise ValueError("expected a list of strings")
         except LLMError:
-            await context.abort(grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable")
+            await _abort_unavailable(context)
         except (json.JSONDecodeError, ValueError):
             await context.abort(grpc.StatusCode.INTERNAL, "Invalid tags response")
         return ai_service_pb2.TagsResponse(tags=tags)
@@ -73,7 +78,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             raw = await self._llm.generate_completion(POST_PROMPT, user_prompt)
             post = GeneratedPost.model_validate_json(_extract_json(raw))
         except LLMError:
-            await context.abort(grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable")
+            await _abort_unavailable(context)
         except ValidationError:
             await context.abort(grpc.StatusCode.INTERNAL, "Invalid post response")
         return ai_service_pb2.PostGenerationResponse(
