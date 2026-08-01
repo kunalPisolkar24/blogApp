@@ -44,5 +44,8 @@ pythonpath = ["."]
 [tool.ruff]
 exclude = ["src/generated"]
 
+[tool.pyright]
+exclude = ["src/generated/**/*.py"]
+
 [tool.coverage.run]
 omit = ["src/generated/*"]
