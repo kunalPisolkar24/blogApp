@@ -1,10 +1,13 @@
 import asyncio
 
+import grpc
 import pytest
 
 from src import metrics
+from src.generated import ai_service_pb2
+from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.llm import LLMError
-from tests.test_llm import FakeHTTPClient, FakeResponse, _client, _ok_response
+from tests.fakes import FakeHTTPClient, FakeResponse, make_client, no_sleep, ok_response
 
 
 def _llm_counter(status: str) -> int:
@@ -16,9 +19,6 @@ def _grpc_counter(method: str, status: str) -> int:
 
 
 async def test_grpc_metrics_record_success_status(running_server, fake_llm) -> None:
-    from src.generated import ai_service_pb2
-    from src.generated import ai_service_pb2_grpc as ai_stubs
-
     channel, _ = running_server
     stub = ai_stubs.AIServiceStub(channel)
     fake_llm.response = "sum"
@@ -30,11 +30,6 @@ async def test_grpc_metrics_record_success_status(running_server, fake_llm) -> N
 
 
 async def test_grpc_metrics_record_error_status(running_server, fake_llm) -> None:
-    import grpc
-
-    from src.generated import ai_service_pb2
-    from src.generated import ai_service_pb2_grpc as ai_stubs
-
     channel, _ = running_server
     stub = ai_stubs.AIServiceStub(channel)
     fake_llm.error = LLMError("boom")
@@ -47,11 +42,6 @@ async def test_grpc_metrics_record_error_status(running_server, fake_llm) -> Non
 
 
 async def test_grpc_metrics_record_internal_status(running_server, fake_llm) -> None:
-    import grpc
-
-    from src.generated import ai_service_pb2
-    from src.generated import ai_service_pb2_grpc as ai_stubs
-
     channel, _ = running_server
     stub = ai_stubs.AIServiceStub(channel)
     fake_llm.response = "not json"
@@ -64,11 +54,6 @@ async def test_grpc_metrics_record_internal_status(running_server, fake_llm) -> 
 
 
 async def test_grpc_metrics_record_invalid_argument(running_server, fake_llm) -> None:
-    import grpc
-
-    from src.generated import ai_service_pb2
-    from src.generated import ai_service_pb2_grpc as ai_stubs
-
     channel, _ = running_server
     stub = ai_stubs.AIServiceStub(channel)
 
@@ -85,13 +70,13 @@ async def test_metrics_llm_success_and_error(monkeypatch) -> None:
     success_before = _llm_counter("success")
     error_before = _llm_counter("error")
 
-    client = _client(monkeypatch, FakeHTTPClient(responses=[_ok_response()]))
+    client = make_client(monkeypatch, FakeHTTPClient(responses=[ok_response()]))
     await client.generate_completion("s", "u")
 
     assert _llm_counter("success") == success_before + 1
     assert _llm_counter("error") == error_before
 
-    bad = _client(monkeypatch, FakeHTTPClient(responses=[FakeResponse(400, {})]))
+    bad = make_client(monkeypatch, FakeHTTPClient(responses=[FakeResponse(400, {})]))
     with pytest.raises(LLMError):
         await bad.generate_completion("s", "u")
 
@@ -99,13 +84,10 @@ async def test_metrics_llm_success_and_error(monkeypatch) -> None:
 
 
 async def test_metrics_llm_retries_increment(monkeypatch) -> None:
-    async def _no_sleep(_seconds: float) -> None:
-        return None
-
-    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
     before = metrics.LLM_RETRIES._value.get()
-    client = _client(
-        monkeypatch, FakeHTTPClient(responses=[FakeResponse(500, {}), _ok_response()])
+    client = make_client(
+        monkeypatch, FakeHTTPClient(responses=[FakeResponse(500, {}), ok_response()])
     )
 
     await client.generate_completion("s", "u")
@@ -118,7 +100,7 @@ async def test_metrics_llm_duration_observed(monkeypatch) -> None:
 
     count_before = REGISTRY.get_sample_value("llm_request_duration_seconds_count")
     sum_before = REGISTRY.get_sample_value("llm_request_duration_seconds_sum")
-    client = _client(monkeypatch, FakeHTTPClient(responses=[_ok_response()]))
+    client = make_client(monkeypatch, FakeHTTPClient(responses=[ok_response()]))
 
     await client.generate_completion("s", "u")
 

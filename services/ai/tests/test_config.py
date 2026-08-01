@@ -12,80 +12,46 @@ def isolated_settings(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     return Settings()
 
 
-def test_default_port(isolated_settings: Settings) -> None:
-    assert isolated_settings.PORT == "50051"
+DEFAULTS = {
+    "PORT": "50051",
+    "GRACE_SECONDS": 5,
+    "METRICS_PORT": 12666,
+    "LOG_LEVEL": "INFO",
+    "LLM_API_URL": "https://lightning.ai/api/v1/chat/completions",
+    "LLM_MODEL": "lightning-ai/gpt-oss-20b",
+    "LLM_TIMEOUT_SECONDS": 60,
+    "MAX_POST_CHARS": 5000,
+    "MAX_INPUT_CHARS": 5000,
+    "MAX_BODY_CHARS": 3000,
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "",
+    "OTEL_SERVICE_NAME": "ai-service",
+}
 
 
-def test_default_grace_seconds(isolated_settings: Settings) -> None:
-    assert isolated_settings.GRACE_SECONDS == 5
+@pytest.mark.parametrize("field,expected", DEFAULTS.items())
+def test_defaults(isolated_settings: Settings, field: str, expected) -> None:
+    assert getattr(isolated_settings, field) == expected
 
 
-def test_default_metrics_port(isolated_settings: Settings) -> None:
-    assert isolated_settings.METRICS_PORT == 12666
+OVERRIDES = {
+    "PORT": "50055",
+    "GRACE_SECONDS": 9,
+    "METRICS_PORT": 9091,
+    "LLM_MODEL": "some-other-model",
+    "LLM_TIMEOUT_SECONDS": 30,
+    "MAX_POST_CHARS": 10000,
+    "MAX_INPUT_CHARS": 10000,
+    "MAX_BODY_CHARS": 1000,
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317",
+    "OTEL_SERVICE_NAME": "ai-test",
+}
 
 
-def test_metrics_port_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("METRICS_PORT", "9091")
+@pytest.mark.parametrize("field,value", OVERRIDES.items())
+def test_env_override(monkeypatch: pytest.MonkeyPatch, field: str, value) -> None:
+    monkeypatch.setenv(field, str(value))
 
-    assert Settings().METRICS_PORT == 9091
-
-
-def test_default_llm_settings(isolated_settings: Settings) -> None:
-    assert (
-        isolated_settings.LLM_API_URL == "https://lightning.ai/api/v1/chat/completions"
-    )
-    assert isolated_settings.LLM_MODEL == "lightning-ai/gpt-oss-20b"
-    assert isolated_settings.LLM_TIMEOUT_SECONDS == 60
-
-
-def test_llm_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LLM_MODEL", "some-other-model")
-    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30")
-
-    settings = Settings()
-
-    assert settings.LLM_MODEL == "some-other-model"
-    assert settings.LLM_TIMEOUT_SECONDS == 30
-
-
-def test_default_max_post_chars(isolated_settings: Settings) -> None:
-    assert isolated_settings.MAX_POST_CHARS == 5000
-
-
-def test_default_max_input_chars(isolated_settings: Settings) -> None:
-    assert isolated_settings.MAX_INPUT_CHARS == 5000
-
-
-def test_default_max_body_chars(isolated_settings: Settings) -> None:
-    assert isolated_settings.MAX_BODY_CHARS == 3000
-
-
-def test_max_post_chars_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MAX_POST_CHARS", "10000")
-
-    assert Settings().MAX_POST_CHARS == 10000
-
-
-def test_max_input_chars_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MAX_INPUT_CHARS", "10000")
-
-    assert Settings().MAX_INPUT_CHARS == 10000
-
-
-def test_max_body_chars_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MAX_BODY_CHARS", "1000")
-
-    assert Settings().MAX_BODY_CHARS == 1000
-
-
-def test_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PORT", "50055")
-    monkeypatch.setenv("GRACE_SECONDS", "9")
-
-    settings = Settings()
-
-    assert settings.PORT == "50055"
-    assert settings.GRACE_SECONDS == 9
+    assert getattr(Settings(), field) == value
 
 
 def test_invalid_grace_seconds_raises(monkeypatch: pytest.MonkeyPatch) -> None:

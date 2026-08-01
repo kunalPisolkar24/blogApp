@@ -8,6 +8,9 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from src.config import settings
+from src.generated import ai_service_pb2
+from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.logging import setup_logging
 from src.tracing import get_span_ids, setup_tracing
 
@@ -15,7 +18,7 @@ from src.tracing import get_span_ids, setup_tracing
 def test_setup_tracing_disabled_without_endpoint(
     monkeypatch: pytest.MonkeyPatch, caplog
 ) -> None:
-    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+    monkeypatch.setattr(settings, "OTEL_EXPORTER_OTLP_ENDPOINT", "")
 
     with caplog.at_level(logging.INFO):
         setup_tracing()
@@ -61,11 +64,6 @@ def test_log_record_includes_trace_ids_inside_span(capsys) -> None:
 
 
 async def test_access_log_emitted_per_rpc(running_server, fake_llm, capsys) -> None:
-    import json as jsonlib
-
-    from src.generated import ai_service_pb2
-    from src.generated import ai_service_pb2_grpc as ai_stubs
-
     setup_logging()
     channel, _ = running_server
     stub = ai_stubs.AIServiceStub(channel)
@@ -74,7 +72,7 @@ async def test_access_log_emitted_per_rpc(running_server, fake_llm, capsys) -> N
     await stub.GenerateSummary(ai_service_pb2.ContentRequest(text="hello"))
 
     records = [
-        jsonlib.loads(line) for line in capsys.readouterr().out.strip().splitlines()
+        json.loads(line) for line in capsys.readouterr().out.strip().splitlines()
     ]
     access = None
     for record in records:
