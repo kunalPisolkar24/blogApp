@@ -1,5 +1,4 @@
 import logging
-import os
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -9,26 +8,31 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from src.config import settings
+
 logger = logging.getLogger(__name__)
 
 
 def setup_tracing() -> None:
-    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-    if not endpoint:
+    if not settings.OTEL_EXPORTER_OTLP_ENDPOINT:
         logger.info("tracing disabled: OTEL_EXPORTER_OTLP_ENDPOINT not set")
         return
 
     provider = TracerProvider(
-        resource=Resource.create(
-            {"service.name": os.getenv("OTEL_SERVICE_NAME", "ai-service")}
+        resource=Resource.create({"service.name": settings.OTEL_SERVICE_NAME})
+    )
+    provider.add_span_processor(
+        BatchSpanProcessor(
+            OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
         )
     )
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
     trace.set_tracer_provider(provider)
 
     GrpcAioInstrumentorServer().instrument()
     HTTPXClientInstrumentor().instrument()
-    logger.info("tracing enabled: exporting to %s", endpoint)
+    logger.info(
+        "tracing enabled: exporting to %s", settings.OTEL_EXPORTER_OTLP_ENDPOINT
+    )
 
 
 def get_span_ids() -> tuple[str, str] | None:
