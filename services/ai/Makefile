@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs
 
 install:
 	poetry install
@@ -33,3 +33,19 @@ clean:
 	rm -f .coverage
 	rm -rf htmlcov
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+docker-build:
+	docker build -t topos-ai .
+
+docker-run:
+	docker run -d --name topos-ai -p 50051:50051 \
+		-e LLM_API_KEY="$(LLM_API_KEY)" \
+		-e LLM_API_URL="$(LLM_API_URL)" \
+		-e LLM_MODEL="$(LLM_MODEL)" \
+		topos-ai
+
+docker-stop:
+	docker rm -f topos-ai
+
+docker-logs:
+	docker logs -f topos-ai
