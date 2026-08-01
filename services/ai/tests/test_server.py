@@ -18,7 +18,7 @@ def free_port() -> int:
 
 @pytest.fixture
 async def running_server(free_port: int):
-    server, health_servicer = create_server(str(free_port))
+    server, health_servicer = await create_server(str(free_port))
     await server.start()
     addr = f"127.0.0.1:{free_port}"
     channel = grpc.aio.insecure_channel(addr)
