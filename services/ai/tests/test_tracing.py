@@ -38,9 +38,11 @@ def test_get_span_ids_inside_active_span() -> None:
 
     span = trace.get_tracer("test").start_span("op")
     with trace.use_span(span, end_on_exit=True):
-        trace_id, span_id = get_span_ids()
-        assert trace_id == format(span.context.trace_id, "032x")
-        assert span_id == format(span.context.span_id, "016x")
+        trace_ids = get_span_ids()
+        assert trace_ids is not None
+        trace_id, span_id = trace_ids
+        assert trace_id == format(span.get_span_context().trace_id, "032x")
+        assert span_id == format(span.get_span_context().span_id, "016x")
 
 
 def test_log_record_includes_trace_ids_inside_span(capsys) -> None:
@@ -59,8 +61,8 @@ def test_log_record_includes_trace_ids_inside_span(capsys) -> None:
     ]
     record = next(r for r in records if r.get("message") == "hello")
 
-    assert record["trace_id"] == format(span.context.trace_id, "032x")
-    assert record["span_id"] == format(span.context.span_id, "016x")
+    assert record["trace_id"] == format(span.get_span_context().trace_id, "032x")
+    assert record["span_id"] == format(span.get_span_context().span_id, "016x")
 
 
 async def test_access_log_emitted_per_rpc(running_server, fake_llm, capsys) -> None:
