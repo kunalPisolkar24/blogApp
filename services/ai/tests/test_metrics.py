@@ -104,7 +104,8 @@ async def test_metrics_llm_duration_observed(monkeypatch) -> None:
 
     await client.generate_completion("s", "u")
 
-    assert REGISTRY.get_sample_value("llm_request_duration_seconds_count") == (
-        count_before + 1
-    )
-    assert REGISTRY.get_sample_value("llm_request_duration_seconds_sum") > sum_before
+    count_after = REGISTRY.get_sample_value("llm_request_duration_seconds_count")
+    sum_after = REGISTRY.get_sample_value("llm_request_duration_seconds_sum")
+    assert count_after is not None and sum_after is not None
+    assert count_after == count_before + 1
+    assert sum_after > sum_before
