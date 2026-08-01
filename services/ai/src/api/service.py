@@ -24,6 +24,7 @@ from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMError, LLMProvider
 from src.tracing import get_span_ids
 
+logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("access")
 
 Handler = Callable[..., Awaitable[Any]]
@@ -80,14 +81,16 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
                 )
             except LLMError:
                 status = "UNAVAILABLE"
+                logger.exception("LLM provider failed")
                 await context.abort(
                     grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable"
                 )
             except asyncio.CancelledError:
                 status = "CANCELLED"
                 raise
-            except Exception:  # noqa: BLE001 - unexpected errors become INTERNAL
+            except Exception:
                 status = "INTERNAL"
+                logger.exception("unexpected error in %s", fn.__name__)
                 await context.abort(grpc.StatusCode.INTERNAL, "Internal service error")
             finally:
                 metrics.GRPC_ACTIVE_REQUESTS.dec()

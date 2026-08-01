@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     GRACE_SECONDS: int = 5
     METRICS_PORT: int = 12666
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    LLM_MODE: Literal["real", "fake"] = "real"
     LLM_API_URL: str = "https://lightning.ai/api/v1/chat/completions"
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "lightning-ai/gpt-oss-20b"

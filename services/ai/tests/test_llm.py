@@ -1,8 +1,11 @@
 import asyncio
+import json
 
 import pytest
 
-from src.llm import LLMError
+from src.domain.models import GeneratedPost
+from src.domain.prompts import POST_PROMPT, SUMMARY_PROMPT, TAGS_PROMPT
+from src.llm import FakeLLMClient, LLMError
 from tests.fakes import FakeHTTPClient, FakeResponse, make_client, no_sleep, ok_response
 
 
@@ -153,3 +156,42 @@ async def test_cancellation_not_retried(
         await client.generate_completion("sys", "usr")
 
     assert len(fake_http.posted_payloads) == 1
+
+
+async def test_fake_llm_returns_summary_text() -> None:
+    client = FakeLLMClient()
+
+    result = await client.generate_completion(SUMMARY_PROMPT, "user")
+
+    assert isinstance(result, str)
+    assert result == FakeLLMClient._SUMMARY
+
+
+async def test_fake_llm_returns_valid_tags_json() -> None:
+    client = FakeLLMClient()
+
+    tags = json.loads(await client.generate_completion(TAGS_PROMPT, "user"))
+
+    assert isinstance(tags, list)
+    assert all(isinstance(tag, str) for tag in tags)
+
+
+async def test_fake_llm_returns_valid_post_json() -> None:
+    client = FakeLLMClient()
+
+    post = GeneratedPost.model_validate_json(
+        await client.generate_completion(POST_PROMPT, "user")
+    )
+
+    assert post.title
+    assert post.body
+    assert post.summary
+    assert post.tags
+
+
+async def test_fake_llm_unknown_prompt_falls_back_to_summary() -> None:
+    client = FakeLLMClient()
+
+    assert await client.generate_completion("unknown system", "user") == (
+        FakeLLMClient._SUMMARY
+    )

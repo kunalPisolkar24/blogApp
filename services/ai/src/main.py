@@ -10,7 +10,7 @@ from prometheus_client import start_http_server
 from src.api.service import AIService
 from src.config import settings
 from src.generated import ai_service_pb2_grpc
-from src.llm import LLMClient
+from src.llm import FakeLLMClient, LLMClient
 from src.logging import setup_logging
 from src.tracing import setup_tracing
 
@@ -58,7 +58,7 @@ async def serve() -> None:
     start_http_server(settings.METRICS_PORT)
     logger.info("prometheus metrics exposed on port %s", settings.METRICS_PORT)
 
-    llm = LLMClient()
+    llm = FakeLLMClient() if settings.LLM_MODE == "fake" else LLMClient()
     server, health_servicer = await create_server(AIService(llm))
     handle_graceful_shutdown(server, health_servicer)
     try:

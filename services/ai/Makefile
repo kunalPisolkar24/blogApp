@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs load-test load-test-build load-test-summary load-test-tags load-test-post load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -51,3 +51,53 @@ docker-stop:
 
 docker-logs:
 	docker logs -f topos-ai
+
+# --- Load Test Targets ---
+
+COMPOSE_LT := docker compose -f load-tests/compose.loadtest.yml --project-name topos-ai-loadtest
+
+RPS       ?= 100
+VUS       ?= 20
+DURATION  ?= 30s
+SCRIPT    ?= mixed
+WEIGHTS   ?= summary:40,tags:30,post:30
+LLM_MODE  ?= fake
+LOG_LEVEL ?= WARNING
+SVC_MEM   ?= 512M
+K6_MEM    ?= 384M
+
+LT_VARS := SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
+	WEIGHTS=$(WEIGHTS) LLM_MODE=$(LLM_MODE) LOG_LEVEL=$(LOG_LEVEL) \
+	SVC_MEM=$(SVC_MEM) K6_MEM=$(K6_MEM)
+
+VALID_SCRIPTS := mixed generate-summary generate-tags generate-post
+
+load-test-build:
+	$(LT_VARS) $(COMPOSE_LT) build
+
+load-test: load-test-build
+	@if echo " $(VALID_SCRIPTS) " | grep -q " $(SCRIPT) "; then :; else \
+		echo "unknown SCRIPT=$(SCRIPT). valid: $(VALID_SCRIPTS)"; exit 2; \
+	fi
+	$(LT_VARS) $(COMPOSE_LT) up -d --wait ai-service
+	$(LT_VARS) $(COMPOSE_LT) run --rm k6
+	@EXIT=$$?; \
+	$(MAKE) --no-print-directory load-test-stop; \
+	exit $$EXIT
+
+load-test-summary: SCRIPT = generate-summary
+load-test-summary: load-test
+
+load-test-tags: SCRIPT = generate-tags
+load-test-tags: load-test
+
+load-test-post: SCRIPT = generate-post
+load-test-post: load-test
+
+load-test-stop:
+	$(LT_VARS) $(COMPOSE_LT) down -v --remove-orphans
+
+load-test-clean: load-test-stop
+
+load-test-tail:
+	$(COMPOSE_LT) logs -f

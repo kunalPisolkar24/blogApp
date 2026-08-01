@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from typing import Protocol
@@ -7,6 +8,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt
 
 from src import metrics
 from src.config import settings
+from src.domain.prompts import POST_PROMPT, SUMMARY_PROMPT, TAGS_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +101,35 @@ class LLMClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+
+class FakeLLMClient:
+    """Returns canned responses without network calls, for local load testing."""
+
+    _SUMMARY = "A concise three-sentence summary generated for load testing."
+    _TAGS = '["loadtest", "capacity", "benchmark", "grpc", "performance"]'
+    _POST = json.dumps(
+        {
+            "title": "Load Test Post",
+            "body": (
+                "<h2>Introduction</h2><p>Generated HTML content for load "
+                "testing.</p><ul><li>Point one</li><li>Point two</li></ul>"
+                "<h2>Conclusion</h2><p>Wrapping up the load test post.</p>"
+            ),
+            "summary": "A short summary of the load test post.",
+            "tags": ["loadtest", "capacity"],
+        }
+    )
+
+    def __init__(self) -> None:
+        self._responses = {
+            SUMMARY_PROMPT: self._SUMMARY,
+            TAGS_PROMPT: self._TAGS,
+            POST_PROMPT: self._POST,
+        }
+
+    async def generate_completion(self, system: str, user: str) -> str:
+        return self._responses.get(system, self._SUMMARY)
+
+    async def close(self) -> None:
+        return None

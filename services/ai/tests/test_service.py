@@ -7,6 +7,7 @@ from grpc_health.v1 import health_pb2, health_pb2_grpc
 
 from src.generated import ai_service_pb2
 from src.llm import LLMError
+from src.logging import setup_logging
 from tests.fake_llm import FakeLLM
 
 
@@ -203,6 +204,45 @@ async def test_llm_error_maps_to_unavailable(
         await callable_rpc(request)
 
     assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
+
+
+def _log_records(capsys) -> list[dict]:
+    return [json.loads(line) for line in capsys.readouterr().out.strip().splitlines()]
+
+
+async def test_llm_error_logged_with_stacktrace(
+    stub, fake_llm: FakeLLM, capsys
+) -> None:
+    setup_logging()
+    fake_llm.error = LLMError("boom")
+
+    with pytest.raises(grpc.aio.AioRpcError):
+        await stub.GenerateSummary(ai_service_pb2.ContentRequest(text="hello"))
+
+    record = next(
+        r for r in _log_records(capsys) if r.get("message") == "LLM provider failed"
+    )
+    assert record["level"] == "ERROR"
+    assert "LLMError" in record["stacktrace"]
+    assert "boom" in record["stacktrace"]
+
+
+async def test_unexpected_error_logged_with_stacktrace(
+    stub, fake_llm: FakeLLM, capsys
+) -> None:
+    setup_logging()
+    fake_llm.response = "not json"
+
+    with pytest.raises(grpc.aio.AioRpcError):
+        await stub.GenerateTags(ai_service_pb2.ContextRequest(title="t", body="b"))
+
+    record = next(
+        r
+        for r in _log_records(capsys)
+        if r.get("message") == "unexpected error in GenerateTags"
+    )
+    assert record["level"] == "ERROR"
+    assert "JSONDecodeError" in record["stacktrace"]
 
 
 async def test_ai_service_health_serving(running_server) -> None:

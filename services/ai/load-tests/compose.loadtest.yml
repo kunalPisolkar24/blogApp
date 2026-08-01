@@ -1,0 +1,63 @@
+name: topos-ai-loadtest
+
+x-ai-service-env: &ai-service-env
+  PORT: 50051
+  LLM_MODE: ${LLM_MODE:-fake}
+  LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+  METRICS_PORT: 12666
+
+services:
+  ai-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: loadtest-ai-service
+    restart: unless-stopped
+    environment: *ai-service-env
+    healthcheck:
+      test: ["CMD", "python", "/healthcheck.py"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - ./healthcheck.py:/healthcheck.py:ro
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SVC_MEM:-512M}
+        reservations:
+          memory: 128M
+
+  k6:
+    image: grafana/k6:latest
+    container_name: loadtest-k6
+    restart: "no"
+    command: ["run", "--summary-trend-stats=avg,med,p(90),p(95),p(99),max", "/load-tests/k6/${SCRIPT:-mixed}.js"]
+    environment:
+      TARGET: ai-service:50051
+      VUS: ${VUS:-20}
+      DURATION: ${DURATION:-30s}
+      RPS: ${RPS:-100}
+      WEIGHTS: ${WEIGHTS:-summary:40,tags:30,post:30}
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    volumes:
+      - ./k6:/load-tests/k6:ro
+      - ../proto:/proto:ro
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${K6_MEM:-384M}
+        reservations:
+          memory: 64M
+
+networks:
+  loadtest-net:
+    name: ai-loadtest-net
+    driver: bridge
