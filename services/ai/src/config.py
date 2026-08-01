@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     PORT: str = "50051"
     GRACE_SECONDS: int = 5
+    METRICS_PORT: int = 12666
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LLM_API_URL: str = "https://lightning.ai/api/v1/chat/completions"
     LLM_API_KEY: str = ""

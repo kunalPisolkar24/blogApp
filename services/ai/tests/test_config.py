@@ -20,6 +20,16 @@ def test_default_grace_seconds(isolated_settings: Settings) -> None:
     assert isolated_settings.GRACE_SECONDS == 5
 
 
+def test_default_metrics_port(isolated_settings: Settings) -> None:
+    assert isolated_settings.METRICS_PORT == 12666
+
+
+def test_metrics_port_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("METRICS_PORT", "9091")
+
+    assert Settings().METRICS_PORT == 9091
+
+
 def test_default_llm_settings(isolated_settings: Settings) -> None:
     assert (
         isolated_settings.LLM_API_URL == "https://lightning.ai/api/v1/chat/completions"
