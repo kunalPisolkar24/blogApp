@@ -10,11 +10,11 @@ from src.llm import LLMError
 from tests.fakes import FakeHTTPClient, FakeResponse, make_client, no_sleep, ok_response
 
 
-def _llm_counter(status: str) -> int:
+def _llm_counter(status: str) -> float:
     return metrics.LLM_REQUESTS.labels(status=status)._value.get()
 
 
-def _grpc_counter(method: str, status: str) -> int:
+def _grpc_counter(method: str, status: str) -> float:
     return metrics.GRPC_REQUESTS.labels(method=method, status=status)._value.get()
 
 
