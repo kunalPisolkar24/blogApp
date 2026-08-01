@@ -149,6 +149,30 @@ async def test_429_respects_retry_after_header(
     assert len(fake_http.posted_payloads) == 2
 
 
+async def test_429_http_date_retry_after_falls_back_to_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slept: list[float] = []
+
+    async def record_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", record_sleep)
+    fake_http = FakeHTTPClient(
+        responses=[
+            FakeResponse(
+                429, {}, headers={"Retry-After": "Thu, 01 Oct 2026 00:00:00 GMT"}
+            ),
+            _ok_response(),
+        ]
+    )
+    client = _client(monkeypatch, fake_http)
+
+    assert await client.generate_completion("sys", "usr") == "hi"
+    assert slept == [2.0]
+    assert len(fake_http.posted_payloads) == 2
+
+
 async def test_client_errors_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

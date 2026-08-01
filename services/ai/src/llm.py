@@ -40,7 +40,10 @@ def _wait_for_retry(retry_state) -> float:
     if isinstance(exc, httpx.HTTPStatusError):
         retry_after = exc.response.headers.get("Retry-After")
         if retry_after is not None:
-            return min(float(retry_after), 30)
+            try:
+                return min(float(retry_after), 30)
+            except ValueError:
+                pass  # HTTP-date form — fall back to backoff
     return min(2**retry_state.attempt_number, 10)
 
 
