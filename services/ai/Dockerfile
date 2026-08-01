@@ -9,7 +9,7 @@ COPY proto/ai/ai_service.proto ./proto/ai/
 RUN pip install --no-cache-dir grpcio-tools
 
 RUN mkdir -p src/generated && touch src/generated/__init__.py && \
-    python -m grpc_tools.protoc -I proto/ai --python_out=src/generated --grpc_python_out=src/generated ai_service.proto && \
+    python -m grpc_tools.protoc -I proto/ai --python_out=src/generated --pyi_out=src/generated --grpc_python_out=src/generated ai_service.proto && \
     find src/generated -type f -name "*.py" -exec sed -i 's/^import ai_service_pb2/from . import ai_service_pb2/' {} +
 
 FROM python:3.12-slim AS builder
