@@ -2,6 +2,7 @@ import asyncio
 
 import grpc
 import pytest
+from prometheus_client.registry import REGISTRY
 
 from src import metrics
 from src.generated import ai_service_pb2
@@ -96,10 +97,9 @@ async def test_metrics_llm_retries_increment(monkeypatch) -> None:
 
 
 async def test_metrics_llm_duration_observed(monkeypatch) -> None:
-    from prometheus_client.registry import REGISTRY
-
     count_before = REGISTRY.get_sample_value("llm_request_duration_seconds_count")
     sum_before = REGISTRY.get_sample_value("llm_request_duration_seconds_sum")
+    assert count_before is not None and sum_before is not None
     client = make_client(monkeypatch, FakeHTTPClient(responses=[ok_response()]))
 
     await client.generate_completion("s", "u")
