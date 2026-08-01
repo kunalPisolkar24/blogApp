@@ -17,23 +17,23 @@ JSON_LOG_FIELDS = "%(timestamp)s %(level)s %(name)s %(message)s"
 
 
 class JsonLogFormatter(JsonFormatter):
-    def add_fields(self, log_record, record, message_dict):
-        super().add_fields(log_record, record, message_dict)
-        if not log_record.get("timestamp"):
-            log_record["timestamp"] = datetime.datetime.fromtimestamp(
+    def add_fields(self, log_data, record, message_dict):
+        super().add_fields(log_data, record, message_dict)
+        if not log_data.get("timestamp"):
+            log_data["timestamp"] = datetime.datetime.fromtimestamp(
                 record.created, tz=datetime.UTC
             ).isoformat()
-        if not log_record.get("level"):
-            log_record["level"] = record.levelname.upper()
-        if "name" in log_record and "logger" not in log_record:
-            log_record["logger"] = log_record.pop("name")
-        log_record.setdefault("service", "ai")
+        if not log_data.get("level"):
+            log_data["level"] = record.levelname.upper()
+        if "name" in log_data and "logger" not in log_data:
+            log_data["logger"] = log_data.pop("name")
+        log_data.setdefault("service", "ai")
         span_ids = get_span_ids()
         if span_ids is not None:
-            log_record["trace_id"], log_record["span_id"] = span_ids
-        log_record.pop("exc_info", None)
+            log_data["trace_id"], log_data["span_id"] = span_ids
+        log_data.pop("exc_info", None)
         if record.exc_info and record.exc_info[0]:
-            log_record["stacktrace"] = self.formatException(record.exc_info)
+            log_data["stacktrace"] = self.formatException(record.exc_info)
 
 
 def setup_logging() -> None:
