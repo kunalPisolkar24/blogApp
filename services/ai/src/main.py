@@ -8,6 +8,7 @@ from grpc_health.v1._async import HealthServicer
 
 from src.config import settings
 from src.generated import ai_service_pb2_grpc
+from src.logging import setup_logging
 from src.service import AIService
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,9 @@ def handle_graceful_shutdown(
 
 
 async def serve() -> None:
+    setup_logging()
+    logger.info("AI service starting")
+
     server, health_servicer = await create_server()
     handle_graceful_shutdown(server, health_servicer)
     try:
