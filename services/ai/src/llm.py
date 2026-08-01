@@ -1,14 +1,11 @@
 import logging
+import time
 from typing import Protocol
 
 import httpx
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_exception,
-    stop_after_attempt,
-)
+from tenacity import retry, retry_if_exception, stop_after_attempt
 
+from src import metrics
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -33,6 +30,11 @@ def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in RETRYABLE_STATUSES
     return False
+
+
+def _before_retry(retry_state) -> None:
+    logger.warning("retrying LLM call after attempt %s", retry_state.attempt_number)
+    metrics.LLM_RETRIES.inc()
 
 
 def _wait_for_retry(retry_state) -> float:
@@ -68,17 +70,24 @@ class LLMClient:
             "Content-Type": "application/json",
         }
 
+        start = time.perf_counter()
+        status = "error"
         try:
             data = await self._post(payload, headers)
-            return data["choices"][0]["message"]["content"]
+            result = data["choices"][0]["message"]["content"]
+            status = "success"
         except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
             raise LLMError(str(exc)) from exc
+        finally:
+            metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
+            metrics.LLM_REQUESTS.labels(status=status).inc()
+        return result
 
     @retry(
         stop=stop_after_attempt(MAX_ATTEMPTS),
         wait=_wait_for_retry,
         retry=retry_if_exception(_is_retryable),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_before_retry,
         reraise=True,
     )
     async def _post(self, payload: dict, headers: dict) -> dict:
