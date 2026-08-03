@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { PrismaClient, User } from './generated/prisma/client.js';
+import { primaryDb } from './lib/prisma.js';
 import {
   InvalidCredentialsError,
   UserNotFoundError,
@@ -46,7 +47,10 @@ export function toUserResponse(user: User): UserResponse {
 let dummyHash: string | null = null;
 
 export class UserService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly primary = primaryDb(),
+  ) {}
 
   async signup(data: SignupInput): Promise<AuthResponse> {
     const password = await hashPassword(data.password);
@@ -67,7 +71,7 @@ export class UserService {
   }
 
   async signin(data: SigninInput): Promise<AuthResponse> {
-    const user = await this.prisma.user.findUnique({ where: { email: data.email } });
+    const user = await this.primary.user.findUnique({ where: { email: data.email } });
     const hash = user?.password ?? (dummyHash ??= await hashPassword(randomBytes(32).toString('hex')));
     const valid = await verifyPassword(data.password, hash);
     if (!user || !valid) {
