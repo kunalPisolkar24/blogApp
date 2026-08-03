@@ -14,6 +14,14 @@ const envSchema = z.object({
   JWT_ISSUER: z.string().default('user-service'),
   JWT_AUDIENCE: z.string().default('topos'),
   JWT_EXPIRES_IN: z.string().default('7d'),
+  REDIS_URL: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  REDIS_SENTINEL_NAME: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  REDIS_SENTINELS: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  REDIS_CACHE_TTL_MS: z.coerce.number().int().positive().default(3600000),
+  REDIS_MISSING_CACHE_TTL_MS: z.coerce.number().int().positive().default(60000),
 });
 
 export const env = envSchema.parse(process.env);

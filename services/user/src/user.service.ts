@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { PrismaClient, User } from './generated/prisma/client.js';
+import { env } from './config/env.js';
+import { redis } from './lib/redis.js';
 import { primaryDb } from './lib/prisma.js';
 import {
   InvalidCredentialsError,
@@ -67,6 +69,7 @@ export class UserService {
     } catch (error) {
       throw toDomainError(error);
     }
+    await this.invalidateUserLists();
     return this.authResponse(user);
   }
 
@@ -81,23 +84,30 @@ export class UserService {
   }
 
   async findById(id: string): Promise<UserResponse | null> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    return user ? toUserResponse(user) : null;
+    return this.cached(`user:${id}`, env.REDIS_CACHE_TTL_MS, async () => {
+      const user = await this.prisma.user.findUnique({ where: { id } });
+      return user ? toUserResponse(user) : null;
+    });
   }
 
   async findAll({ limit, cursor }: PaginationArgs): Promise<UserResponse[]> {
-    const users = await this.prisma.user.findMany({
-      take: limit,
-      skip: cursor ? 1 : 0,
-      cursor: cursor ? { id: cursor } : undefined,
-      orderBy: { id: 'desc' },
-    });
-    return users.map(toUserResponse);
+    const key = `users:${limit}:${cursor ?? ''}`;
+    const ttl = env.REDIS_CACHE_TTL_MS;
+    return (await this.cached(key, ttl, async () => {
+      const users = await this.prisma.user.findMany({
+        take: limit,
+        skip: cursor ? 1 : 0,
+        cursor: cursor ? { id: cursor } : undefined,
+        orderBy: { id: 'desc' },
+      });
+      return users.map(toUserResponse);
+    })) ?? [];
   }
 
   async updateProfile(userId: string, data: UpdateProfileInput): Promise<UserResponse> {
     try {
       const user = await this.prisma.user.update({ where: { id: userId }, data });
+      await this.invalidateUser(userId);
       return toUserResponse(user);
     } catch (error) {
       throw toDomainError(error);
@@ -109,5 +119,58 @@ export class UserService {
       token: await signToken(user.id),
       user: toUserResponse(user),
     };
+  }
+
+  private async cached<T>(
+    key: string,
+    ttlMs: number,
+    miss: () => Promise<T | null>,
+  ): Promise<T | null> {
+    if (!redis) {
+      return miss();
+    }
+    try {
+      const raw = await redis.get(key);
+      if (raw !== null) {
+        return JSON.parse(raw) as T;
+      }
+    } catch {
+      return miss();
+    }
+    const value = await miss();
+    if (value !== null) {
+      try {
+        await redis.set(key, JSON.stringify(value), 'PX', ttlMs);
+      } catch {
+        /* cache write is best-effort */
+      }
+    }
+    return value;
+  }
+
+  private async invalidateUser(userId: string): Promise<void> {
+    if (!redis) {
+      return;
+    }
+    try {
+      await redis.del(`user:${userId}`);
+      await this.invalidateUserLists();
+    } catch {
+      /* cache invalidation is best-effort */
+    }
+  }
+
+  private async invalidateUserLists(): Promise<void> {
+    if (!redis) {
+      return;
+    }
+    try {
+      const keys = await redis.keys('users:*');
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch {
+      /* cache invalidation is best-effort */
+    }
   }
 }

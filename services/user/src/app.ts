@@ -8,6 +8,7 @@ import { DomainError, ValidationError } from './errors.js';
 import { resolvers } from './graphql/resolvers.js';
 import { typeDefs } from './graphql/typeDefs.js';
 import { prisma } from './lib/prisma.js';
+import { pingRedis } from './lib/redis.js';
 import { UserService } from './user.service.js';
 
 function unwrapDomain(error: unknown): DomainError | null {
@@ -83,7 +84,7 @@ export async function buildApp(): Promise<Hono> {
   });
 
   app.get('/', (c) => c.text('user service running'));
-  app.get('/health', (c) => c.json({ status: 'ok' }));
+  app.get('/health', async (c) => c.json({ status: 'ok', redis: await pingRedis() }));
 
   return app;
 }
