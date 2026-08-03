@@ -1,0 +1,75 @@
+services:
+  user-postgres:
+    image: postgres:16-alpine
+    container_name: local-user-postgres
+    restart: unless-stopped
+    ports:
+      - "${USER_POSTGRES_EXT_PORT:-5432}:${USER_POSTGRES_INT_PORT:-5432}"
+    environment:
+      - POSTGRES_USER=${USER_POSTGRES_USER:-topos_user}
+      - POSTGRES_PASSWORD=${USER_POSTGRES_PASSWORD:-topos_pass}
+      - POSTGRES_DB=${USER_POSTGRES_DB:-topos_users}
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_POSTGRES_USER:-topos_user} -d ${USER_POSTGRES_DB:-topos_users}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${USER_SERVICE_CONTAINER:-local-user-service}
+    restart: unless-stopped
+    ports:
+      - "${USER_SERVICE_EXT_PORT:-4001}:${USER_SERVICE_INT_PORT:-4001}"
+    environment:
+      - PORT=${USER_SERVICE_INT_PORT:-4001}
+      - NODE_ENV=development
+      - DATABASE_URL=${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
+      - DATABASE_URL_REPLICA=
+      - DATABASE_URL_MIGRATE=${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
+      - JWT_SECRET=${USER_JWT_SECRET:-local-dev-secret-0123456789abcdef0123456789abcdef}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_INT_PORT:-4001}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  user-migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    container_name: ${USER_MIGRATOR_CONTAINER:-local-user-migrator}
+    environment:
+      - DATABASE_URL_MIGRATE=${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  user_postgres_data:
+
+networks:
+  app-network:
+    name: ${APP_NETWORK:-topos_local_network}
+    driver: bridge
