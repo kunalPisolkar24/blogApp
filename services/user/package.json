@@ -12,11 +12,14 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@apollo/server": "^5.5.1",
+    "@apollo/subgraph": "^2.14.3",
     "@hono/node-server": "^2.0.12",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@prisma/extension-read-replicas": "^0.5.0",
     "dotenv": "^17.4.2",
+    "graphql": "^16.14.2",
     "hono": "^4.12.33",
     "pg": "^8.22.0",
     "zod": "^4.4.3"
