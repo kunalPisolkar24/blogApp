@@ -8,7 +8,7 @@ const primary = new PrismaClient({
   adapter: new PrismaPg(new Pool({ connectionString: env.DATABASE_URL })),
 });
 
-export const prisma = env.DATABASE_URL_REPLICA
+export const prisma = (env.DATABASE_URL_REPLICA
   ? primary.$extends(
       readReplicas({
         replicas: [
@@ -20,4 +20,4 @@ export const prisma = env.DATABASE_URL_REPLICA
         ],
       }),
     )
-  : primary;
+  : primary) as PrismaClient;
