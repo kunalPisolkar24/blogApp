@@ -3,6 +3,7 @@ import type { AuthResponse, PaginationArgs, UserResponse } from './domain/user.j
 import { toUserResponse } from './domain/user.js';
 import { InvalidCredentialsError } from './errors.js';
 import { CacheManager } from './lib/cache.js';
+import type { Metrics } from './observability/metrics.js';
 import { UserRepository } from './repositories/user.repository.js';
 import type { SigninInput, SignupInput, UpdateProfileInput } from './schemas.js';
 import { getDummyHash, hashPassword, verifyPassword } from './utils/password.js';
@@ -13,6 +14,7 @@ export class UserService {
     private readonly users: UserRepository,
     private readonly cache: CacheManager,
     private readonly cacheTtlMs: number,
+    private readonly metrics?: Metrics,
   ) {}
 
   async signup(data: SignupInput): Promise<AuthResponse> {
@@ -24,6 +26,7 @@ export class UserService {
       name: data.username,
     });
     await this.cache.invalidateUserLists();
+    this.metrics?.recordSignup();
     return this.authResponse(user);
   }
 
@@ -32,8 +35,10 @@ export class UserService {
     const hash = user?.password ?? (await getDummyHash());
     const valid = await verifyPassword(data.password, hash);
     if (!user || !valid) {
+      this.metrics?.recordSigninFailure();
       throw new InvalidCredentialsError();
     }
+    this.metrics?.recordSignin();
     return this.authResponse(user);
   }
 

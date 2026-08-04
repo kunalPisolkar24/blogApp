@@ -6,6 +6,10 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4001),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  OTEL_SERVICE_NAME: z.string().default('user-service'),
   DATABASE_URL: z.string().url(),
   DATABASE_URL_REPLICA: z
     .preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),

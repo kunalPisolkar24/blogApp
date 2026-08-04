@@ -67,6 +67,9 @@ services:
       - REDIS_URL=${USER_REDIS_URL:-redis://local-user-redis:6379}
       - REDIS_CACHE_TTL_MS=${USER_CACHE_TTL_MS:-3600000}
       - REDIS_MISSING_CACHE_TTL_MS=${USER_MISSING_CACHE_TTL_MS:-60000}
+      - LOG_LEVEL=${USER_LOG_LEVEL:-info}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${USER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=user-service
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_INT_PORT:-4001}/health || exit 1"]
       interval: 30s

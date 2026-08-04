@@ -27,6 +27,9 @@ services:
       - REDIS_SENTINEL_PASSWORD=${USER_REDIS_SENTINEL_PASSWORD:?USER_REDIS_SENTINEL_PASSWORD is required}
       - REDIS_CACHE_TTL_MS=${USER_CACHE_TTL_MS:-3600000}
       - REDIS_MISSING_CACHE_TTL_MS=${USER_MISSING_CACHE_TTL_MS:-60000}
+      - LOG_LEVEL=${USER_LOG_LEVEL:-info}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${USER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=user-service
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_INT_PORT:?USER_SERVICE_INT_PORT is required}/health || exit 1"]
       interval: 30s

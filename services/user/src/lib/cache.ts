@@ -1,26 +1,40 @@
 import type { Redis } from 'ioredis';
+import type { Metrics } from '../observability/metrics.js';
 
 export class CacheManager {
-  constructor(private readonly redis: Redis | null) {}
+  constructor(
+    private readonly redis: Redis | null,
+    private readonly metrics?: Metrics,
+  ) {}
 
   async read<T>(key: string, ttlMs: number, miss: () => Promise<T | null>): Promise<T | null> {
     if (!this.redis) {
       return miss();
     }
+    let raw: string | null;
     try {
-      const raw = await this.redis.get(key);
-      if (raw !== null) {
-        return JSON.parse(raw) as T;
-      }
+      raw = await this.redis.get(key);
     } catch {
+      this.metrics?.recordCacheRead('read_error');
       return miss();
     }
+    if (raw !== null) {
+      try {
+        const parsed = JSON.parse(raw) as T;
+        this.metrics?.recordCacheRead('hit');
+        return parsed;
+      } catch {
+        this.metrics?.recordCacheRead('read_error');
+        return miss();
+      }
+    }
+    this.metrics?.recordCacheRead('miss');
     const value = await miss();
     if (value !== null) {
       try {
         await this.redis.set(key, JSON.stringify(value), 'PX', ttlMs);
       } catch {
-        /* cache write is best-effort */
+        this.metrics?.recordCacheRead('write_error');
       }
     }
     return value;
@@ -32,8 +46,9 @@ export class CacheManager {
     }
     try {
       await this.redis.del(key);
+      this.metrics?.recordCacheInvalidation('key', 'ok');
     } catch {
-      /* cache invalidation is best-effort */
+      this.metrics?.recordCacheInvalidation('key', 'error');
     }
   }
 
@@ -46,8 +61,9 @@ export class CacheManager {
       if (keys.length > 0) {
         await this.redis.del(...keys);
       }
+      this.metrics?.recordCacheInvalidation('lists', 'ok');
     } catch {
-      /* cache invalidation is best-effort */
+      this.metrics?.recordCacheInvalidation('lists', 'error');
     }
   }
 }
