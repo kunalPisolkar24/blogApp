@@ -1,32 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { UserService, toUserResponse } from '../user.service.js';
-import { Prisma, type PrismaClient, type User } from '../generated/prisma/client.js';
-import {
-  InvalidCredentialsError,
-  UserAlreadyExistsError,
-  UserNotFoundError,
-} from '../errors.js';
+import { UserService } from '../user.service.js';
+import { toUserResponse } from '../domain/user.js';
+import { CacheManager } from '../lib/cache.js';
+import { UserRepository } from '../repositories/user.repository.js';
+import { InvalidCredentialsError } from '../errors.js';
+import type { User } from '../generated/prisma/client.js';
 
 const mocks = vi.hoisted(() => ({
-  env: { REDIS_CACHE_TTL_MS: 3600000 },
-  redis: {
-    get: vi.fn(),
-    set: vi.fn(),
-    del: vi.fn(),
-    keys: vi.fn(),
-  },
   hashPassword: vi.fn(),
   verifyPassword: vi.fn(),
+  getDummyHash: vi.fn(),
   signToken: vi.fn(),
-  primaryDb: vi.fn(),
 }));
 
-vi.mock('../config/env.js', () => ({ env: mocks.env }));
-vi.mock('../lib/redis.js', () => ({ redis: mocks.redis }));
-vi.mock('../lib/prisma.js', () => ({ primaryDb: mocks.primaryDb }));
 vi.mock('../utils/password.js', () => ({
   hashPassword: mocks.hashPassword,
   verifyPassword: mocks.verifyPassword,
+  getDummyHash: mocks.getDummyHash,
 }));
 vi.mock('../utils/token.js', () => ({ signToken: mocks.signToken }));
 
@@ -44,55 +34,37 @@ const makeUser = (overrides: Partial<User> = {}): User => ({
   ...overrides,
 });
 
-const prismaError = (code: string): Prisma.PrismaClientKnownRequestError =>
-  new Prisma.PrismaClientKnownRequestError('Prisma client error', {
-    code,
-    clientVersion: '7.9.1',
-  });
-
 const createUserMocks = () => ({
-  user: {
-    findUnique: vi.fn<(args: Prisma.UserFindUniqueArgs) => Promise<User | null>>(),
-    findMany: vi.fn<(args: Prisma.UserFindManyArgs) => Promise<User[]>>(),
-    create: vi.fn<(args: Prisma.UserCreateArgs) => Promise<User>>(),
-    update: vi.fn<(args: Prisma.UserUpdateArgs) => Promise<User>>(),
-  },
+  create: vi.fn(),
+  findByEmail: vi.fn(),
+  findById: vi.fn(),
+  findAll: vi.fn(),
+  update: vi.fn(),
 });
 
-type PrismaUserMocks = ReturnType<typeof createUserMocks>;
+const createCacheMocks = () => ({
+  read: vi.fn(async (_key: string, _ttl: number, miss: () => Promise<unknown>) => miss()),
+  invalidateKey: vi.fn(),
+  invalidateUserLists: vi.fn(),
+});
+
+type UserMocks = ReturnType<typeof createUserMocks>;
+type CacheMocks = ReturnType<typeof createCacheMocks>;
 
 describe('UserService', () => {
   let service: UserService;
-  let prisma: PrismaUserMocks;
-  let primary: PrismaUserMocks;
+  let users: UserMocks;
+  let cache: CacheMocks;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    prisma = createUserMocks();
-    primary = createUserMocks();
+    users = createUserMocks();
+    cache = createCacheMocks();
     service = new UserService(
-      prisma as unknown as PrismaClient,
-      primary as unknown as PrismaClient,
+      users as unknown as UserRepository,
+      cache as unknown as CacheManager,
+      3600000,
     );
-  });
-
-  describe('toUserResponse', () => {
-    it('maps the user model to the public response shape', () => {
-      expect(toUserResponse(makeUser())).toEqual({
-        id: 'u1',
-        username: 'alice',
-        email: 'alice@example.com',
-        name: 'Alice',
-        bio: null,
-        avatarUrl: null,
-        bannerUrl: null,
-        createdAt: '2024-01-01T00:00:00.000Z',
-      });
-    });
-
-    it('never exposes the password hash', () => {
-      expect(toUserResponse(makeUser())).not.toHaveProperty('password');
-    });
   });
 
   describe('signup', () => {
@@ -105,20 +77,18 @@ describe('UserService', () => {
     beforeEach(() => {
       mocks.hashPassword.mockResolvedValue('hashed-password');
       mocks.signToken.mockResolvedValue('token');
-      prisma.user.create.mockResolvedValue(makeUser());
+      users.create.mockResolvedValue(makeUser());
     });
 
     it('hashes the password before storing the user', async () => {
       await service.signup(input);
 
       expect(mocks.hashPassword).toHaveBeenCalledWith(input.password);
-      expect(prisma.user.create).toHaveBeenCalledWith({
-        data: {
-          email: input.email,
-          username: input.username,
-          password: 'hashed-password',
-          name: input.username,
-        },
+      expect(users.create).toHaveBeenCalledWith({
+        email: input.email,
+        username: input.username,
+        password: 'hashed-password',
+        name: input.username,
       });
     });
 
@@ -130,25 +100,9 @@ describe('UserService', () => {
     });
 
     it('invalidates the user list caches', async () => {
-      mocks.redis.keys.mockResolvedValue(['users:10:']);
-      mocks.redis.del.mockResolvedValue(1);
-
       await service.signup(input);
 
-      expect(mocks.redis.keys).toHaveBeenCalledWith('users:*');
-      expect(mocks.redis.del).toHaveBeenCalledWith('users:10:');
-    });
-
-    it('maps a unique-constraint violation to UserAlreadyExistsError', async () => {
-      prisma.user.create.mockRejectedValue(prismaError('P2002'));
-
-      await expect(service.signup(input)).rejects.toBeInstanceOf(UserAlreadyExistsError);
-    });
-
-    it('rethrows unexpected errors as-is', async () => {
-      prisma.user.create.mockRejectedValue(new Error('database unreachable'));
-
-      await expect(service.signup(input)).rejects.toThrow('database unreachable');
+      expect(cache.invalidateUserLists).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -158,12 +112,12 @@ describe('UserService', () => {
     beforeEach(() => {
       mocks.verifyPassword.mockResolvedValue(false);
       mocks.signToken.mockResolvedValue('token');
-      mocks.hashPassword.mockResolvedValue('dummy-hash');
+      mocks.getDummyHash.mockResolvedValue('dummy-hash');
     });
 
     it('returns a token and the user for valid credentials', async () => {
       const user = makeUser();
-      primary.user.findUnique.mockResolvedValue(user);
+      users.findByEmail.mockResolvedValue(user);
       mocks.verifyPassword.mockResolvedValue(true);
 
       await expect(service.signin(credentials)).resolves.toEqual({
@@ -172,19 +126,18 @@ describe('UserService', () => {
       });
     });
 
-    it('looks the user up on the primary client', async () => {
-      primary.user.findUnique.mockResolvedValue(makeUser());
+    it('looks the user up by email', async () => {
+      users.findByEmail.mockResolvedValue(makeUser());
       mocks.verifyPassword.mockResolvedValue(true);
 
       await service.signin(credentials);
 
-      expect(primary.user.findUnique).toHaveBeenCalledWith({ where: { email: credentials.email } });
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(users.findByEmail).toHaveBeenCalledWith(credentials.email);
     });
 
     it('verifies the password against the stored hash', async () => {
       const user = makeUser();
-      primary.user.findUnique.mockResolvedValue(user);
+      users.findByEmail.mockResolvedValue(user);
       mocks.verifyPassword.mockResolvedValue(true);
 
       await service.signin(credentials);
@@ -193,137 +146,78 @@ describe('UserService', () => {
     });
 
     it('rejects when the user does not exist', async () => {
-      primary.user.findUnique.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
 
       await expect(service.signin(credentials)).rejects.toBeInstanceOf(InvalidCredentialsError);
     });
 
     it('rejects when the password does not match', async () => {
-      primary.user.findUnique.mockResolvedValue(makeUser());
+      users.findByEmail.mockResolvedValue(makeUser());
 
       await expect(service.signin(credentials)).rejects.toBeInstanceOf(InvalidCredentialsError);
     });
 
     it('still verifies a dummy hash when the user is missing', async () => {
-      primary.user.findUnique.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
 
       await expect(service.signin(credentials)).rejects.toBeInstanceOf(InvalidCredentialsError);
-      expect(mocks.verifyPassword).toHaveBeenCalledWith(credentials.password, expect.any(String));
+      expect(mocks.getDummyHash).toHaveBeenCalled();
+      expect(mocks.verifyPassword).toHaveBeenCalledWith(credentials.password, 'dummy-hash');
     });
   });
 
   describe('findById', () => {
     it('returns the mapped user', async () => {
-      prisma.user.findUnique.mockResolvedValue(makeUser());
+      users.findById.mockResolvedValue(makeUser());
 
       await expect(service.findById('u1')).resolves.toEqual(toUserResponse(makeUser()));
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'u1' } });
+      expect(users.findById).toHaveBeenCalledWith('u1');
     });
 
     it('returns null when the user does not exist', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
+      users.findById.mockResolvedValue(null);
 
       await expect(service.findById('u1')).resolves.toBeNull();
     });
 
-    it('caches the user on a cache miss', async () => {
-      mocks.redis.get.mockResolvedValue(null);
-      prisma.user.findUnique.mockResolvedValue(makeUser());
+    it('reads through the cache with the user key and ttl', async () => {
+      users.findById.mockResolvedValue(makeUser());
 
       await service.findById('u1');
 
-      expect(mocks.redis.set).toHaveBeenCalledWith(
-        'user:u1',
-        JSON.stringify(toUserResponse(makeUser())),
-        'PX',
-        3600000,
-      );
-    });
-
-    it('serves from cache on a hit without querying the database', async () => {
-      mocks.redis.get.mockResolvedValue(JSON.stringify(toUserResponse(makeUser())));
-
-      await expect(service.findById('u1')).resolves.toEqual(toUserResponse(makeUser()));
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
-    });
-
-    it('falls back to the database when redis.get fails', async () => {
-      mocks.redis.get.mockRejectedValue(new Error('redis unavailable'));
-      prisma.user.findUnique.mockResolvedValue(makeUser());
-
-      await expect(service.findById('u1')).resolves.toEqual(toUserResponse(makeUser()));
-    });
-
-    it('does not cache a miss', async () => {
-      mocks.redis.get.mockResolvedValue(null);
-      prisma.user.findUnique.mockResolvedValue(null);
-
-      await service.findById('u1');
-
-      expect(mocks.redis.set).not.toHaveBeenCalled();
+      expect(cache.read).toHaveBeenCalledWith('user:u1', 3600000, expect.any(Function));
     });
   });
 
   describe('findAll', () => {
-    it('returns all users when no cursor is given', async () => {
-      const users = [makeUser({ id: 'u2' }), makeUser({ id: 'u1' })];
-      prisma.user.findMany.mockResolvedValue(users);
+    it('returns the mapped users when no cursor is given', async () => {
+      const all = [makeUser({ id: 'u2' }), makeUser({ id: 'u1' })];
+      users.findAll.mockResolvedValue(all);
 
-      await expect(service.findAll({ limit: 10 })).resolves.toEqual(users.map(toUserResponse));
-      expect(prisma.user.findMany).toHaveBeenCalledWith({
-        take: 10,
-        skip: 0,
-        cursor: undefined,
-        orderBy: { id: 'desc' },
-      });
+      await expect(service.findAll({ limit: 10 })).resolves.toEqual(all.map(toUserResponse));
+      expect(users.findAll).toHaveBeenCalledWith({ limit: 10, cursor: undefined });
     });
 
-    it('skips the cursor user when paginating', async () => {
-      prisma.user.findMany.mockResolvedValue([makeUser({ id: 'u1' })]);
+    it('forwards the cursor', async () => {
+      users.findAll.mockResolvedValue([]);
 
-      const result = await service.findAll({ limit: 10, cursor: 'u2' });
+      await service.findAll({ limit: 10, cursor: 'u2' });
 
-      expect(result).toEqual([toUserResponse(makeUser({ id: 'u1' }))]);
-      expect(prisma.user.findMany).toHaveBeenCalledWith({
-        take: 10,
-        skip: 1,
-        cursor: { id: 'u2' },
-        orderBy: { id: 'desc' },
-      });
+      expect(users.findAll).toHaveBeenCalledWith({ limit: 10, cursor: 'u2' });
     });
 
-    it('returns an empty list when there are no users', async () => {
-      prisma.user.findMany.mockResolvedValue([]);
+    it('returns an empty list when the cached value is null', async () => {
+      cache.read.mockResolvedValue(null);
 
       await expect(service.findAll({ limit: 10 })).resolves.toEqual([]);
     });
 
     it('uses a cache key that includes the page parameters', async () => {
-      mocks.redis.get.mockResolvedValue(null);
-      prisma.user.findMany.mockResolvedValue([makeUser()]);
+      users.findAll.mockResolvedValue([]);
 
       await service.findAll({ limit: 10, cursor: 'u2' });
 
-      expect(mocks.redis.set).toHaveBeenCalledWith(
-        'users:10:u2',
-        JSON.stringify([toUserResponse(makeUser())]),
-        'PX',
-        3600000,
-      );
-    });
-
-    it('returns an empty list when the cached value is null', async () => {
-      mocks.redis.get.mockResolvedValue('null');
-
-      await expect(service.findAll({ limit: 10 })).resolves.toEqual([]);
-      expect(prisma.user.findMany).not.toHaveBeenCalled();
-    });
-
-    it('falls back to the database when redis.get fails', async () => {
-      mocks.redis.get.mockRejectedValue(new Error('redis unavailable'));
-      prisma.user.findMany.mockResolvedValue([makeUser()]);
-
-      await expect(service.findAll({ limit: 10 })).resolves.toEqual([toUserResponse(makeUser())]);
+      expect(cache.read).toHaveBeenCalledWith('users:10:u2', 3600000, expect.any(Function));
     });
   });
 
@@ -331,38 +225,21 @@ describe('UserService', () => {
     const data = { name: 'Alice Updated', bio: 'Hello' };
 
     it('updates the user and returns the mapped result', async () => {
-      prisma.user.update.mockResolvedValue(makeUser({ ...data }));
+      users.update.mockResolvedValue(makeUser({ ...data }));
 
       await expect(service.updateProfile('u1', data)).resolves.toEqual(
         toUserResponse(makeUser({ ...data })),
       );
-      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data });
+      expect(users.update).toHaveBeenCalledWith('u1', data);
     });
 
     it('invalidates the user and list caches', async () => {
-      mocks.redis.del.mockResolvedValue(1);
-      mocks.redis.keys.mockResolvedValue(['users:10:']);
-      prisma.user.update.mockResolvedValue(makeUser({ ...data }));
+      users.update.mockResolvedValue(makeUser());
 
       await service.updateProfile('u1', data);
 
-      expect(mocks.redis.del).toHaveBeenCalledWith('user:u1');
-      expect(mocks.redis.keys).toHaveBeenCalledWith('users:*');
-      expect(mocks.redis.del).toHaveBeenCalledWith('users:10:');
-    });
-
-    it('maps a missing record to UserNotFoundError', async () => {
-      prisma.user.update.mockRejectedValue(prismaError('P2025'));
-
-      await expect(service.updateProfile('u1', data)).rejects.toBeInstanceOf(UserNotFoundError);
-    });
-
-    it('maps a unique-constraint violation to UserAlreadyExistsError', async () => {
-      prisma.user.update.mockRejectedValue(prismaError('P2002'));
-
-      await expect(service.updateProfile('u1', data)).rejects.toBeInstanceOf(
-        UserAlreadyExistsError,
-      );
+      expect(cache.invalidateKey).toHaveBeenCalledWith('user:u1');
+      expect(cache.invalidateUserLists).toHaveBeenCalledTimes(1);
     });
   });
 });

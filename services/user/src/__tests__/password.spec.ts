@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashPassword, verifyPassword } from '../utils/password.js';
+import { getDummyHash, hashPassword, verifyPassword } from '../utils/password.js';
 
 const PASSWORD = 'correct horse battery staple 1';
 const WRONG_PASSWORD = 'wrong password';
@@ -30,5 +30,15 @@ describe('verifyPassword', () => {
 
   it('rejects a malformed stored hash', async () => {
     await expect(verifyPassword(PASSWORD, 'not-a-valid-hash')).resolves.toBe(false);
+  });
+});
+
+describe('getDummyHash', () => {
+  it('returns a valid scrypt hash', async () => {
+    await expect(getDummyHash()).resolves.toMatch(/^scrypt:/);
+  });
+
+  it('memoizes the hash across calls', async () => {
+    await expect(getDummyHash()).resolves.toBe(await getDummyHash());
   });
 });

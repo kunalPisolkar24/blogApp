@@ -20,6 +20,7 @@ export default defineConfig({
         'src/config/**',
         'src/lib/prisma.ts',
         'src/lib/redis.ts',
+        'src/integration/**',
       ],
       thresholds: {
         lines: 85,

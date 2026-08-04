@@ -3,12 +3,15 @@ import { HeaderMap } from '@apollo/server';
 import { buildSubgraphSchema } from '@apollo/subgraph';
 import { GraphQLError, type GraphQLFormattedError } from 'graphql';
 import { Hono } from 'hono';
+import { env } from './config/env.js';
 import { createContext } from './context.js';
 import { DomainError, ValidationError } from './errors.js';
 import { resolvers } from './graphql/resolvers.js';
 import { typeDefs } from './graphql/typeDefs.js';
-import { prisma } from './lib/prisma.js';
-import { pingRedis } from './lib/redis.js';
+import { CacheManager } from './lib/cache.js';
+import { prisma, primaryDb } from './lib/prisma.js';
+import { pingRedis, redis } from './lib/redis.js';
+import { UserRepository } from './repositories/user.repository.js';
 import { UserService } from './user.service.js';
 
 function unwrapDomain(error: unknown): DomainError | null {
@@ -38,7 +41,11 @@ function formatError(
 }
 
 export async function buildApp(): Promise<Hono> {
-  const userService = new UserService(prisma);
+  const userService = new UserService(
+    new UserRepository(prisma, primaryDb()),
+    new CacheManager(redis),
+    env.REDIS_CACHE_TTL_MS,
+  );
 
   const apollo = new ApolloServer({
     schema: buildSubgraphSchema({

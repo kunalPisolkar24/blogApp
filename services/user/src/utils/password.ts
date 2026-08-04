@@ -1,6 +1,12 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import type { ScryptOptions } from 'node:crypto';
 
+let dummyHash: string | null = null;
+
+export async function getDummyHash(): Promise<string> {
+  return (dummyHash ??= await hashPassword(randomBytes(32).toString('hex')));
+}
+
 const N = 131072; // 2^17, OWASP recommended
 const R = 8;
 const P = 1;
