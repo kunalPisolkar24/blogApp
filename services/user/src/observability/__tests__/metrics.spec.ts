@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from 'prom-client';
-import { Metrics } from '../observability/metrics.js';
+import { Metrics } from '../metrics.js';
 
 const mocks = vi.hoisted(() => ({
   env: { NODE_ENV: 'test' },
 }));
 
-vi.mock('../config/env.js', () => ({ env: mocks.env }));
+vi.mock('../../config/env.js', () => ({ env: mocks.env }));
 
 describe('Metrics', () => {
   afterEach(() => {

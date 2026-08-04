@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { typeDefs } from '../graphql/typeDefs.js';
+import { typeDefs } from '../typeDefs.js';
 
 describe('typeDefs', () => {
   it('parses to a valid GraphQL document', () => {

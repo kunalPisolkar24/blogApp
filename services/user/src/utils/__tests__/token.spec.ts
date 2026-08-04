@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SignJWT } from 'jose';
-import { signToken, verifyToken } from '../utils/token.js';
+import { signToken, verifyToken } from '../token.js';
 
 const mocks = vi.hoisted(() => ({
   env: {
@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../config/env.js', () => ({ env: mocks.env }));
+vi.mock('../../config/env.js', () => ({ env: mocks.env }));
 
 const JWT_SECRET = mocks.env.JWT_SECRET;
 

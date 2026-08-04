@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CacheManager } from '../lib/cache.js';
+import { CacheManager } from '../cache.js';
 import type { Redis } from 'ioredis';
 
 const createRedisMocks = () => ({

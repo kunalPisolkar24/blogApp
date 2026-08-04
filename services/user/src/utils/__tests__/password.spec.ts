@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDummyHash, hashPassword, verifyPassword } from '../utils/password.js';
+import { getDummyHash, hashPassword, verifyPassword } from '../password.js';
 
 const PASSWORD = 'correct horse battery staple 1';
 const WRONG_PASSWORD = 'wrong password';

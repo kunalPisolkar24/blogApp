@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { resolvers } from '../graphql/resolvers.js';
-import { UnauthorizedError, UserNotFoundError, ValidationError } from '../errors.js';
-import type { GraphQLContext } from '../context.js';
+import { resolvers } from '../resolvers.js';
+import { UnauthorizedError, UserNotFoundError, ValidationError } from '../../errors.js';
+import type { GraphQLContext } from '../../context.js';
 
 type UserServiceLike = GraphQLContext['userService'];
 

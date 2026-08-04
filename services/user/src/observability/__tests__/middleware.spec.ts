@@ -3,15 +3,15 @@ import { Hono } from 'hono';
 import { requestId } from 'hono/request-id';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from 'prom-client';
-import { createLogger, type Logger } from '../observability/logger.js';
-import { requestLogging, requestMetrics } from '../observability/middleware.js';
-import { Metrics } from '../observability/metrics.js';
+import { createLogger, type Logger } from '../logger.js';
+import { requestLogging, requestMetrics } from '../middleware.js';
+import { Metrics } from '../metrics.js';
 
 const mocks = vi.hoisted(() => ({
   env: { NODE_ENV: 'test', LOG_LEVEL: 'info' },
 }));
 
-vi.mock('../config/env.js', () => ({ env: mocks.env }));
+vi.mock('../../config/env.js', () => ({ env: mocks.env }));
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 10));
 

@@ -1,6 +1,6 @@
 import { trace } from '@opentelemetry/api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setupTracing } from '../observability/tracing.js';
+import { setupTracing } from '../tracing.js';
 
 const mocks = vi.hoisted(() => ({
   env: {
@@ -12,8 +12,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../config/env.js', () => ({ env: mocks.env }));
-vi.mock('../observability/logger.js', () => ({ logger: mocks.logger }));
+vi.mock('../../config/env.js', () => ({ env: mocks.env }));
+vi.mock('../logger.js', () => ({ logger: mocks.logger }));
 
 describe('setupTracing', () => {
   afterEach(() => {

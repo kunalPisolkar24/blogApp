@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { UserRepository } from '../repositories/user.repository.js';
-import { Prisma, type PrismaClient, type User } from '../generated/prisma/client.js';
+import { UserRepository } from '../user.repository.js';
+import { Prisma, type PrismaClient, type User } from '../../generated/prisma/client.js';
 import {
   UserAlreadyExistsError,
   UserNotFoundError,
-} from '../errors.js';
+} from '../../errors.js';
 
 const makeUser = (overrides: Partial<User> = {}): User => ({
   id: 'u1',

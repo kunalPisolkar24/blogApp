@@ -6,13 +6,13 @@ import {
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-node';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createLogger } from '../observability/logger.js';
+import { createLogger } from '../logger.js';
 
 const mocks = vi.hoisted(() => ({
   env: { LOG_LEVEL: 'info' },
 }));
 
-vi.mock('../config/env.js', () => ({ env: mocks.env }));
+vi.mock('../../config/env.js', () => ({ env: mocks.env }));
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 10));
 

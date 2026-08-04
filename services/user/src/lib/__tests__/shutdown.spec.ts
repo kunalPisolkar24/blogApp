@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setupGracefulShutdown } from '../lib/shutdown.js';
+import { setupGracefulShutdown } from '../shutdown.js';
 
 const mocks = vi.hoisted(() => ({
   closeRedis: vi.fn(),
 }));
 
-vi.mock('../lib/redis.js', () => ({ closeRedis: mocks.closeRedis }));
+vi.mock('../redis.js', () => ({ closeRedis: mocks.closeRedis }));
 
 describe('setupGracefulShutdown', () => {
   beforeEach(() => {
