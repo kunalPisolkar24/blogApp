@@ -20,6 +20,10 @@ const envSchema = z.object({
     .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   REDIS_SENTINELS: z
     .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  REDIS_PASSWORD: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  REDIS_SENTINEL_PASSWORD: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   REDIS_CACHE_TTL_MS: z.coerce.number().int().positive().default(3600000),
   REDIS_MISSING_CACHE_TTL_MS: z.coerce.number().int().positive().default(60000),
 });

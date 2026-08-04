@@ -23,7 +23,17 @@ function createClient(): Redis | null {
   const sentinels = parseSentinels(env.REDIS_SENTINELS);
 
   if (sentinels.length > 0 && env.REDIS_SENTINEL_NAME) {
-    return new Redis({ sentinels, name: env.REDIS_SENTINEL_NAME });
+    const options: Record<string, string | number | SentinelNode[]> = {
+      sentinels,
+      name: env.REDIS_SENTINEL_NAME,
+    };
+    if (env.REDIS_SENTINEL_PASSWORD) {
+      options.sentinelPassword = env.REDIS_SENTINEL_PASSWORD;
+    }
+    if (env.REDIS_PASSWORD) {
+      options.password = env.REDIS_PASSWORD;
+    }
+    return new Redis(options);
   }
 
   if (env.REDIS_URL) {
