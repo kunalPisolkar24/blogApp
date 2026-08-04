@@ -1,5 +1,6 @@
 trash/
 node_modules/
 dist/
+coverage/
 .env
 src/generated/

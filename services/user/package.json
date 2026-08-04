@@ -6,6 +6,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"
@@ -29,8 +32,10 @@
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@types/pg": "^8.20.3",
+    "@vitest/coverage-v8": "^4.0.17",
     "prisma": "^7.9.1",
     "tsx": "^4.23.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   }
 }
