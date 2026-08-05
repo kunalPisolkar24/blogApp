@@ -1,2 +1,23 @@
 trash/
+
+# Environment
 .env
+.env.local
+
+# Build artifacts
+/server
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Logs
+*.log
+
+# Editor and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
