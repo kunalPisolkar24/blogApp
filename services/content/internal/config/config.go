@@ -10,13 +10,14 @@ import (
 )
 
 type Config struct {
-	Port        string
-	MongoURI    string
-	DbName      string
-	RedisAddr   string
-	JwtSecret   string
-	JwtIssuer   string
-	JwtAudience string
+	Port         string
+	MongoURI     string
+	DbName       string
+	RedisAddr    string
+	JwtSecret    string
+	JwtIssuer    string
+	JwtAudience  string
+	AIServiceURL string
 }
 
 var loadOnce sync.Once
@@ -27,13 +28,14 @@ func LoadConfig() (Config, error) {
 	loadEnvFile()
 
 	cfg := Config{
-		Port:        getEnv("PORT", "4002"),
-		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		DbName:      getEnv("DB_NAME", "blog_content"),
-		RedisAddr:   getEnv("REDIS_ADDR", "localhost:6379"),
-		JwtSecret:   getEnv("JWT_SECRET", ""),
-		JwtIssuer:   getEnv("JWT_ISSUER", "user-service"),
-		JwtAudience: getEnv("JWT_AUDIENCE", "topos"),
+		Port:         getEnv("PORT", "4002"),
+		MongoURI:     getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		DbName:       getEnv("DB_NAME", "blog_content"),
+		RedisAddr:    getEnv("REDIS_ADDR", "localhost:6379"),
+		JwtSecret:    getEnv("JWT_SECRET", ""),
+		JwtIssuer:    getEnv("JWT_ISSUER", "user-service"),
+		JwtAudience:  getEnv("JWT_AUDIENCE", "topos"),
+		AIServiceURL: getEnv("AI_SERVICE_URL", "ai-service:50051"),
 	}
 
 	if cfg.JwtSecret == "" {

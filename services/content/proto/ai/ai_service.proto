@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package ai;
+
+option go_package = "github.com/kunalPisolkar24/topos/services/content/proto/ai";
+
+service AIService {
+  rpc GenerateSummary (ContentRequest) returns (ContentResponse);
+  rpc GenerateTags (ContextRequest) returns (TagsResponse);
+  rpc GeneratePost (PostGenerationRequest) returns (PostGenerationResponse);
+}
+
+message ContentRequest {
+  string text = 1;
+}
+
+message ContentResponse {
+  string summary = 1;
+}
+
+message ContextRequest {
+  string title = 1;
+  string body = 2;
+}
+
+message TagsResponse {
+  repeated string tags = 1;
+}
+
+message PostGenerationRequest {
+  string prompt = 1;
+}
+
+message PostGenerationResponse {
+  string title = 1;
+  string body = 2;
+  string summary = 3;
+  repeated string tags = 4;
+}

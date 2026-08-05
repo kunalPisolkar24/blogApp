@@ -66,11 +66,17 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 
 // GenerateTags is the resolver for the generateTags field.
 func (r *mutationResolver) GenerateTags(ctx context.Context, title string, body string) ([]string, error) {
+	if _, ok := middleware.UserIDFromContext(ctx); !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
 	return r.PostService.GenerateTags(ctx, title, body)
 }
 
 // GeneratePostContent is the resolver for the generatePostContent field.
 func (r *mutationResolver) GeneratePostContent(ctx context.Context, prompt string) (*model.GeneratedPost, error) {
+	if _, ok := middleware.UserIDFromContext(ctx); !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
 	post, err := r.PostService.GeneratePostContent(ctx, prompt)
 	if err != nil {
 		return nil, mapDomainError(err)

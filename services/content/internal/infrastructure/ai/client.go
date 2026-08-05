@@ -1,0 +1,218 @@
+package ai
+
+import (
+	"context"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	pb "github.com/kunalPisolkar24/topos/services/content/proto/ai"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+const (
+	summaryTimeout = 30 * time.Second
+	tagsTimeout    = 15 * time.Second
+	postTimeout    = 60 * time.Second
+)
+
+// resilientClient talks to the AI service over gRPC and falls back to a
+// local noop client when the service is unreachable or failing.
+type resilientClient struct {
+	primary  domain.AIService
+	fallback domain.AIService
+	breaker  *circuitBreaker
+}
+
+// NewResilientClient returns an AI client that fails over to noop
+// generation when the gRPC connection or the service misbehaves.
+func NewResilientClient(addr string) domain.AIService {
+	return &resilientClient{
+		primary:  newGRPCClient(addr),
+		fallback: NewNoopAI(),
+		breaker:  newCircuitBreaker(),
+	}
+}
+
+func (c *resilientClient) GenerateSummary(ctx context.Context, text string) (string, error) {
+	if c.breaker.canProceed() {
+		summary, err := c.primary.GenerateSummary(ctx, text)
+		if err == nil {
+			c.breaker.recordSuccess()
+			return summary, nil
+		}
+		c.breaker.recordFailure()
+		slog.Warn("ai summary generation failed, using fallback", "error", err)
+	}
+	return c.fallback.GenerateSummary(ctx, text)
+}
+
+func (c *resilientClient) GenerateTags(ctx context.Context, title, body string) ([]string, error) {
+	if c.breaker.canProceed() {
+		tags, err := c.primary.GenerateTags(ctx, title, body)
+		if err == nil {
+			c.breaker.recordSuccess()
+			return tags, nil
+		}
+		c.breaker.recordFailure()
+		slog.Warn("ai tags generation failed, using fallback", "error", err)
+	}
+	return c.fallback.GenerateTags(ctx, title, body)
+}
+
+func (c *resilientClient) GeneratePost(ctx context.Context, prompt string) (*domain.GeneratedPost, error) {
+	if c.breaker.canProceed() {
+		post, err := c.primary.GeneratePost(ctx, prompt)
+		if err == nil {
+			c.breaker.recordSuccess()
+			return post, nil
+		}
+		c.breaker.recordFailure()
+		slog.Warn("ai post generation failed, using fallback", "error", err)
+	}
+	return c.fallback.GeneratePost(ctx, prompt)
+}
+
+func (c *resilientClient) Close() error {
+	return c.primary.Close()
+}
+
+type grpcClient struct {
+	client pb.AIServiceClient
+	conn   *grpc.ClientConn
+}
+
+// newGRPCClient dials without blocking; the first call performs the
+// actual connection and the circuit breaker absorbs any failures.
+func newGRPCClient(addr string) domain.AIService {
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic("grpc.NewClient: " + err.Error())
+	}
+	return &grpcClient{
+		client: pb.NewAIServiceClient(conn),
+		conn:   conn,
+	}
+}
+
+func (c *grpcClient) GenerateSummary(ctx context.Context, text string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, summaryTimeout)
+	defer cancel()
+
+	resp, err := c.client.GenerateSummary(ctx, &pb.ContentRequest{Text: text})
+	if err != nil {
+		return "", err
+	}
+	return resp.Summary, nil
+}
+
+func (c *grpcClient) GenerateTags(ctx context.Context, title, body string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, tagsTimeout)
+	defer cancel()
+
+	resp, err := c.client.GenerateTags(ctx, &pb.ContextRequest{Title: title, Body: body})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Tags, nil
+}
+
+func (c *grpcClient) GeneratePost(ctx context.Context, prompt string) (*domain.GeneratedPost, error) {
+	ctx, cancel := context.WithTimeout(ctx, postTimeout)
+	defer cancel()
+
+	resp, err := c.client.GeneratePost(ctx, &pb.PostGenerationRequest{Prompt: prompt})
+	if err != nil {
+		return nil, err
+	}
+	return &domain.GeneratedPost{
+		Title:   resp.Title,
+		Body:    resp.Body,
+		Summary: resp.Summary,
+		Tags:    resp.Tags,
+	}, nil
+}
+
+func (c *grpcClient) Close() error {
+	return c.conn.Close()
+}
+
+type circuitState int
+
+const (
+	stateClosed circuitState = iota
+	stateOpen
+	stateHalfOpen
+)
+
+// circuitBreaker trips after a run of failures and lets a probe through
+// after a reset window so the service can recover.
+type circuitBreaker struct {
+	mu              sync.Mutex
+	state           circuitState
+	failureCount    int
+	successCount    int
+	lastFailureTime time.Time
+}
+
+func newCircuitBreaker() *circuitBreaker {
+	return &circuitBreaker{state: stateClosed}
+}
+
+const (
+	failureThreshold = 5
+	successThreshold = 2
+	resetWindow      = 30 * time.Second
+)
+
+func (b *circuitBreaker) canProceed() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	switch b.state {
+	case stateOpen:
+		if time.Since(b.lastFailureTime) > resetWindow {
+			b.state = stateHalfOpen
+			b.successCount = 0
+			return true
+		}
+		return false
+	default:
+		return true
+	}
+}
+
+func (b *circuitBreaker) recordSuccess() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	switch b.state {
+	case stateHalfOpen:
+		b.successCount++
+		if b.successCount >= successThreshold {
+			b.state = stateClosed
+			b.failureCount = 0
+		}
+	case stateClosed:
+		b.failureCount = 0
+	}
+}
+
+func (b *circuitBreaker) recordFailure() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.failureCount++
+	b.lastFailureTime = time.Now()
+
+	switch b.state {
+	case stateClosed:
+		if b.failureCount >= failureThreshold {
+			b.state = stateOpen
+		}
+	case stateHalfOpen:
+		b.state = stateOpen
+	}
+}

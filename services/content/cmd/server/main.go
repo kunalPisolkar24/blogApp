@@ -16,6 +16,7 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/config"
 	"github.com/kunalPisolkar24/topos/services/content/internal/db"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 	"github.com/kunalPisolkar24/topos/services/content/internal/repository"
@@ -67,17 +68,21 @@ func run() error {
 		defer cacheClient.Close()
 	}
 
-	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient, cacheClient), mongoClient))
+	aiClient := ai.NewResilientClient(cfg.AIServiceURL)
+	defer aiClient.Close()
+	slog.Info("ai client configured", "addr", cfg.AIServiceURL)
+
+	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient, cacheClient, aiClient), mongoClient))
 }
 
 // newResolver builds the services and graph resolver used by the API.
-func newResolver(cfg config.Config, mongoClient *mongo.Client, cacheClient *cache.Cache) *graph.Resolver {
+func newResolver(cfg config.Config, mongoClient *mongo.Client, cacheClient *cache.Cache, aiClient domain.AIService) *graph.Resolver {
 	database := mongoClient.Database(cfg.DbName)
 	postRepo := repository.NewMongoPostRepository(database)
 	tagRepo := repository.NewMongoTagRepository(database)
 
 	return graph.NewResolver(
-		service.NewPostService(postRepo, tagRepo, ai.NewNoopAI(), cacheClient),
+		service.NewPostService(postRepo, tagRepo, aiClient, cacheClient),
 		service.NewTagService(tagRepo, cacheClient),
 	)
 }
