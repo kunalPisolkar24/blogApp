@@ -15,6 +15,10 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/graph"
 	"github.com/kunalPisolkar24/topos/services/content/internal/config"
 	"github.com/kunalPisolkar24/topos/services/content/internal/db"
+	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
+	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
+	"github.com/kunalPisolkar24/topos/services/content/internal/repository"
+	"github.com/kunalPisolkar24/topos/services/content/internal/service"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
@@ -51,15 +55,27 @@ func run() error {
 	}
 	slog.Info("mongo indexes ready")
 
-	return serve(ctx, newServer(cfg, mongoClient))
+	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient), mongoClient))
+}
+
+// newResolver builds the services and graph resolver used by the API.
+func newResolver(cfg config.Config, mongoClient *mongo.Client) *graph.Resolver {
+	database := mongoClient.Database(cfg.DbName)
+	postRepo := repository.NewMongoPostRepository(database)
+	tagRepo := repository.NewMongoTagRepository(database)
+
+	return graph.NewResolver(
+		service.NewPostService(postRepo, tagRepo, ai.NewNoopAI()),
+		service.NewTagService(tagRepo),
+	)
 }
 
 // newHandler wires the GraphQL endpoint, the playground, and the health check.
-func newHandler(mongoClient *mongo.Client) http.Handler {
+func newHandler(resolver *graph.Resolver, mongoClient *mongo.Client) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(queryPath, handler.NewDefaultServer(
-		graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}),
-	))
+	mux.Handle(queryPath, middleware.UserIDMiddleware(handler.NewDefaultServer(
+		graph.NewExecutableSchema(graph.Config{Resolvers: resolver}),
+	)))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
 	mux.HandleFunc("/health", healthHandler(mongoClient))
 	return mux
@@ -80,10 +96,10 @@ func healthHandler(mongoClient *mongo.Client) http.HandlerFunc {
 }
 
 // newServer builds the HTTP server with routes attached.
-func newServer(cfg config.Config, mongoClient *mongo.Client) *http.Server {
+func newServer(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client) *http.Server {
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           newHandler(mongoClient),
+		Handler:           newHandler(resolver, mongoClient),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 }
