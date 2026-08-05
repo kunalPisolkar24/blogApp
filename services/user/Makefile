@@ -2,7 +2,8 @@
         image image-migrator run \
         load-test-build load-test load-test-signup load-test-signin \
         load-test-me load-test-users load-test-update-profile \
-        load-test-cold load-test-stop load-test-clean load-test-tail
+        load-test-cold load-test-stop load-test-clean load-test-tail \
+        ha-test-up ha-test-logs ha-test-stop
 
 NODE_VERSION ?= 22.14.0
 IMAGE       ?= topos-user
@@ -108,3 +109,25 @@ load-test-clean: load-test-stop
 
 load-test-tail:
 	$(COMPOSE_LT) logs -f
+
+# --- HA Test (Postgres tripod + Pgpool-II pool) ---
+
+HA_TEST_ENV     ?= .env.ha-test
+HA_TEST_NETWORK ?= topos-user-ha-test
+HA_TEST_COMPOSE := docker compose -f compose.yml --env-file $(HA_TEST_ENV) \
+	--project-name topos-user-hatest
+
+ha-test-up:
+	docker network create $(HA_TEST_NETWORK) 2>/dev/null || true
+	$(HA_TEST_COMPOSE) up -d --build --wait user-service
+	$(HA_TEST_COMPOSE) logs --no-color user-migrator
+
+ha-test-logs:
+	$(HA_TEST_COMPOSE) logs -f
+
+ha-test-stop:
+	# Remove any one-off rejoin containers (recreated outside compose after a
+	# failover) so their volumes don't block the compose teardown below.
+	docker rm -f hatest-postgres-primary hatest-postgres-replica-2 2>/dev/null || true
+	$(HA_TEST_COMPOSE) down -v --remove-orphans
+	docker network rm $(HA_TEST_NETWORK) 2>/dev/null || true

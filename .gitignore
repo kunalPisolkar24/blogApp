@@ -2,3 +2,4 @@
 .vscode
 .env.local
 .zed/
+.env.ha-test
