@@ -13,12 +13,10 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/kunalPisolkar24/topos/services/content/graph"
+	"github.com/kunalPisolkar24/topos/services/content/internal/config"
 )
 
-const (
-	defaultPort = "4002"
-	queryPath   = "/query"
-)
+const queryPath = "/query"
 
 func main() {
 	if err := run(); err != nil {
@@ -28,17 +26,14 @@ func main() {
 }
 
 func run() error {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = defaultPort
-	}
+	cfg := config.LoadConfig()
 
 	mux := http.NewServeMux()
 	mux.Handle(queryPath, handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}})))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
 
 	srv := &http.Server{
-		Addr:              ":" + port,
+		Addr:              ":" + cfg.Port,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
