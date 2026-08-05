@@ -18,6 +18,7 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/db"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
+	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/messaging"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 	"github.com/kunalPisolkar24/topos/services/content/internal/repository"
 	"github.com/kunalPisolkar24/topos/services/content/internal/service"
@@ -40,9 +41,9 @@ func main() {
 
 // run wires everything together and blocks until the server stops.
 func run() error {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return err
+	cfg := config.LoadConfig()
+	if cfg.JwtSecret == "" {
+		return errors.New("JWT_SECRET is required")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -72,40 +73,47 @@ func run() error {
 	defer aiClient.Close()
 	slog.Info("ai client configured", "addr", cfg.AIServiceURL)
 
-	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient, cacheClient, aiClient), mongoClient))
+	producer := messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
+	defer producer.Close()
+
+	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient, cacheClient, aiClient, producer), mongoClient, producer))
 }
 
 // newResolver builds the services and graph resolver used by the API.
-func newResolver(cfg config.Config, mongoClient *mongo.Client, cacheClient *cache.Cache, aiClient domain.AIService) *graph.Resolver {
+func newResolver(cfg config.Config, mongoClient *mongo.Client, cacheClient *cache.Cache, aiClient domain.AIService, producer domain.EventPublisher) *graph.Resolver {
 	database := mongoClient.Database(cfg.DbName)
 	postRepo := repository.NewMongoPostRepository(database)
 	tagRepo := repository.NewMongoTagRepository(database)
 
 	return graph.NewResolver(
-		service.NewPostService(postRepo, tagRepo, aiClient, cacheClient),
+		service.NewPostService(postRepo, tagRepo, aiClient, producer, cacheClient),
 		service.NewTagService(tagRepo, cacheClient),
 	)
 }
 
 // newHandler wires the GraphQL endpoint, the playground, and the health check.
-func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client) http.Handler {
+func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client, producer domain.EventProducer) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(queryPath, middleware.AuthMiddleware(cfg)(handler.NewDefaultServer(
 		graph.NewExecutableSchema(graph.Config{Resolvers: resolver}),
 	)))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
-	mux.HandleFunc("/health", healthHandler(mongoClient))
+	mux.HandleFunc("/health", healthHandler(mongoClient, producer))
 	return mux
 }
 
-// healthHandler reports 200 when mongo is reachable, 503 otherwise.
-func healthHandler(mongoClient *mongo.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		ctx, cancel := context.WithTimeout(context.Background(), healthTimeout)
+// healthHandler reports 200 when mongo and kafka are reachable.
+func healthHandler(mongoClient *mongo.Client, producer domain.EventProducer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), healthTimeout)
 		defer cancel()
 
 		if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
 			http.Error(w, "mongo unreachable", http.StatusServiceUnavailable)
+			return
+		}
+		if err := producer.Ping(ctx); err != nil {
+			http.Error(w, "kafka unreachable", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -113,10 +121,10 @@ func healthHandler(mongoClient *mongo.Client) http.HandlerFunc {
 }
 
 // newServer builds the HTTP server with routes attached.
-func newServer(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client) *http.Server {
+func newServer(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client, producer domain.EventProducer) *http.Server {
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           newHandler(cfg, resolver, mongoClient),
+		Handler:           newHandler(cfg, resolver, mongoClient, producer),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 }

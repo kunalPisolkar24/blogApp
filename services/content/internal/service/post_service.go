@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -15,20 +16,22 @@ import (
 const maxSlugRetries = 5
 
 type PostService struct {
-	postRepo  domain.PostRepository
-	tagRepo   domain.TagRepository
-	aiService domain.AIService
-	cache     *cache.Cache
-	clock     func() time.Time
+	postRepo       domain.PostRepository
+	tagRepo        domain.TagRepository
+	aiService      domain.AIService
+	eventPublisher domain.EventPublisher
+	cache          *cache.Cache
+	clock          func() time.Time
 }
 
-func NewPostService(postRepo domain.PostRepository, tagRepo domain.TagRepository, aiService domain.AIService, cacheClient *cache.Cache) *PostService {
+func NewPostService(postRepo domain.PostRepository, tagRepo domain.TagRepository, aiService domain.AIService, eventPublisher domain.EventPublisher, cacheClient *cache.Cache) *PostService {
 	return &PostService{
-		postRepo:  postRepo,
-		tagRepo:   tagRepo,
-		aiService: aiService,
-		cache:     cacheClient,
-		clock:     time.Now,
+		postRepo:       postRepo,
+		tagRepo:        tagRepo,
+		aiService:      aiService,
+		eventPublisher: eventPublisher,
+		cache:          cacheClient,
+		clock:          time.Now,
 	}
 }
 
@@ -66,6 +69,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		created, err = s.postRepo.Create(ctx, post)
 		if err == nil {
 			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
+			s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
 			return created, nil
 		}
 		if !isDuplicateKey(err) {
@@ -115,6 +119,7 @@ func (s *PostService) UpdatePost(ctx context.Context, id, actorID string, title,
 	updated, err := s.postRepo.Update(ctx, id, post)
 	if err == nil {
 		s.invalidatePost(ctx, id)
+		s.publishEvent(ctx, "post updated", updated.ID, s.eventPublisher.PublishPostUpdated, updated)
 	}
 	return updated, err
 }
@@ -131,7 +136,31 @@ func (s *PostService) DeletePost(ctx context.Context, id, actorID string) error 
 		return err
 	}
 	s.invalidatePost(ctx, id)
+	s.publishEvent(ctx, "post deleted", id, func(ctx context.Context, _ *domain.Post) error {
+		return s.eventPublisher.PublishPostDeleted(ctx, id)
+	}, nil)
 	return nil
+}
+
+// SetPostSummary persists a generated summary and drops the affected
+// cache entries so readers see the new value immediately.
+func (s *PostService) SetPostSummary(ctx context.Context, id, summary string, status domain.PostStatus) error {
+	if err := s.postRepo.UpdateSummary(ctx, id, summary, status); err != nil {
+		return err
+	}
+	s.invalidatePost(ctx, id)
+	return nil
+}
+
+// publishEvent is a nil-safe best-effort publish; a failed event never
+// fails the underlying operation.
+func (s *PostService) publishEvent(ctx context.Context, name, postID string, publish func(context.Context, *domain.Post) error, post *domain.Post) {
+	if s.eventPublisher == nil {
+		return
+	}
+	if err := publish(ctx, post); err != nil {
+		slog.Error("failed to publish event", "event", name, "error", err, "postID", postID)
+	}
 }
 
 func (s *PostService) GetPosts(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error) {

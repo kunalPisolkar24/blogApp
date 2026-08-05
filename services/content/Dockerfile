@@ -13,7 +13,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath -ldflags="-s -w" \
-    -o /out/content-service ./cmd/server
+    -o /out/content-service ./cmd/server \
+    && CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath -ldflags="-s -w" \
+    -o /out/content-worker ./cmd/worker
 
 # --- Runtime stage: minimal image, non-root user ---
 FROM alpine:3.20 AS runtime
@@ -29,6 +32,7 @@ RUN apk add --no-cache tini curl ca-certificates \
 
 WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /out/content-service ./
+COPY --from=builder --chown=appuser:appuser /out/content-worker ./
 
 USER appuser
 EXPOSE 4002

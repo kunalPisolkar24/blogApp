@@ -45,3 +45,8 @@ type PostRepository interface {
 	FindByAuthor(ctx context.Context, authorID string, page, limit int) (*PaginatedPosts, error)
 	FindByTag(ctx context.Context, tag string, page, limit int) (*PaginatedPosts, error)
 }
+
+type SummaryProcessor interface {
+	GetPost(ctx context.Context, id string) (*Post, error)
+	SetPostSummary(ctx context.Context, id, summary string, status PostStatus) error
+}
