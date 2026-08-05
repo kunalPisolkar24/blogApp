@@ -46,6 +46,11 @@ func run() error {
 	slog.Info("connected to mongo", "db", cfg.DbName)
 	defer mongoClient.Disconnect(ctx)
 
+	if err := db.EnsureIndexes(ctx, mongoClient.Database(cfg.DbName)); err != nil {
+		return errors.New("ensure indexes: " + err.Error())
+	}
+	slog.Info("mongo indexes ready")
+
 	return serve(ctx, newServer(cfg, mongoClient))
 }
 
