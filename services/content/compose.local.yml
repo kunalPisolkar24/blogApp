@@ -1,0 +1,54 @@
+services:
+  content-mongo:
+    image: mongo:7
+    container_name: local-content-mongo
+    restart: unless-stopped
+    ports:
+      - "${CONTENT_MONGO_EXT_PORT:-27017}:27017"
+    volumes:
+      - content_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  content-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${CONTENT_SERVICE_CONTAINER:-local-content-service}
+    restart: unless-stopped
+    ports:
+      - "${CONTENT_SERVICE_EXT_PORT:-4002}:${CONTENT_SERVICE_INT_PORT:-4002}"
+    environment:
+      - PORT=${CONTENT_SERVICE_INT_PORT:-4002}
+      - MONGO_URI=${CONTENT_MONGO_URI:-mongodb://local-content-mongo:27017}
+      - DB_NAME=${CONTENT_DB_NAME:-blog_content}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      content-mongo:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  content_mongo_data:
+
+networks:
+  app-network:
+    name: ${APP_NETWORK:-topos_local_network}
+    driver: bridge
