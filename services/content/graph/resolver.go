@@ -1,15 +1,18 @@
 package graph
 
-import "context"
+import (
+	"github.com/kunalPisolkar24/topos/services/content/internal/service"
+)
 
-type Resolver struct{}
-
-// Hello is the resolver for the hello field.
-func (r *queryResolver) Hello(ctx context.Context) (string, error) {
-	return "world", nil
+// Resolver holds the dependencies used by all resolvers.
+type Resolver struct {
+	PostService *service.PostService
+	TagService  *service.TagService
 }
 
-// Query returns QueryResolver implementation.
-func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
-
-type queryResolver struct{ *Resolver }
+func NewResolver(postService *service.PostService, tagService *service.TagService) *Resolver {
+	return &Resolver{
+		PostService: postService,
+		TagService:  tagService,
+	}
+}

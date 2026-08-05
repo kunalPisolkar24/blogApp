@@ -1,5 +1,5 @@
 schema:
-  - graph/schema.graphqls
+  - graph/*.graphqls
 
 exec:
   filename: graph/generated.go
@@ -9,7 +9,24 @@ model:
   filename: graph/model/models_gen.go
   package: model
 
-resolver:
-  layout: single-file
-  filename: graph/resolver.go
+federation:
+  filename: graph/federation.go
   package: graph
+  version: 2
+
+resolver:
+  layout: follow-schema
+  dir: graph
+  package: graph
+
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Int32
+  User:
+    fields:
+      posts:
+        resolver: true
