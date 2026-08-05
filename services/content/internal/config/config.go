@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"sync"
@@ -9,23 +10,35 @@ import (
 )
 
 type Config struct {
-	Port     string
-	MongoURI string
-	DbName   string
+	Port        string
+	MongoURI    string
+	DbName      string
+	JwtSecret   string
+	JwtIssuer   string
+	JwtAudience string
 }
 
 var loadOnce sync.Once
 
 // LoadConfig reads configuration from the environment, falling back to a
 // local .env file when present, then to sane defaults.
-func LoadConfig() Config {
+func LoadConfig() (Config, error) {
 	loadEnvFile()
 
-	return Config{
-		Port:     getEnv("PORT", "4002"),
-		MongoURI: getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		DbName:   getEnv("DB_NAME", "blog_content"),
+	cfg := Config{
+		Port:        getEnv("PORT", "4002"),
+		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		DbName:      getEnv("DB_NAME", "blog_content"),
+		JwtSecret:   getEnv("JWT_SECRET", ""),
+		JwtIssuer:   getEnv("JWT_ISSUER", "user-service"),
+		JwtAudience: getEnv("JWT_AUDIENCE", "topos"),
 	}
+
+	if cfg.JwtSecret == "" {
+		return Config{}, errors.New("JWT_SECRET is required")
+	}
+
+	return cfg, nil
 }
 
 func loadEnvFile() {

@@ -34,6 +34,7 @@ services:
       - PORT=${CONTENT_SERVICE_INT_PORT:-4002}
       - MONGO_URI=${CONTENT_MONGO_URI:-mongodb://local-content-mongo:27017}
       - DB_NAME=${CONTENT_DB_NAME:-blog_content}
+      - JWT_SECRET=${CONTENT_JWT_SECRET:-local-dev-secret}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
       interval: 30s

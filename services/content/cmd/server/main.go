@@ -38,7 +38,10 @@ func main() {
 
 // run wires everything together and blocks until the server stops.
 func run() error {
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -71,9 +74,9 @@ func newResolver(cfg config.Config, mongoClient *mongo.Client) *graph.Resolver {
 }
 
 // newHandler wires the GraphQL endpoint, the playground, and the health check.
-func newHandler(resolver *graph.Resolver, mongoClient *mongo.Client) http.Handler {
+func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(queryPath, middleware.UserIDMiddleware(handler.NewDefaultServer(
+	mux.Handle(queryPath, middleware.AuthMiddleware(cfg)(handler.NewDefaultServer(
 		graph.NewExecutableSchema(graph.Config{Resolvers: resolver}),
 	)))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
@@ -99,7 +102,7 @@ func healthHandler(mongoClient *mongo.Client) http.HandlerFunc {
 func newServer(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client) *http.Server {
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           newHandler(resolver, mongoClient),
+		Handler:           newHandler(cfg, resolver, mongoClient),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 }
