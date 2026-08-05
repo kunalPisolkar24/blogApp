@@ -38,13 +38,16 @@ func run() error {
 	return serve(ctx, newServer(cfg))
 }
 
-// newHandler wires the GraphQL endpoint and the playground.
+// newHandler wires the GraphQL endpoint, the playground, and the health check.
 func newHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(queryPath, handler.NewDefaultServer(
 		graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}),
 	))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	return mux
 }
 
