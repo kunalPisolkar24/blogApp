@@ -36,7 +36,7 @@ services:
       timeout: 10s
       retries: 3
     depends_on:
-      user-postgres-primary:
+      user-postgres-pool:
         condition: service_healthy
       user-redis-sentinel-1:
         condition: service_healthy
@@ -56,7 +56,7 @@ services:
     environment:
       - DATABASE_URL_MIGRATE=${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL:?USER_DATABASE_URL is required}}
     depends_on:
-      user-postgres-primary:
+      user-postgres-pool:
         condition: service_healthy
     networks:
       - app-network
