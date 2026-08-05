@@ -23,6 +23,9 @@ type Config struct {
 	KafkaConsumerGroupID string
 	KafkaDLQTopic        string
 	WorkerConcurrency    int
+	LogFormat            string
+	LogLevel             string
+	OtelEndpoint         string
 }
 
 var loadOnce sync.Once
@@ -46,6 +49,9 @@ func LoadConfig() Config {
 		KafkaConsumerGroupID: getEnv("KAFKA_CONSUMER_GROUP_ID", "content-summary-worker-group"),
 		KafkaDLQTopic:        getEnv("KAFKA_DLQ_TOPIC", "posts-dlq"),
 		WorkerConcurrency:    getEnvInt("WORKER_CONCURRENCY", 3),
+		LogFormat:            getEnv("LOG_FORMAT", "json"),
+		LogLevel:             getEnv("LOG_LEVEL", "info"),
+		OtelEndpoint:         getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 	}
 }
 

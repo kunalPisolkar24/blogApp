@@ -16,14 +16,17 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/messaging"
+	"github.com/kunalPisolkar24/topos/services/content/internal/observability"
 	"github.com/kunalPisolkar24/topos/services/content/internal/repository"
 	"github.com/kunalPisolkar24/topos/services/content/internal/service"
 	"github.com/kunalPisolkar24/topos/services/content/internal/worker"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 const (
+	serviceName     = "content-worker"
 	healthTimeout   = 2 * time.Second
 	shutdownTimeout = 10 * time.Second
 )
@@ -37,9 +40,16 @@ func main() {
 
 func run() error {
 	cfg := config.LoadConfig()
+	observability.SetupLogging(cfg.LogFormat, cfg.LogLevel, serviceName)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	shutdownTracing, err := observability.SetupTracing(ctx, cfg.OtelEndpoint, serviceName)
+	if err != nil {
+		return errors.New("setup tracing: " + err.Error())
+	}
+	defer shutdownTracing(context.Background())
 
 	mongoClient, err := db.Connect(ctx, cfg.MongoURI)
 	if err != nil {
@@ -119,9 +129,11 @@ func run() error {
 	return server.Shutdown(shutdownCtx)
 }
 
-// newHealthHandler reports 200 when mongo, kafka and the worker are healthy.
+// newHealthHandler reports 200 when mongo, kafka and the worker are
+// healthy, and serves Prometheus metrics on /metrics.
 func newHealthHandler(mongoClient *mongo.Client, producer domain.EventProducer, w *worker.Worker) http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/health", func(rw http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), healthTimeout)
 		defer cancel()

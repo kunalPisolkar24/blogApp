@@ -8,6 +8,7 @@ import (
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	pb "github.com/kunalPisolkar24/topos/services/content/proto/ai"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -85,9 +86,14 @@ type grpcClient struct {
 }
 
 // newGRPCClient dials without blocking; the first call performs the
-// actual connection and the circuit breaker absorbs any failures.
+// actual connection and the circuit breaker absorbs any failures. The
+// client handler wires the active tracer into each RPC.
 func newGRPCClient(addr string) domain.AIService {
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(
+		addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 	if err != nil {
 		panic("grpc.NewClient: " + err.Error())
 	}

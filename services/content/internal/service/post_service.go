@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
+	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 	"github.com/kunalPisolkar24/topos/services/content/internal/slug"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -69,6 +70,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		created, err = s.postRepo.Create(ctx, post)
 		if err == nil {
 			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
+			metrics.PostsCreated.Inc()
 			s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
 			return created, nil
 		}
@@ -119,6 +121,7 @@ func (s *PostService) UpdatePost(ctx context.Context, id, actorID string, title,
 	updated, err := s.postRepo.Update(ctx, id, post)
 	if err == nil {
 		s.invalidatePost(ctx, id)
+		metrics.PostsUpdated.Inc()
 		s.publishEvent(ctx, "post updated", updated.ID, s.eventPublisher.PublishPostUpdated, updated)
 	}
 	return updated, err
@@ -136,6 +139,7 @@ func (s *PostService) DeletePost(ctx context.Context, id, actorID string) error 
 		return err
 	}
 	s.invalidatePost(ctx, id)
+	metrics.PostsDeleted.Inc()
 	s.publishEvent(ctx, "post deleted", id, func(ctx context.Context, _ *domain.Post) error {
 		return s.eventPublisher.PublishPostDeleted(ctx, id)
 	}, nil)
@@ -159,7 +163,7 @@ func (s *PostService) publishEvent(ctx context.Context, name, postID string, pub
 		return
 	}
 	if err := publish(ctx, post); err != nil {
-		slog.Error("failed to publish event", "event", name, "error", err, "postID", postID)
+		middleware.LoggerFromContext(ctx).Error("failed to publish event", "event", name, "error", err, "postID", postID)
 	}
 }
 

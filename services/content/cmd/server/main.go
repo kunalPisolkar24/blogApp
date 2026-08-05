@@ -20,13 +20,17 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/messaging"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
+	"github.com/kunalPisolkar24/topos/services/content/internal/observability"
 	"github.com/kunalPisolkar24/topos/services/content/internal/repository"
 	"github.com/kunalPisolkar24/topos/services/content/internal/service"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
+	serviceName     = "content-service"
 	queryPath       = "/query"
 	shutdownTimeout = 10 * time.Second
 	healthTimeout   = 2 * time.Second
@@ -42,12 +46,19 @@ func main() {
 // run wires everything together and blocks until the server stops.
 func run() error {
 	cfg := config.LoadConfig()
+	observability.SetupLogging(cfg.LogFormat, cfg.LogLevel, serviceName)
 	if cfg.JwtSecret == "" {
 		return errors.New("JWT_SECRET is required")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	shutdownTracing, err := observability.SetupTracing(ctx, cfg.OtelEndpoint, serviceName)
+	if err != nil {
+		return errors.New("setup tracing: " + err.Error())
+	}
+	defer shutdownTracing(context.Background())
 
 	mongoClient, err := db.Connect(ctx, cfg.MongoURI)
 	if err != nil {
@@ -91,15 +102,21 @@ func newResolver(cfg config.Config, mongoClient *mongo.Client, cacheClient *cach
 	)
 }
 
-// newHandler wires the GraphQL endpoint, the playground, and the health check.
+// newHandler wires the GraphQL endpoint, the playground, and the health
+// check. The /query handler is traced (span covers auth, resolution and
+// outbound calls); every request carries a request id in its context.
 func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client, producer domain.EventProducer) http.Handler {
+	gql := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: resolver}))
+
 	mux := http.NewServeMux()
-	mux.Handle(queryPath, middleware.AuthMiddleware(cfg)(handler.NewDefaultServer(
-		graph.NewExecutableSchema(graph.Config{Resolvers: resolver}),
-	)))
+	mux.Handle(queryPath, otelhttp.NewHandler(
+		middleware.MetricsMiddleware(middleware.AuthMiddleware(cfg)(gql)),
+		"graphql",
+	))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
 	mux.HandleFunc("/health", healthHandler(mongoClient, producer))
-	return mux
+	mux.Handle("/metrics", promhttp.Handler())
+	return middleware.RequestIDMiddleware(mux)
 }
 
 // healthHandler reports 200 when mongo and kafka are reachable.
