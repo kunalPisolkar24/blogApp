@@ -1,0 +1,134 @@
+name: topos-user-loadtest
+
+x-user-service-env: &user-service-env
+  NODE_ENV: production
+  PORT: 4001
+  DATABASE_URL: postgresql://topos_user:topos_pass@user-postgres:5432/topos_users
+  JWT_SECRET: ${USER_JWT_SECRET:?USER_JWT_SECRET is required}
+  REDIS_URL: redis://user-redis:6379
+  REDIS_CACHE_TTL_MS: ${USER_CACHE_TTL_MS:-3600000}
+  REDIS_MISSING_CACHE_TTL_MS: ${USER_MISSING_CACHE_TTL_MS:-60000}
+  LOG_LEVEL: ${USER_LOG_LEVEL:-info}
+
+services:
+  user-postgres:
+    image: postgres:16-alpine
+    container_name: loadtest-user-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: topos_user
+      POSTGRES_PASSWORD: topos_pass
+      POSTGRES_DB: topos_users
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U topos_user -d topos_users"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${PG_MEM:-512M}
+        reservations:
+          memory: 256M
+
+  user-redis:
+    image: redis:7-alpine
+    container_name: loadtest-user-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEM:-384M}
+        reservations:
+          memory: 64M
+
+  user-migrator:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: migrator
+    container_name: loadtest-user-migrator
+    restart: "no"
+    environment:
+      DATABASE_URL_MIGRATE: postgresql://topos_user:topos_pass@user-postgres:5432/topos_users
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+    networks:
+      - loadtest-net
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: loadtest-user-service
+    restart: unless-stopped
+    environment: *user-service-env
+    depends_on:
+      user-postgres:
+        condition: service_healthy
+      user-redis:
+        condition: service_healthy
+      user-migrator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4001/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SVC_MEM:-512M}
+        reservations:
+          memory: 256M
+
+  k6:
+    image: grafana/k6:latest
+    container_name: loadtest-k6
+    restart: "no"
+    command: ["run", "/load-tests/k6/${SCRIPT:-mixed}.js"]
+    environment:
+      TARGET: http://user-service:4001
+      VUS: ${VUS:-20}
+      DURATION: ${DURATION:-30s}
+      RPS: ${RPS:-50}
+      WEIGHTS: ${WEIGHTS:-users:30,user:15,me:20,signin:20,updateProfile:10,signup:5}
+      SEED_USERS: ${SEED_USERS:-100}
+    depends_on:
+      user-service:
+        condition: service_healthy
+    volumes:
+      - ./k6:/load-tests/k6:ro
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${K6_MEM:-384M}
+        reservations:
+          memory: 64M
+
+networks:
+  loadtest-net:
+    name: topos-user-loadtest-net
+    driver: bridge
