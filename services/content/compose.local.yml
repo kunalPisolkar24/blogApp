@@ -22,6 +22,27 @@ services:
         reservations:
           memory: 256M
 
+  content-redis:
+    image: redis:7-alpine
+    container_name: local-content-redis
+    restart: unless-stopped
+    ports:
+      - "${CONTENT_REDIS_EXT_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
   content-service:
     build:
       context: .
@@ -34,6 +55,7 @@ services:
       - PORT=${CONTENT_SERVICE_INT_PORT:-4002}
       - MONGO_URI=${CONTENT_MONGO_URI:-mongodb://local-content-mongo:27017}
       - DB_NAME=${CONTENT_DB_NAME:-blog_content}
+      - REDIS_ADDR=${CONTENT_REDIS_ADDR:-local-content-redis:6379}
       - JWT_SECRET=${CONTENT_JWT_SECRET:-local-dev-secret}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
@@ -42,6 +64,8 @@ services:
       retries: 3
     depends_on:
       content-mongo:
+        condition: service_healthy
+      content-redis:
         condition: service_healthy
     networks:
       - app-network

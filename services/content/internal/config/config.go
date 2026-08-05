@@ -13,6 +13,7 @@ type Config struct {
 	Port        string
 	MongoURI    string
 	DbName      string
+	RedisAddr   string
 	JwtSecret   string
 	JwtIssuer   string
 	JwtAudience string
@@ -29,6 +30,7 @@ func LoadConfig() (Config, error) {
 		Port:        getEnv("PORT", "4002"),
 		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		DbName:      getEnv("DB_NAME", "blog_content"),
+		RedisAddr:   getEnv("REDIS_ADDR", "localhost:6379"),
 		JwtSecret:   getEnv("JWT_SECRET", ""),
 		JwtIssuer:   getEnv("JWT_ISSUER", "user-service"),
 		JwtAudience: getEnv("JWT_AUDIENCE", "topos"),

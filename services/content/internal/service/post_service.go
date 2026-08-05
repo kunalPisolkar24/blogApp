@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/slug"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,14 +18,16 @@ type PostService struct {
 	postRepo  domain.PostRepository
 	tagRepo   domain.TagRepository
 	aiService domain.AIService
+	cache     *cache.Cache
 	clock     func() time.Time
 }
 
-func NewPostService(postRepo domain.PostRepository, tagRepo domain.TagRepository, aiService domain.AIService) *PostService {
+func NewPostService(postRepo domain.PostRepository, tagRepo domain.TagRepository, aiService domain.AIService, cacheClient *cache.Cache) *PostService {
 	return &PostService{
 		postRepo:  postRepo,
 		tagRepo:   tagRepo,
 		aiService: aiService,
+		cache:     cacheClient,
 		clock:     time.Now,
 	}
 }
@@ -62,6 +65,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		var err error
 		created, err = s.postRepo.Create(ctx, post)
 		if err == nil {
+			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
 			return created, nil
 		}
 		if !isDuplicateKey(err) {
@@ -108,7 +112,11 @@ func (s *PostService) UpdatePost(ctx context.Context, id, actorID string, title,
 		post.ResetSummary = true
 	}
 
-	return s.postRepo.Update(ctx, id, post)
+	updated, err := s.postRepo.Update(ctx, id, post)
+	if err == nil {
+		s.invalidatePost(ctx, id)
+	}
+	return updated, err
 }
 
 func (s *PostService) DeletePost(ctx context.Context, id, actorID string) error {
@@ -119,23 +127,59 @@ func (s *PostService) DeletePost(ctx context.Context, id, actorID string) error 
 	if existing.AuthorID != actorID {
 		return domain.ErrForbidden
 	}
-	return s.postRepo.Delete(ctx, id)
+	if err := s.postRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+	s.invalidatePost(ctx, id)
+	return nil
 }
 
 func (s *PostService) GetPosts(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error) {
-	return s.postRepo.FindAll(ctx, page, limit)
+	page, limit = normalizePagination(page, limit)
+	return withCache(s.cache, ctx, cache.KeyPosts(page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
+		return s.postRepo.FindAll(ctx, page, limit)
+	})
 }
 
 func (s *PostService) GetPost(ctx context.Context, id string) (*domain.Post, error) {
-	return s.postRepo.FindByID(ctx, id)
+	return withCache(s.cache, ctx, cache.KeyPost(id), cache.PostTTL, func() (*domain.Post, error) {
+		return s.postRepo.FindByID(ctx, id)
+	})
 }
 
 func (s *PostService) GetPostsByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
-	return s.postRepo.FindByAuthor(ctx, authorID, page, limit)
+	page, limit = normalizePagination(page, limit)
+	return withCache(s.cache, ctx, cache.KeyPostsByAuthor(authorID, page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
+		return s.postRepo.FindByAuthor(ctx, authorID, page, limit)
+	})
 }
 
 func (s *PostService) GetPostsByTag(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error) {
-	return s.postRepo.FindByTag(ctx, tag, page, limit)
+	page, limit = normalizePagination(page, limit)
+	return withCache(s.cache, ctx, cache.KeyPostsByTag(tag, page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
+		return s.postRepo.FindByTag(ctx, tag, page, limit)
+	})
+}
+
+// invalidatePost drops the single-post entry and every list derived from it.
+func (s *PostService) invalidatePost(ctx context.Context, id string) {
+	cache.Del(s.cache, ctx, cache.KeyPost(id))
+	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
+}
+
+// normalizePagination mirrors the repository's defaulting so cache keys
+// stay canonical regardless of how callers spell the arguments.
+func normalizePagination(page, limit int) (int, int) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return page, limit
 }
 
 func (s *PostService) GenerateTags(ctx context.Context, title, body string) ([]string, error) {

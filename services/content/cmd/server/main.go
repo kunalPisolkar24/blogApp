@@ -13,6 +13,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/kunalPisolkar24/topos/services/content/graph"
+	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/config"
 	"github.com/kunalPisolkar24/topos/services/content/internal/db"
 	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
@@ -58,18 +59,26 @@ func run() error {
 	}
 	slog.Info("mongo indexes ready")
 
-	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient), mongoClient))
+	cacheClient, err := cache.New(ctx, cfg.RedisAddr)
+	if err != nil {
+		slog.Warn("redis unavailable, caching disabled", "addr", cfg.RedisAddr, "error", err)
+	} else {
+		slog.Info("connected to redis", "addr", cfg.RedisAddr)
+		defer cacheClient.Close()
+	}
+
+	return serve(ctx, newServer(cfg, newResolver(cfg, mongoClient, cacheClient), mongoClient))
 }
 
 // newResolver builds the services and graph resolver used by the API.
-func newResolver(cfg config.Config, mongoClient *mongo.Client) *graph.Resolver {
+func newResolver(cfg config.Config, mongoClient *mongo.Client, cacheClient *cache.Cache) *graph.Resolver {
 	database := mongoClient.Database(cfg.DbName)
 	postRepo := repository.NewMongoPostRepository(database)
 	tagRepo := repository.NewMongoTagRepository(database)
 
 	return graph.NewResolver(
-		service.NewPostService(postRepo, tagRepo, ai.NewNoopAI()),
-		service.NewTagService(tagRepo),
+		service.NewPostService(postRepo, tagRepo, ai.NewNoopAI(), cacheClient),
+		service.NewTagService(tagRepo, cacheClient),
 	)
 }
 

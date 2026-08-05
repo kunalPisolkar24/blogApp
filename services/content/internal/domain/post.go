@@ -14,25 +14,25 @@ const (
 )
 
 type Post struct {
-	ID            string     `bson:"_id,omitempty"`
-	Title         string     `bson:"title"`
-	Body          string     `bson:"body"`
-	Slug          string     `bson:"slug"`
-	ImageUrl      *string    `bson:"imageUrl"`
-	AuthorID      string     `bson:"authorId"`
-	Tags          []string   `bson:"tags"`
-	Summary       string     `bson:"summary"`
-	SummaryStatus PostStatus `bson:"summaryStatus"`
-	CreatedAt     time.Time  `bson:"createdAt"`
-	UpdatedAt     time.Time  `bson:"updatedAt"`
-	ResetSummary  bool       `bson:"-"`
+	ID            string     `bson:"_id,omitempty" json:"id,omitempty"`
+	Title         string     `bson:"title" json:"title"`
+	Body          string     `bson:"body" json:"body"`
+	Slug          string     `bson:"slug" json:"slug"`
+	ImageUrl      *string    `bson:"imageUrl" json:"imageUrl,omitempty"`
+	AuthorID      string     `bson:"authorId" json:"authorId"`
+	Tags          []string   `bson:"tags" json:"tags"`
+	Summary       string     `bson:"summary" json:"summary"`
+	SummaryStatus PostStatus `bson:"summaryStatus" json:"summaryStatus"`
+	CreatedAt     time.Time  `bson:"createdAt" json:"createdAt"`
+	UpdatedAt     time.Time  `bson:"updatedAt" json:"updatedAt"`
+	ResetSummary  bool       `bson:"-" json:"-"`
 }
 
 type PaginatedPosts struct {
-	Posts      []*Post
-	TotalPages int
-	TotalPosts int64
-	Page       int
+	Posts      []*Post `json:"posts"`
+	TotalPages int     `json:"totalPages"`
+	TotalPosts int64   `json:"totalPosts"`
+	Page       int     `json:"page"`
 }
 
 type PostRepository interface {
