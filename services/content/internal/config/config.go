@@ -9,7 +9,9 @@ import (
 )
 
 type Config struct {
-	Port string
+	Port     string
+	MongoURI string
+	DbName   string
 }
 
 var loadOnce sync.Once
@@ -20,7 +22,9 @@ func LoadConfig() Config {
 	loadEnvFile()
 
 	return Config{
-		Port: getEnv("PORT", "4002"),
+		Port:     getEnv("PORT", "4002"),
+		MongoURI: getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		DbName:   getEnv("DB_NAME", "blog_content"),
 	}
 }
 

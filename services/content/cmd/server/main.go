@@ -14,11 +14,15 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/kunalPisolkar24/topos/services/content/graph"
 	"github.com/kunalPisolkar24/topos/services/content/internal/config"
+	"github.com/kunalPisolkar24/topos/services/content/internal/db"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 const (
 	queryPath       = "/query"
 	shutdownTimeout = 10 * time.Second
+	healthTimeout   = 2 * time.Second
 )
 
 func main() {
@@ -35,27 +39,46 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return serve(ctx, newServer(cfg))
+	mongoClient, err := db.Connect(ctx, cfg.MongoURI)
+	if err != nil {
+		return errors.New("connect mongo: " + err.Error())
+	}
+	slog.Info("connected to mongo", "db", cfg.DbName)
+	defer mongoClient.Disconnect(ctx)
+
+	return serve(ctx, newServer(cfg, mongoClient))
 }
 
 // newHandler wires the GraphQL endpoint, the playground, and the health check.
-func newHandler() http.Handler {
+func newHandler(mongoClient *mongo.Client) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(queryPath, handler.NewDefaultServer(
 		graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}),
 	))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.HandleFunc("/health", healthHandler(mongoClient))
 	return mux
 }
 
+// healthHandler reports 200 when mongo is reachable, 503 otherwise.
+func healthHandler(mongoClient *mongo.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		ctx, cancel := context.WithTimeout(context.Background(), healthTimeout)
+		defer cancel()
+
+		if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
+			http.Error(w, "mongo unreachable", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 // newServer builds the HTTP server with routes attached.
-func newServer(cfg config.Config) *http.Server {
+func newServer(cfg config.Config, mongoClient *mongo.Client) *http.Server {
 	return &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           newHandler(),
+		Handler:           newHandler(mongoClient),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 }
