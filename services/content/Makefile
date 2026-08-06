@@ -2,10 +2,10 @@
 
 # Excluded from the coverage report:
 #   - generated code (gqlgen, protobuf): no hand-written logic
-#   - db and repository: covered by the integration suite (testcontainers)
+#   - db, repository: covered by the integration suite (testcontainers)
+#   - bootstrap, cmd: entrypoint wiring only
 #   - testutil: test doubles
-#   - cmd: entrypoint wiring only
-GENERATED_RE := 'graph/generated.go|graph/model/|proto/ai/|\.pb\.go|internal/db/|internal/repository/|internal/testutil/|cmd/'
+GENERATED_RE := 'graph/generated.go|graph/model/|proto/ai/|\.pb\.go|internal/db/|internal/repository/|internal/bootstrap/|internal/testutil/|cmd/'
 
 test:
 	go test ./...

@@ -10,12 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
+	"github.com/kunalPisolkar24/topos/services/content/internal/bootstrap"
 	"github.com/kunalPisolkar24/topos/services/content/internal/config"
-	"github.com/kunalPisolkar24/topos/services/content/internal/db"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
-	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/ai"
-	"github.com/kunalPisolkar24/topos/services/content/internal/infrastructure/messaging"
 	"github.com/kunalPisolkar24/topos/services/content/internal/observability"
 	"github.com/kunalPisolkar24/topos/services/content/internal/repository"
 	"github.com/kunalPisolkar24/topos/services/content/internal/service"
@@ -45,42 +42,18 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	shutdownTracing, err := observability.SetupTracing(ctx, cfg.OtelEndpoint, serviceName)
+	deps, err := bootstrap.New(ctx, cfg, serviceName)
 	if err != nil {
-		return errors.New("setup tracing: " + err.Error())
+		return err
 	}
-	defer shutdownTracing(context.Background())
-
-	mongoClient, err := db.Connect(ctx, cfg.MongoURI)
-	if err != nil {
-		return errors.New("connect mongo: " + err.Error())
-	}
-	slog.Info("connected to mongo", "db", cfg.DbName)
-	defer mongoClient.Disconnect(ctx)
-
-	if err := db.EnsureIndexes(ctx, mongoClient.Database(cfg.DbName)); err != nil {
-		return errors.New("ensure indexes: " + err.Error())
-	}
-
-	cacheClient, err := cache.New(ctx, cfg.RedisAddr)
-	if err != nil {
-		slog.Warn("redis unavailable, caching disabled", "addr", cfg.RedisAddr, "error", err)
-	} else {
-		defer cacheClient.Close()
-	}
-
-	aiClient := ai.NewResilientClient(cfg.AIServiceURL)
-	defer aiClient.Close()
-
-	producer := messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
-	defer producer.Close()
+	defer deps.Close(context.Background())
 
 	processor := service.NewPostService(
-		repository.NewMongoPostRepository(mongoClient.Database(cfg.DbName)),
-		repository.NewMongoTagRepository(mongoClient.Database(cfg.DbName)),
-		aiClient,
-		producer,
-		cacheClient,
+		repository.NewMongoPostRepository(deps.Mongo.Database(cfg.DbName)),
+		repository.NewMongoTagRepository(deps.Mongo.Database(cfg.DbName)),
+		deps.AI,
+		deps.Producer,
+		deps.Cache,
 	)
 
 	w, err := worker.NewWorker(
@@ -90,8 +63,8 @@ func run() error {
 		cfg.KafkaDLQTopic,
 		cfg.WorkerConcurrency,
 		processor,
-		aiClient,
-		producer,
+		deps.AI,
+		deps.Producer,
 	)
 	if err != nil {
 		return err
@@ -100,7 +73,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           newHealthHandler(mongoClient, producer, w),
+		Handler:           newHealthHandler(deps.Mongo, deps.Producer, w),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
