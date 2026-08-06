@@ -1,6 +1,6 @@
-node_modules
+trash/
+node_modules/
+dist/
+coverage/
 .env
-dist
-npm-debug.log
-generated
-coverage
+src/generated/

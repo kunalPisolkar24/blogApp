@@ -1,61 +1,63 @@
 include:
-  - path: infra/db.yml
+  - path: infra/postgres.yml
   - path: infra/redis.yml
 
-x-user-service-env: &user-service-env
-  PORT: ${USER_SERVICE_INT_PORT:?USER_SERVICE_INT_PORT is required}
-  JWT_SECRET: ${USER_JWT_SECRET:?USER_JWT_SECRET is required}
-  DATABASE_URL: ${USER_DATABASE_URL:?USER_DATABASE_URL is required}
-  DATABASE_URL_REPLICA: ${USER_DATABASE_URL_REPLICA:-postgresql://${USER_POSTGRES_USER}:${USER_POSTGRES_PASSWORD}@${USER_POSTGRES_REPLICA_CONTAINER}:${USER_POSTGRES_REPLICA_INT_PORT}/${USER_POSTGRES_DB}}
-  DATABASE_URL_MIGRATE: ${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL}}
-  NODE_ENV: ${USER_NODE_ENV:-production}
-  REDIS_URL: ${USER_REDIS_URL:-}
-  REDIS_MASTER_NAME: ${USER_REDIS_MASTER_NAME:-mymaster}
-  REDIS_SENTINELS: ${USER_REDIS_SENTINELS:-${USER_REDIS_SENTINEL_1_CONTAINER}:${USER_REDIS_SENTINEL_INT_PORT},${USER_REDIS_SENTINEL_2_CONTAINER}:${USER_REDIS_SENTINEL_INT_PORT},${USER_REDIS_SENTINEL_3_CONTAINER}:${USER_REDIS_SENTINEL_INT_PORT}}
-  REDIS_PASSWORD: ${USER_REDIS_PASSWORD:-}
-  USER_CACHE_TTL_MS: ${USER_CACHE_TTL_MS:-3600000}
-  USER_MISSING_CACHE_TTL_MS: ${USER_MISSING_CACHE_TTL_MS:-60000}
-
-x-user-migrate-env: &user-migrate-env
-  DATABASE_URL_MIGRATE: ${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL}}
-
 services:
-  user-migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: migrator
-    container_name: user-migrate
-    restart: "no"
-    environment: *user-migrate-env
-    depends_on:
-      user-postgres-primary:
-        condition: service_healthy
-    networks:
-      - app-network
-
   user-service:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runtime
     container_name: ${USER_SERVICE_CONTAINER:?USER_SERVICE_CONTAINER is required}
     restart: unless-stopped
     ports:
       - "${USER_SERVICE_EXT_PORT:?USER_SERVICE_EXT_PORT is required}:${USER_SERVICE_INT_PORT:?USER_SERVICE_INT_PORT is required}"
-    environment: *user-service-env
-    depends_on:
-      user-migrate:
-        condition: service_completed_successfully
-      user-postgres-primary:
-        condition: service_healthy
-      user-redis-sentinel-1:
-        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=${USER_SERVICE_INT_PORT:?USER_SERVICE_INT_PORT is required}
+      - DATABASE_URL=${USER_DATABASE_URL:?USER_DATABASE_URL is required}
+      - DATABASE_URL_REPLICA=${USER_DATABASE_URL_REPLICA:?USER_DATABASE_URL_REPLICA is required}
+      - DATABASE_URL_MIGRATE=${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL:?USER_DATABASE_URL is required}}
+      - JWT_SECRET=${USER_JWT_SECRET:?USER_JWT_SECRET is required}
+      - JWT_ISSUER=${USER_JWT_ISSUER:-user-service}
+      - JWT_AUDIENCE=${USER_JWT_AUDIENCE:-topos}
+      - JWT_EXPIRES_IN=${USER_JWT_EXPIRES_IN:-7d}
+      - REDIS_SENTINELS=${USER_REDIS_SENTINEL_HOSTS:?USER_REDIS_SENTINEL_HOSTS is required}
+      - REDIS_SENTINEL_NAME=${USER_REDIS_MASTER_NAME:-mymaster}
+      - REDIS_PASSWORD=${USER_REDIS_PASSWORD:?USER_REDIS_PASSWORD is required}
+      - REDIS_SENTINEL_PASSWORD=${USER_REDIS_SENTINEL_PASSWORD:?USER_REDIS_SENTINEL_PASSWORD is required}
+      - REDIS_CACHE_TTL_MS=${USER_CACHE_TTL_MS:-3600000}
+      - REDIS_MISSING_CACHE_TTL_MS=${USER_MISSING_CACHE_TTL_MS:-60000}
+      - LOG_LEVEL=${USER_LOG_LEVEL:-info}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${USER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=user-service
     healthcheck:
-      test: [ "CMD", "curl", "--fail", "http://localhost:${USER_SERVICE_INT_PORT}/health" ]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_INT_PORT:?USER_SERVICE_INT_PORT is required}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+    depends_on:
+      user-postgres-pool:
+        condition: service_healthy
+      user-redis-sentinel-1:
+        condition: service_healthy
+      user-redis-sentinel-2:
+        condition: service_healthy
+      user-redis-sentinel-3:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  user-migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    container_name: ${USER_MIGRATOR_CONTAINER:?USER_MIGRATOR_CONTAINER is required}
+    environment:
+      - DATABASE_URL_MIGRATE=${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL:?USER_DATABASE_URL is required}}
+    depends_on:
+      user-postgres-pool:
+        condition: service_healthy
     networks:
       - app-network
 

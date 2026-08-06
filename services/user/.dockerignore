@@ -1,10 +1,10 @@
 node_modules
 dist
-npm-debug.log
-.git
-coverage
-tests
+src/generated
 .env
 .env.*
+trash
 infra
-compose.yml
+tests
+.git
+*.log

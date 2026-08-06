@@ -1,69 +1,51 @@
-FROM node:20-bookworm-slim AS base
+# syntax=docker/dockerfile:1.7
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+ARG NODE_VERSION=22.14.0
 
-WORKDIR /app
+FROM node:${NODE_VERSION}-alpine AS base
+WORKDIR /usr/src/app
 
 FROM base AS deps
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --include=dev --no-audit --no-fund
 
-COPY package*.json ./
-
-RUN npm ci --include=dev --no-audit --no-fund
-
-FROM deps AS build
-
-COPY . .
-
-RUN DATABASE_URL_MIGRATE="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate \
-    && npm run build
-
-FROM base AS migrator
-
-COPY package.migrator.json ./package.json
-
-RUN npm install --omit=optional --no-audit --no-fund \
-    && rm -rf /app/node_modules/@electric-sql \
-              /app/node_modules/mysql2 \
-              /app/node_modules/postgres \
-              /app/node_modules/@prisma/studio-core/dist/ui \
-              /app/node_modules/@prisma/studio-core/dist/metafile-cjs.json \
-              /app/node_modules/@prisma/studio-core/dist/metafile-esm.json \
-    && npm cache clean --force
-
-COPY prisma.config.ts ./prisma.config.ts
+FROM deps AS builder
+COPY tsconfig.json prisma.config.ts ./
 COPY prisma ./prisma
+RUN DATABASE_URL_MIGRATE="postgresql://dummy:dummy@localhost:5432/dummy" \
+    npm run db:generate
+COPY src ./src
+RUN npm run build
 
-CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
+FROM base AS prod-deps
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --no-audit --no-fund
+
+FROM deps AS migrator
+COPY prisma.config.ts ./
+COPY prisma ./prisma
+CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM base AS runtime
+ARG GIT_REVISION=unknown
+LABEL org.opencontainers.image.title="topos-user" \
+      org.opencontainers.image.source="https://github.com/kunalPisolkar24/topos" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.licenses="MIT"
 
-COPY package*.json ./
+RUN apk add --no-cache tini curl
 
-RUN npm ci --omit=dev --no-audit --no-fund \
-    && find /app/node_modules/@prisma/client/runtime \
-        \( -name 'query_compiler_*.mysql.*' \
-        -o -name 'query_compiler_*.sqlite.*' \
-        -o -name 'query_compiler_*.cockroachdb.*' \
-        -o -name 'query_compiler_*.sqlserver.*' \) -delete \
-    && rm -rf /app/node_modules/@prisma/engines \
-    && npm cache clean --force
-
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/src/generated/prisma ./src/generated/prisma
-
+WORKDIR /usr/src/app
 ENV NODE_ENV=production
-ENV NODE_OPTIONS=--max-old-space-size=512
+COPY --from=prod-deps --chown=node:node /usr/src/app/node_modules ./node_modules
+COPY --from=builder   --chown=node:node /usr/src/app/dist ./dist
+COPY --from=builder   --chown=node:node /usr/src/app/src/generated/prisma ./src/generated/prisma
+COPY --chown=node:node package.json ./
 
+USER node
 EXPOSE 4001
 
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["npm", "start"]
-
-FROM deps AS seed
-
-COPY --from=build /app/src ./src
-COPY load-tests/seed ./load-tests/seed
-
-ENV NODE_ENV=production
-ENV NODE_OPTIONS=--max-old-space-size=512
-
-CMD ["npx", "tsx", "load-tests/seed/seed.ts"]

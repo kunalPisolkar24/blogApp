@@ -1,16 +1,5 @@
 extend schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@key"])
 
-enum CacheControlScope {
-  PUBLIC
-  PRIVATE
-}
-
-directive @cacheControl(
-  maxAge: Int
-  scope: CacheControlScope
-  inheritMaxAge: Boolean
-) on FIELD_DEFINITION | OBJECT | INTERFACE | UNION
-
 type User @key(fields: "id") {
   id: ID!
   username: String!
@@ -28,9 +17,9 @@ type AuthPayload {
 }
 
 type Query {
-  me: User @cacheControl(maxAge: 0)
-  user(id: ID!): User @cacheControl(maxAge: 60, scope: PRIVATE)
-  users(limit: Int = 10, cursor: ID): [User!]! @cacheControl(maxAge: 60, scope: PUBLIC)
+  me: User
+  user(id: ID!): User
+  users(limit: Int = 20, cursor: ID): [User!]!
 }
 
 type Mutation {

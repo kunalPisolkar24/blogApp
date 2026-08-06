@@ -1,26 +1,29 @@
-import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { readReplicas } from '@prisma/extension-read-replicas';
-import { PrismaClient } from '../generated/prisma/client';
-import { env } from '../config/env';
+import { Pool } from 'pg';
+import { env } from '../config/env.js';
+import { PrismaClient } from '../generated/prisma/client.js';
 
-const pool = new Pool({ connectionString: env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+const primary = new PrismaClient({
+  adapter: new PrismaPg(new Pool({ connectionString: env.DATABASE_URL })),
+});
 
-const baseClient = new PrismaClient({ adapter });
-
-const client = env.DATABASE_URL_REPLICA
-    ? baseClient.$extends(
-        readReplicas({
-            replicas: [
-                new PrismaClient({
-                    adapter: new PrismaPg(
-                        new Pool({ connectionString: env.DATABASE_URL_REPLICA })
-                    ),
-                }),
-            ],
-        })
+const extended = env.DATABASE_URL_REPLICA
+  ? primary.$extends(
+      readReplicas({
+        replicas: [
+          new PrismaClient({
+            adapter: new PrismaPg(
+              new Pool({ connectionString: env.DATABASE_URL_REPLICA }),
+            ),
+          }),
+        ],
+      }),
     )
-    : baseClient;
+  : null;
 
-export default client as unknown as PrismaClient;
+export const prisma = (extended ?? primary) as PrismaClient;
+
+export function primaryDb(): PrismaClient {
+  return (extended ? extended.$primary() : primary) as PrismaClient;
+}

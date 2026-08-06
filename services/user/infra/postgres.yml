@@ -1,0 +1,119 @@
+x-postgres-common: &postgres-common
+  image: bitnami/postgresql:latest
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRESQL_USERNAME\" -d \"$$POSTGRESQL_DATABASE\""]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 10s
+  networks:
+    - app-network
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+      reservations:
+        memory: 256M
+
+services:
+  user-postgres-primary:
+    <<: *postgres-common
+    container_name: ${USER_POSTGRES_PRIMARY_CONTAINER:?USER_POSTGRES_PRIMARY_CONTAINER is required}
+    ports:
+      - "${USER_POSTGRES_EXT_PORT:?USER_POSTGRES_EXT_PORT is required}:${USER_POSTGRES_INT_PORT:-5432}"
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=master
+      # Superuser 'postgres' — used by the pool's health checks and pg_promote().
+      - POSTGRESQL_POSTGRES_PASSWORD=${USER_POSTGRES_POSTGRES_PASSWORD:?USER_POSTGRES_POSTGRES_PASSWORD is required}
+      - POSTGRESQL_REPLICATION_USER=${USER_POSTGRES_REPLICATION_USER:?USER_POSTGRES_REPLICATION_USER is required}
+      - POSTGRESQL_REPLICATION_PASSWORD=${USER_POSTGRES_REPLICATION_PASSWORD:?USER_POSTGRES_REPLICATION_PASSWORD is required}
+      - POSTGRESQL_USERNAME=${USER_POSTGRES_USER:?USER_POSTGRES_USER is required}
+      - POSTGRESQL_PASSWORD=${USER_POSTGRES_PASSWORD:?USER_POSTGRES_PASSWORD is required}
+      - POSTGRESQL_DATABASE=${USER_POSTGRES_DB:?USER_POSTGRES_DB is required}
+    volumes:
+      - user_postgres_primary_data:/bitnami/postgresql
+
+  user-postgres-replica-1:
+    <<: *postgres-common
+    container_name: ${USER_POSTGRES_REPLICA_1_CONTAINER:?USER_POSTGRES_REPLICA_1_CONTAINER is required}
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_POSTGRES_PASSWORD=${USER_POSTGRES_POSTGRES_PASSWORD:?USER_POSTGRES_POSTGRES_PASSWORD is required}
+      - POSTGRESQL_MASTER_HOST=${USER_POSTGRES_PRIMARY_CONTAINER:?USER_POSTGRES_PRIMARY_CONTAINER is required}
+      - POSTGRESQL_MASTER_PORT_NUMBER=${USER_POSTGRES_INT_PORT:-5432}
+      - POSTGRESQL_REPLICATION_USER=${USER_POSTGRES_REPLICATION_USER:?USER_POSTGRES_REPLICATION_USER is required}
+      - POSTGRESQL_REPLICATION_PASSWORD=${USER_POSTGRES_REPLICATION_PASSWORD:?USER_POSTGRES_REPLICATION_PASSWORD is required}
+      - POSTGRESQL_USERNAME=${USER_POSTGRES_USER:?USER_POSTGRES_USER is required}
+      - POSTGRESQL_PASSWORD=${USER_POSTGRES_PASSWORD:?USER_POSTGRES_PASSWORD is required}
+      - POSTGRESQL_DATABASE=${USER_POSTGRES_DB:?USER_POSTGRES_DB is required}
+    volumes:
+      - user_postgres_replica_1_data:/bitnami/postgresql
+    depends_on:
+      user-postgres-primary:
+        condition: service_healthy
+
+  user-postgres-replica-2:
+    <<: *postgres-common
+    container_name: ${USER_POSTGRES_REPLICA_2_CONTAINER:?USER_POSTGRES_REPLICA_2_CONTAINER is required}
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_POSTGRES_PASSWORD=${USER_POSTGRES_POSTGRES_PASSWORD:?USER_POSTGRES_POSTGRES_PASSWORD is required}
+      - POSTGRESQL_MASTER_HOST=${USER_POSTGRES_PRIMARY_CONTAINER:?USER_POSTGRES_PRIMARY_CONTAINER is required}
+      - POSTGRESQL_MASTER_PORT_NUMBER=${USER_POSTGRES_INT_PORT:-5432}
+      - POSTGRESQL_REPLICATION_USER=${USER_POSTGRES_REPLICATION_USER:?USER_POSTGRES_REPLICATION_USER is required}
+      - POSTGRESQL_REPLICATION_PASSWORD=${USER_POSTGRES_REPLICATION_PASSWORD:?USER_POSTGRES_REPLICATION_PASSWORD is required}
+      - POSTGRESQL_USERNAME=${USER_POSTGRES_USER:?USER_POSTGRES_USER is required}
+      - POSTGRESQL_PASSWORD=${USER_POSTGRES_PASSWORD:?USER_POSTGRES_PASSWORD is required}
+      - POSTGRESQL_DATABASE=${USER_POSTGRES_DB:?USER_POSTGRES_DB is required}
+    volumes:
+      - user_postgres_replica_2_data:/bitnami/postgresql
+    depends_on:
+      user-postgres-primary:
+        condition: service_healthy
+
+  user-postgres-pool:
+    image: topos-pgpool:4.7.2
+    build:
+      context: ./pgpool/image
+    container_name: ${USER_POSTGRES_POOL_CONTAINER:?USER_POSTGRES_POOL_CONTAINER is required}
+    restart: unless-stopped
+    volumes:
+      - ./pgpool:/config:ro
+    environment:
+      # The entrypoint registers every *_USERNAME/*_PASSWORD pair in pool_passwd
+      # (SCRAM). "APP" authenticates the app, "POSTGRES" is the superuser used
+      # by sr/health checks and failover.
+      - APP_USERNAME=${USER_POSTGRES_USER:?USER_POSTGRES_USER is required}
+      - APP_PASSWORD=${USER_POSTGRES_PASSWORD:?USER_POSTGRES_PASSWORD is required}
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=${USER_POSTGRES_POSTGRES_PASSWORD:?USER_POSTGRES_POSTGRES_PASSWORD is required}
+      - PGPOOL_PCP_USER=${PGPOOL_PCP_USER:?PGPOOL_PCP_USER is required}
+      - PGPOOL_PCP_PASSWORD=${PGPOOL_PCP_PASSWORD:?PGPOOL_PCP_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$$APP_PASSWORD psql -w -h 127.0.0.1 -p 5432 -U $$APP_USERNAME -d topos_users -c 'SELECT 1' >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      user-postgres-primary:
+        condition: service_healthy
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  user_postgres_primary_data:
+  user_postgres_replica_1_data:
+  user_postgres_replica_2_data:
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK}

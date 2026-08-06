@@ -1,55 +1,42 @@
-import { GraphQLContext } from '../context';
-import { signupSchema, signinSchema, updateProfileSchema } from '../types';
-import { ValidationError, UnauthorizedError } from '../errors/DomainError';
-
-const USERS_LIMIT_FLOOR = 1;
-const USERS_LIMIT_CEIL = 50;
-const USERS_DEFAULT_LIMIT = 20;
-const CURSOR_PATTERN = /^\d+$/;
+import type { GraphQLContext } from '../context.js';
+import { UnauthorizedError, UserNotFoundError } from '../errors.js';
+import { signinSchema, signupSchema, updateProfileSchema, validate } from '../schemas.js';
 
 export const resolvers = {
-    Query: {
-        me: async (_: unknown, __: unknown, context: GraphQLContext) => {
-            if (!context.user) return null;
-            return context.loaders.user.load(context.user.id);
-        },
-        user: async (_: unknown, { id }: { id: string }, context: GraphQLContext) => {
-            return context.loaders.user.load(parseInt(id));
-        },
-        users: async (_: unknown, { limit, cursor }: { limit?: number; cursor?: string }, context: GraphQLContext) => {
-            const safeLimit = Number.isFinite(limit) && (limit as number) >= USERS_LIMIT_FLOOR
-                ? Math.min(limit as number, USERS_LIMIT_CEIL)
-                : USERS_DEFAULT_LIMIT;
-            let safeCursor: number | undefined;
-            if (cursor !== undefined && cursor !== null) {
-                if (typeof cursor !== 'string' || !CURSOR_PATTERN.test(cursor)) {
-                    throw new ValidationError('Cursor must be a numeric string');
-                }
-                safeCursor = parseInt(cursor, 10);
-            }
-            return context.userService.findAll({ limit: safeLimit, cursor: safeCursor });
-        }
+  Query: {
+    me: (_: unknown, __: unknown, ctx: GraphQLContext) =>
+      ctx.user ? ctx.userService.findById(ctx.user.id) : null,
+    user: async (_: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      const user = await ctx.userService.findById(id);
+      if (!user) {
+        throw new UserNotFoundError();
+      }
+      return user;
     },
-    Mutation: {
-        signup: async (_: unknown, args: unknown, context: GraphQLContext) => {
-            const validated = signupSchema.parse(args);
-            return context.userService.signup(validated);
-        },
-        signin: async (_: unknown, args: unknown, context: GraphQLContext) => {
-            const validated = signinSchema.parse(args);
-            return context.userService.signin(validated);
-        },
-        updateProfile: async (_: unknown, args: unknown, context: GraphQLContext) => {
-            if (!context.user) {
-                throw new UnauthorizedError();
-            }
-            const validated = updateProfileSchema.parse(args);
-            return context.userService.updateProfile(context.user.id, validated);
-        }
+    users: (
+      _: unknown,
+      { limit = 20, cursor }: { limit?: number; cursor?: string | null },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.userService.findAll({
+        limit: Math.min(Math.max(Math.floor(limit), 1), 50),
+        cursor: cursor ?? undefined,
+      }),
+  },
+  Mutation: {
+    signup: (_: unknown, args: unknown, ctx: GraphQLContext) =>
+      ctx.userService.signup(validate(signupSchema, args)),
+    signin: (_: unknown, args: unknown, ctx: GraphQLContext) =>
+      ctx.userService.signin(validate(signinSchema, args)),
+    updateProfile: (_: unknown, args: unknown, ctx: GraphQLContext) => {
+      if (!ctx.user) {
+        throw new UnauthorizedError();
+      }
+      return ctx.userService.updateProfile(ctx.user.id, validate(updateProfileSchema, args));
     },
-    User: {
-        __resolveReference: async (userRef: { id: string }, context: GraphQLContext) => {
-            return context.loaders.user.load(parseInt(userRef.id));
-        },
-    },
+  },
+  User: {
+    __resolveReference: (ref: { id: string }, ctx: GraphQLContext) =>
+      ctx.userService.findById(ref.id),
+  },
 };

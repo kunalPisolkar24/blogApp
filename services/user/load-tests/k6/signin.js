@@ -1,43 +1,29 @@
 import {
-    postGraphQL,
-    checkOk,
-    parseBody,
-    getDefaultOptions,
-    authDuration,
-    authErrors,
-    signinSuccess,
-    signinInvalidCreds,
-    SIGNIN_MUTATION,
-    loadSeed,
-    pickUser,
-    CONSTANTS,
+  postGraphQL,
+  checkOk,
+  seedUsers,
+  iterIndex,
+  getDefaultOptions,
+  queries,
 } from './shared.js';
 
-const vus = parseInt(__ENV.VUS) || 10;
+const vus = parseInt(__ENV.VUS) || 20;
 const duration = __ENV.DURATION || '30s';
-const rps = parseInt(__ENV.RPS) || 10;
+const rps = parseInt(__ENV.RPS) || 50;
 
 export const options = getDefaultOptions({ vus, duration, rps });
 
 export function setup() {
-    return loadSeed();
+  return seedUsers();
 }
 
-export default function (seed) {
-    const idx = (__VU - 1) * 1000 + __ITER;
-    const user = pickUser(seed, idx);
-    const res = postGraphQL(SIGNIN_MUTATION, { email: user.email, password: user.password }, null, 'auth');
-    authDuration.add(res.timings.duration);
-    checkOk(res, 'signin');
-
-    if (res.status === CONSTANTS.HTTP_UNAUTHORIZED) {
-        signinInvalidCreds.add(1);
-        return;
-    }
-    const body = parseBody(res);
-    if (res.status === CONSTANTS.HTTP_OK && body && body.data && body.data.signin && body.data.signin.token) {
-        signinSuccess.add(1);
-        return;
-    }
-    authErrors.add(1);
+export default function (users) {
+  const u = users[iterIndex() % users.length];
+  const res = postGraphQL(
+    queries.SIGNIN_MUTATION,
+    { email: u.email, password: u.password },
+    {},
+    { group: 'signin' },
+  );
+  checkOk(res, 'signin');
 }

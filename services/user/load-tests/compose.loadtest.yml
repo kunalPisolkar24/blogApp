@@ -1,54 +1,26 @@
 name: topos-user-loadtest
 
 x-user-service-env: &user-service-env
-  PORT: ${USER_SERVICE_INT_PORT:-4001}
+  NODE_ENV: production
+  PORT: 4001
+  DATABASE_URL: postgresql://topos_user:topos_pass@user-postgres:5432/topos_users
   JWT_SECRET: ${USER_JWT_SECRET:?USER_JWT_SECRET is required}
-  DATABASE_URL: ${USER_DATABASE_URL:-postgresql://${USER_POSTGRES_USER:-topos_user}:${USER_POSTGRES_PASSWORD:-topos_pass}@user-postgres:${USER_POSTGRES_INT_PORT:-5432}/${USER_POSTGRES_DB:-topos_users}}
   REDIS_URL: redis://user-redis:6379
-  NODE_ENV: production
-  USER_CACHE_TTL_MS: ${USER_CACHE_TTL_MS:-3600000}
-  USER_MISSING_CACHE_TTL_MS: ${USER_MISSING_CACHE_TTL_MS:-60000}
-
-x-user-migrate-env: &user-migrate-env
-  DATABASE_URL_MIGRATE: ${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL:-postgresql://${USER_POSTGRES_USER:-topos_user}:${USER_POSTGRES_PASSWORD:-topos_pass}@user-postgres:${USER_POSTGRES_INT_PORT:-5432}/${USER_POSTGRES_DB:-topos_users}}}
-
-x-user-seed-env: &user-seed-env
-  DATABASE_URL: ${USER_DATABASE_URL:-postgresql://${USER_POSTGRES_USER:-topos_user}:${USER_POSTGRES_PASSWORD:-topos_pass}@user-postgres:${USER_POSTGRES_INT_PORT:-5432}/${USER_POSTGRES_DB:-topos_users}}
-  JWT_SECRET: ${USER_JWT_SECRET:?USER_JWT_SECRET is required}
-  JWT_ISSUER: ${JWT_ISSUER:-user-service}
-  JWT_AUDIENCE: ${JWT_AUDIENCE:-topos}
-  JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-  SEED_USER_COUNT: ${SEED_USER_COUNT:-5000}
-  SEED_OUTPUT_DIR: /load-tests/seed-k6/seed_data
-  NODE_ENV: production
+  REDIS_CACHE_TTL_MS: ${USER_CACHE_TTL_MS:-3600000}
+  REDIS_MISSING_CACHE_TTL_MS: ${USER_MISSING_CACHE_TTL_MS:-60000}
+  LOG_LEVEL: ${USER_LOG_LEVEL:-info}
 
 services:
   user-postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: loadtest-user-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${USER_POSTGRES_USER:-topos_user}
-      POSTGRES_PASSWORD: ${USER_POSTGRES_PASSWORD:-topos_pass}
-      POSTGRES_DB: ${USER_POSTGRES_DB:-topos_users}
-    command:
-      - postgres
-      - -c
-      - shared_buffers=256MB
-      - -c
-      - effective_cache_size=768MB
-      - -c
-      - work_mem=8MB
-      - -c
-      - max_connections=200
-      - -c
-      - fsync=off
-      - -c
-      - synchronous_commit=off
-    volumes:
-      - user_lt_pg_data:/var/lib/postgresql/data
+      POSTGRES_USER: topos_user
+      POSTGRES_PASSWORD: topos_pass
+      POSTGRES_DB: topos_users
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${USER_POSTGRES_USER:-topos_user} -d ${USER_POSTGRES_DB:-topos_users}"]
+      test: ["CMD-SHELL", "pg_isready -U topos_user -d topos_users"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -57,9 +29,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${PG_MEM:-1G}
+          memory: ${PG_MEM:-512M}
         reservations:
-          memory: 512M
+          memory: 256M
 
   user-redis:
     image: redis:7-alpine
@@ -71,10 +43,6 @@ services:
       - ""
       - --appendonly
       - "no"
-      - --maxmemory
-      - ${REDIS_MEM:-512mb}
-      - --maxmemory-policy
-      - allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -85,37 +53,22 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${REDIS_MEM:-640M}
+          memory: ${REDIS_MEM:-384M}
         reservations:
-          memory: 128M
+          memory: 64M
 
-  user-migrate:
+  user-migrator:
     build:
       context: ..
       dockerfile: Dockerfile
       target: migrator
-    container_name: loadtest-user-migrate
+    container_name: loadtest-user-migrator
     restart: "no"
-    environment: *user-migrate-env
+    environment:
+      DATABASE_URL_MIGRATE: postgresql://topos_user:topos_pass@user-postgres:5432/topos_users
     depends_on:
       user-postgres:
         condition: service_healthy
-    networks:
-      - loadtest-net
-
-  user-seed:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      target: seed
-    container_name: loadtest-user-seed
-    restart: "no"
-    environment: *user-seed-env
-    depends_on:
-      user-migrate:
-        condition: service_completed_successfully
-    volumes:
-      - ./k6:/load-tests/seed-k6:rw
     networks:
       - loadtest-net
 
@@ -132,10 +85,10 @@ services:
         condition: service_healthy
       user-redis:
         condition: service_healthy
-      user-seed:
+      user-migrator:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:${USER_SERVICE_INT_PORT:-4001}/ready"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4001/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -145,7 +98,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${SVC_MEM:-768M}
+          memory: ${SVC_MEM:-512M}
         reservations:
           memory: 256M
 
@@ -153,13 +106,14 @@ services:
     image: grafana/k6:latest
     container_name: loadtest-k6
     restart: "no"
-    command: ["run", "--summary-trend-stats=avg,med,p(90),p(95),p(99),max", "/load-tests/k6/${SCRIPT:-mixed}.js"]
+    command: ["run", "/load-tests/k6/${SCRIPT:-mixed}.js"]
     environment:
-      TARGET: http://user-service:${USER_SERVICE_INT_PORT:-4001}
+      TARGET: http://user-service:4001
       VUS: ${VUS:-20}
       DURATION: ${DURATION:-30s}
       RPS: ${RPS:-50}
-      WEIGHTS: ${WEIGHTS:-reads:50,user:20,me:10,signin:10,signup:10}
+      WEIGHTS: ${WEIGHTS:-users:30,user:15,me:20,signin:20,updateProfile:10,signup:5}
+      SEED_USERS: ${SEED_USERS:-100}
     depends_on:
       user-service:
         condition: service_healthy
@@ -174,10 +128,7 @@ services:
         reservations:
           memory: 64M
 
-volumes:
-  user_lt_pg_data:
-
 networks:
   loadtest-net:
-    name: loadtest-net
+    name: topos-user-loadtest-net
     driver: bridge

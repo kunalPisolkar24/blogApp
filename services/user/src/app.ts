@@ -1,138 +1,146 @@
-import { Hono } from 'hono';
+import { ApolloServer } from '@apollo/server';
 import { HeaderMap } from '@apollo/server';
-import { createContext } from './context';
-import { requestLogger } from './middleware/request-logger';
-import { metricsMiddleware } from './middleware/metrics';
-import { metrics } from './lib/metrics';
-import prisma from './lib/prisma';
-import { streamGraphQLResponse } from './lib/graphqlResponse';
-import { checkDependencies, withTimeout } from './lib/ready';
-import { PayloadTooLargeError, isDomainError } from './errors/DomainError';
-import { logger } from './lib/logger';
-import { OperationKind } from './context';
-import { composeApp } from './composition';
+import { buildSubgraphSchema } from '@apollo/subgraph';
+import { GraphQLError, type GraphQLFormattedError } from 'graphql';
+import { Hono } from 'hono';
+import { requestId } from 'hono/request-id';
+import { env } from './config/env.js';
+import { createContext } from './context.js';
+import { DomainError, ValidationError } from './errors.js';
+import { resolvers } from './graphql/resolvers.js';
+import { typeDefs } from './graphql/typeDefs.js';
+import { CacheManager } from './lib/cache.js';
+import { prisma, primaryDb } from './lib/prisma.js';
+import { pingRedis, redis } from './lib/redis.js';
+import { logger } from './observability/logger.js';
+import { requestLogging, requestMetrics } from './observability/middleware.js';
+import { Metrics } from './observability/metrics.js';
+import { UserRepository } from './repositories/user.repository.js';
+import { UserService } from './user.service.js';
 
-const GRAPHQL_MAX_BODY_BYTES = 1 * 1024 * 1024;
-
-const pickString = (value: unknown): string | undefined =>
-    typeof value === 'string' && value.length > 0 ? value : undefined;
-
-export interface AppHandle {
-    app: Hono;
-    shutdown: () => Promise<void>;
+function hasErrors(body: string): boolean {
+  try {
+    return Array.isArray(JSON.parse(body).errors);
+  } catch {
+    return false;
+  }
 }
 
-export async function createApp(): Promise<Hono> {
-    return (await buildApp()).app;
+function operationName(body: unknown): string {
+  if (
+    body !== null &&
+    typeof body === 'object' &&
+    'operationName' in body &&
+    typeof body.operationName === 'string' &&
+    body.operationName.length > 0
+  ) {
+    return body.operationName;
+  }
+  return 'anonymous';
 }
 
-export async function buildApp(): Promise<AppHandle> {
-    const app = new Hono();
+function unwrapDomain(error: unknown): DomainError | null {
+  const inner =
+    error instanceof Error && 'originalError' in error
+      ? (error as { originalError?: unknown }).originalError
+      : error;
+  return inner instanceof DomainError ? inner : null;
+}
 
-    app.use('*', requestLogger);
-    app.use('*', metricsMiddleware);
-
-    app.onError((error, c) => {
-        if (isDomainError(error)) {
-            logger.warn({
-                msg: 'Request rejected with domain error',
-                code: error.code,
-                message: error.message,
-            });
-            return c.json(
-                { error: { code: error.code, message: error.message } },
-                error.httpStatus as 400 | 401 | 404 | 409 | 413 | 500
-            );
-        }
-        logger.error({
-            msg: 'Unhandled request error',
-            error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-        });
-        return c.json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } }, 500);
-    });
-
-    const composed = await composeApp({ prisma });
-    const { apolloServer, userService, serviceCache } = composed;
-
-    app.use('/graphql', async (c) => {
-        const contentLengthHeader = c.req.header('content-length');
-        if (contentLengthHeader) {
-            const contentLength = parseInt(contentLengthHeader, 10);
-            if (Number.isFinite(contentLength) && contentLength > GRAPHQL_MAX_BODY_BYTES) {
-                throw new PayloadTooLargeError(
-                    `GraphQL request body exceeds ${GRAPHQL_MAX_BODY_BYTES} bytes`
-                );
-            }
-        }
-
-        const rawBody = await c.req.raw.text();
-        if (Buffer.byteLength(rawBody, 'utf8') > GRAPHQL_MAX_BODY_BYTES) {
-            throw new PayloadTooLargeError(
-                `GraphQL request body exceeds ${GRAPHQL_MAX_BODY_BYTES} bytes`
-            );
-        }
-
-        const parsedBody = rawBody.length > 0 ? JSON.parse(rawBody) : {};
-        const operationName = pickString(parsedBody?.operationName) ?? 'anonymous';
-        const queryText = pickString(parsedBody?.query) ?? '';
-        const operationKind: OperationKind = queryText.trimStart().startsWith('mutation')
-            ? 'mutation'
-            : queryText.trimStart().startsWith('subscription')
-            ? 'subscription'
-            : 'query';
-        const stopTimer = metrics.graphqlOperationDuration.startTimer({
-            operation: operationName,
-            kind: operationKind,
-        });
-
-        const httpHeaders = new HeaderMap();
-        c.req.raw.headers.forEach((value, key) => {
-            httpHeaders.set(key, value);
-        });
-
-        const httpGraphQLRequest = {
-            method: c.req.method,
-            headers: httpHeaders,
-            search: new URL(c.req.url).search ?? '',
-            body: parsedBody,
-        };
-
-        try {
-            const response = await apolloServer.executeHTTPGraphQLRequest({
-                httpGraphQLRequest,
-                context: () =>
-                    createContext(c, userService, {
-                        operationName,
-                        operationKind,
-                    }),
-            });
-            const httpStatus = response.status ?? 200;
-            stopTimer({ status: httpStatus >= 400 ? 'error' : 'success' });
-            return streamGraphQLResponse(response);
-        } catch (error) {
-            stopTimer({ status: 'error' });
-            throw error;
-        }
-    });
-
-    app.get('/metrics', async (c) => {
-        c.header('Content-Type', metrics.register.contentType);
-        return c.body(await metrics.register.metrics());
-    });
-
-    app.get('/health', (c) => c.text('User Service OK'));
-
-    app.get('/ready', async (c) => {
-        const ready = await withTimeout(checkDependencies(prisma, serviceCache), 500);
-        if (ready.ok) {
-            return c.json({ status: 'ready', checks: ready.checks });
-        }
-        return c.json({ status: 'unavailable', checks: ready.checks }, 503);
-    });
-
+function formatError(
+  formatted: GraphQLFormattedError,
+  error: unknown,
+): GraphQLFormattedError {
+  const domain = unwrapDomain(error);
+  if (domain) {
     return {
-        app,
-        shutdown: composed.shutdown,
+      message: domain.message,
+      path: formatted.path,
+      extensions: { code: domain.code },
     };
+  }
+  if (error instanceof GraphQLError && error.originalError === undefined) {
+    return formatted;
+  }
+  logger.error(
+    {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    },
+    'internal graphql error',
+  );
+  return { message: 'Internal server error', extensions: { code: 'INTERNAL_ERROR' } };
 }
 
+export async function buildApp(): Promise<Hono> {
+  const metrics = new Metrics();
+  const userService = new UserService(
+    new UserRepository(prisma, primaryDb(), metrics),
+    new CacheManager(redis, metrics),
+    env.REDIS_CACHE_TTL_MS,
+    metrics,
+  );
+
+  const apollo = new ApolloServer({
+    schema: buildSubgraphSchema({
+      typeDefs,
+      // resolvers expect GraphQLContext; buildSubgraphSchema's resolver type has context unknown
+      resolvers: resolvers as any,
+    }),
+    formatError,
+  });
+  await apollo.start();
+
+  const app = new Hono();
+
+  app.use(requestId());
+  app.use(requestLogging(logger));
+  app.use(requestMetrics(metrics));
+
+  app.onError((error, c) => {
+    if (error instanceof DomainError) {
+      logger.info({ code: error.code }, error.message);
+      return c.json({ error: { code: error.code, message: error.message } }, error.httpStatus);
+    }
+    logger.error(error, 'unhandled error');
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } }, 500);
+  });
+
+  app.post('/graphql', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      throw new ValidationError('Request body must be valid JSON');
+    }
+
+    const start = performance.now();
+    const response = await apollo.executeHTTPGraphQLRequest({
+      httpGraphQLRequest: {
+        method: c.req.method,
+        headers: new HeaderMap(c.req.raw.headers),
+        search: new URL(c.req.url).search,
+        body,
+      },
+      context: () => createContext(c, userService),
+    });
+    metrics.recordGraphqlOperation(
+      operationName(body),
+      response.body.kind === 'complete' && hasErrors(response.body.string) ? 'error' : 'success',
+      (performance.now() - start) / 1000,
+    );
+
+    return new Response(response.body.kind === 'complete' ? response.body.string : null, {
+      status: response.status ?? 200,
+      headers: Object.fromEntries(response.headers),
+    });
+  });
+
+  app.get('/metrics', async (c) =>
+    c.body(await metrics.getMetrics(), 200, { 'Content-Type': metrics.getContentType() }),
+  );
+  app.get('/', (c) => c.text('user service running'));
+  app.get('/health', async (c) => c.json({ status: 'ok', redis: await pingRedis() }));
+
+  return app;
+}

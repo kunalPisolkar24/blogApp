@@ -1,53 +1,103 @@
-include:
-  - path: infra/compose.local.yml
-
 services:
-  user-migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: migrator
-    container_name: local-user-migrate
-    restart: "no"
+  user-postgres:
+    image: postgres:16-alpine
+    container_name: local-user-postgres
+    restart: unless-stopped
+    ports:
+      - "${USER_POSTGRES_EXT_PORT:-5432}:${USER_POSTGRES_INT_PORT:-5432}"
     environment:
-      DATABASE_URL_MIGRATE: ${USER_DATABASE_URL_MIGRATE:-${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}}
-    depends_on:
-      user-postgres:
-        condition: service_healthy
+      - POSTGRES_USER=${USER_POSTGRES_USER:-topos_user}
+      - POSTGRES_PASSWORD=${USER_POSTGRES_PASSWORD:-topos_pass}
+      - POSTGRES_DB=${USER_POSTGRES_DB:-topos_users}
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_POSTGRES_USER:-topos_user} -d ${USER_POSTGRES_DB:-topos_users}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  user-redis:
+    image: redis:7.2-alpine
+    container_name: ${USER_REDIS_CONTAINER:-local-user-redis}
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${USER_REDIS_EXT_PORT:-6380}:6379"
+    volumes:
+      - user_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
 
   user-service:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runtime
     container_name: ${USER_SERVICE_CONTAINER:-local-user-service}
     restart: unless-stopped
     ports:
       - "${USER_SERVICE_EXT_PORT:-4001}:${USER_SERVICE_INT_PORT:-4001}"
     environment:
-      PORT: ${USER_SERVICE_INT_PORT:-4001}
-      JWT_SECRET: ${USER_JWT_SECRET:-local-dev-secret}
-      DATABASE_URL: ${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
-      NODE_ENV: development
-      REDIS_URL: ${USER_REDIS_URL:-redis://local-user-redis:6379}
-      USER_CACHE_TTL_MS: ${USER_CACHE_TTL_MS:-3600000}
-      USER_MISSING_CACHE_TTL_MS: ${USER_MISSING_CACHE_TTL_MS:-60000}
+      - PORT=${USER_SERVICE_INT_PORT:-4001}
+      - NODE_ENV=development
+      - DATABASE_URL=${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
+      - DATABASE_URL_REPLICA=
+      - DATABASE_URL_MIGRATE=${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
+      - JWT_SECRET=${USER_JWT_SECRET:-local-dev-secret-0123456789abcdef0123456789abcdef}
+      - REDIS_URL=${USER_REDIS_URL:-redis://local-user-redis:6379}
+      - REDIS_CACHE_TTL_MS=${USER_CACHE_TTL_MS:-3600000}
+      - REDIS_MISSING_CACHE_TTL_MS=${USER_MISSING_CACHE_TTL_MS:-60000}
+      - LOG_LEVEL=${USER_LOG_LEVEL:-info}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${USER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=user-service
     healthcheck:
-      test: [ "CMD", "curl", "--fail", "http://localhost:${USER_SERVICE_INT_PORT:-4001}/health" ]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${USER_SERVICE_INT_PORT:-4001}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - app-network
     depends_on:
-      user-migrate:
-        condition: service_completed_successfully
       user-postgres:
         condition: service_healthy
-      user-redis:
+    networks:
+      - app-network
+
+  user-migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    container_name: ${USER_MIGRATOR_CONTAINER:-local-user-migrator}
+    environment:
+      - DATABASE_URL_MIGRATE=${USER_DATABASE_URL:-postgresql://topos_user:topos_pass@local-user-postgres:5432/topos_users}
+    depends_on:
+      user-postgres:
         condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  user_postgres_data:
+  user_redis_data:
 
 networks:
   app-network:

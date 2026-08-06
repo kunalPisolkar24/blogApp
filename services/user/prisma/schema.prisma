@@ -1,20 +1,21 @@
 generator client {
-    provider = "prisma-client"
-    output   = "../src/generated/prisma"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-    provider = "postgresql"
+  provider = "postgresql"
 }
 
 model User {
-    id        Int      @id @default(autoincrement())
-    username  String   @unique
-    email     String   @unique
-    password  String
-    name      String?
-    bio       String?
-    avatarUrl String?
-    bannerUrl String?
-    createdAt DateTime @default(now())
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  name      String?
+  bio       String?
+  avatarUrl String?
+  bannerUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
