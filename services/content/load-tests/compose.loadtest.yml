@@ -1,0 +1,175 @@
+name: topos-content-loadtest
+
+x-content-service-env: &content-service-env
+  PORT: ${CONTENT_SERVICE_INT_PORT:-4002}
+  MONGO_URI: mongodb://content-mongo:27017
+  DB_NAME: ${CONTENT_DB_NAME:-blog_content}
+  REDIS_ADDR: content-redis:6379
+  JWT_SECRET: ${JWT_SECRET:-local-dev-secret}
+  JWT_ISSUER: ${JWT_ISSUER:-user-service}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-topos}
+  KAFKA_BROKERS: kafka-1:9092
+  KAFKA_TOPIC: ${KAFKA_TOPIC:-posts}
+  KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-posts-dlq}
+
+services:
+  content-mongo:
+    image: mongo:7
+    container_name: loadtest-content-mongo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${MONGO_MEM:-768M}
+        reservations:
+          memory: 256M
+
+  content-redis:
+    image: redis:7-alpine
+    container_name: loadtest-content-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${REDIS_MEM:-512mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEM:-640M}
+        reservations:
+          memory: 128M
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: loadtest-content-kafka
+    hostname: kafka-1
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 15s
+      start_period: 20s
+      retries: 5
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: ${KAFKA_MEM:-512M}
+        reservations:
+          memory: 256M
+
+  init-kafka:
+    image: apache/kafka:3.7.0
+    container_name: loadtest-content-init-kafka
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_TOPIC:-posts} --replication-factor 1 --partitions ${PARTITIONS:-3}
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 1 --partitions 1"
+    networks:
+      - loadtest-net
+
+  content-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: loadtest-content-service
+    restart: unless-stopped
+    environment: *content-service-env
+    depends_on:
+      content-mongo:
+        condition: service_healthy
+      content-redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SVC_MEM:-768M}
+        reservations:
+          memory: 256M
+
+  k6:
+    image: grafana/k6:latest
+    container_name: loadtest-content-k6
+    restart: "no"
+    command: ["run", "--summary-trend-stats=avg,med,p(90),p(95),p(99),max", "/load-tests/k6/${SCRIPT:-mixed}.js"]
+    environment:
+      TARGET: http://content-service:${CONTENT_SERVICE_INT_PORT:-4002}
+      VUS: ${VUS:-20}
+      DURATION: ${DURATION:-30s}
+      RPS: ${RPS:-50}
+      WEIGHTS: ${WEIGHTS:-posts:30,post:20,tag:10,author:10,create:15,update:10,delete:5}
+      SEED_POST_COUNT: ${SEED_POST_COUNT:-1000}
+      SEED_USERS: ${SEED_USERS:-20}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret}
+      JWT_ISSUER: ${JWT_ISSUER:-user-service}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-topos}
+    depends_on:
+      content-service:
+        condition: service_healthy
+    volumes:
+      - ./k6:/load-tests/k6:ro
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${K6_MEM:-384M}
+        reservations:
+          memory: 64M
+
+networks:
+  loadtest-net:
+    name: loadtest-net
+    driver: bridge

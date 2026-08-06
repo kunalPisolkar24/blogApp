@@ -21,3 +21,5 @@ coverage.html
 *.swo
 .DS_Store
 Thumbs.db
+# Go build artifacts
+/load-tests/producer/producer
