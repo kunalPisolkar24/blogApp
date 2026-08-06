@@ -51,10 +51,22 @@ func New(ctx context.Context, cfg config.Config, serviceName string) (*Dependenc
 	slog.Info("mongo indexes ready")
 
 	var cacheClient *cache.Cache
-	if cacheClient, err = cache.New(ctx, cfg.RedisAddr); err != nil {
-		slog.Warn("redis unavailable, caching disabled", "addr", cfg.RedisAddr, "error", err)
+	sentinelPassword := cfg.RedisSentinelPassword
+	if sentinelPassword == "" {
+		sentinelPassword = cfg.RedisPassword
+	}
+
+	cacheOpts := cache.Options{
+		Addr:             cfg.RedisAddr,
+		MasterName:       cfg.RedisMasterName,
+		Sentinels:        cfg.RedisSentinels,
+		Password:         cfg.RedisPassword,
+		SentinelPassword: sentinelPassword,
+	}
+	if cacheClient, err = cache.New(ctx, cacheOpts); err != nil {
+		slog.Warn("redis unavailable, caching disabled", "sentinels", cfg.RedisSentinels, "error", err)
 	} else {
-		slog.Info("connected to redis", "addr", cfg.RedisAddr)
+		slog.Info("connected to redis", "sentinels", cfg.RedisSentinels, "master", cfg.RedisMasterName)
 	}
 
 	aiClient := ai.NewResilientClient(cfg.AIServiceURL)

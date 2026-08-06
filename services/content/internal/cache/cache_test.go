@@ -14,7 +14,7 @@ func newTestCache(t *testing.T) (*Cache, *miniredis.Miniredis) {
 	t.Helper()
 
 	mr := miniredis.RunT(t)
-	c, err := New(context.Background(), mr.Addr())
+	c, err := New(context.Background(), Options{Addr: mr.Addr()})
 	require.NoError(t, err)
 	t.Cleanup(func() { c.Close() })
 	return c, mr
@@ -106,7 +106,15 @@ func TestNilCacheIsNoop(t *testing.T) {
 }
 
 func TestRedisUnreachable(t *testing.T) {
-	_, err := New(context.Background(), "localhost:1")
+	_, err := New(context.Background(), Options{Addr: "localhost:1"})
+	require.Error(t, err)
+}
+
+func TestSentinelsUnreachable(t *testing.T) {
+	_, err := New(context.Background(), Options{
+		MasterName: "mymaster",
+		Sentinels:  []string{"localhost:1"},
+	})
 	require.Error(t, err)
 }
 

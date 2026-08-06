@@ -37,7 +37,7 @@ func newMemCache(t *testing.T) *cache.Cache {
 	t.Helper()
 
 	mr := miniredis.RunT(t)
-	c, err := cache.New(context.Background(), mr.Addr())
+	c, err := cache.New(context.Background(), cache.Options{Addr: mr.Addr()})
 	require.NoError(t, err)
 	t.Cleanup(func() { c.Close() })
 	return c

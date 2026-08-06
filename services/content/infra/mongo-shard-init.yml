@@ -1,0 +1,24 @@
+# One-shot job that enables sharding on the posts collection. It waits for
+# mongos to answer and for both shards to register, then shards posts on a
+# hashed slug key (keeps the existing unique slug index valid). Idempotent.
+
+services:
+  mongo-shard-init:
+    image: mongo:7.0
+    container_name: ${MONGO_SHARD_INIT_CONTAINER:-prod-content-mongo-shard-init}
+    restart: "no"
+    entrypoint: ["/bin/sh", "/scripts/shard-init.sh"]
+    environment:
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+    volumes:
+      - ../infra/scripts/shard-init.sh:/scripts/shard-init.sh:ro
+    depends_on:
+      content-mongo-mongos-0:
+        condition: service_healthy
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK:-topos_prod_network}

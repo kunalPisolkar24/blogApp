@@ -1,0 +1,96 @@
+# Kafka HA: three combined broker+controller nodes in KRaft mode (apache
+# image), replication factor 3, min in-sync replicas 2. init-kafka creates
+# the posts and posts-dlq topics once the cluster is up.
+
+x-kafka-common: &kafka-common
+  image: apache/kafka:3.7.0
+  restart: unless-stopped
+  networks:
+    - app-network
+  healthcheck:
+    test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+    interval: 10s
+    timeout: 15s
+    start_period: 20s
+    retries: 10
+
+x-kafka-env: &kafka-env
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+
+services:
+  kafka-1:
+    <<: *kafka-common
+    container_name: ${KAFKA_1_CONTAINER:-prod-content-kafka-1}
+    hostname: kafka-1
+    ports:
+      - "${KAFKA_EXT_PORT_1:-9092}:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092
+    volumes:
+      - kafka_1_data:/var/lib/kafka/data
+
+  kafka-2:
+    <<: *kafka-common
+    container_name: ${KAFKA_2_CONTAINER:-prod-content-kafka-2}
+    hostname: kafka-2
+    ports:
+      - "${KAFKA_EXT_PORT_2:-9093}:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:9092
+    volumes:
+      - kafka_2_data:/var/lib/kafka/data
+
+  kafka-3:
+    <<: *kafka-common
+    container_name: ${KAFKA_3_CONTAINER:-prod-content-kafka-3}
+    hostname: kafka-3
+    ports:
+      - "${KAFKA_EXT_PORT_3:-9094}:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-3:9092
+    volumes:
+      - kafka_3_data:/var/lib/kafka/data
+
+  init-kafka:
+    image: apache/kafka:3.7.0
+    container_name: ${KAFKA_INIT_CONTAINER:-prod-content-init-kafka}
+    restart: "no"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_TOPIC:-posts} --replication-factor 3 --partitions ${KAFKA_POSTS_PARTITIONS:-6}
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 3 --partitions 3"
+    networks:
+      - app-network
+
+volumes:
+  kafka_1_data:
+  kafka_2_data:
+  kafka_3_data:
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK:-topos_prod_network}

@@ -1,0 +1,88 @@
+# Redis HA: one master, one replica and three sentinels (bitnami images).
+# Clients connect through the sentinels; a failover promotes the replica.
+
+x-redis-common: &redis-common
+  image: bitnamilegacy/redis:7.2
+  restart: unless-stopped
+  networks:
+    - app-network
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+
+x-redis-sentinel-common: &redis-sentinel-common
+  image: bitnamilegacy/redis-sentinel:7.2
+  restart: unless-stopped
+  environment:
+    REDIS_SENTINEL_MASTER_NAME: ${REDIS_MASTER_NAME:-mymaster}
+    REDIS_MASTER_HOST: content-redis-master
+    REDIS_MASTER_PORT_NUMBER: 6379
+    REDIS_MASTER_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    REDIS_SENTINEL_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    REDIS_SENTINEL_QUORUM: 2
+    REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+    REDIS_SENTINEL_FAILOVER_TIMEOUT: 10000
+    REDIS_SENTINEL_RESOLVE_HOSTNAMES: "yes"
+    REDIS_SENTINEL_ANNOUNCE_HOSTNAMES: "yes"
+  networks:
+    - app-network
+  depends_on:
+    content-redis-master:
+      condition: service_healthy
+    content-redis-replica:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -p 26379 -a \"$$REDIS_SENTINEL_PASSWORD\" --no-auth-warning ping | grep PONG"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+
+services:
+  content-redis-master:
+    <<: *redis-common
+    container_name: ${REDIS_MASTER_CONTAINER:-prod-content-redis-master}
+    environment:
+      REDIS_REPLICATION_MODE: master
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_master_data:/bitnami/redis
+
+  content-redis-replica:
+    <<: *redis-common
+    container_name: ${REDIS_REPLICA_CONTAINER:-prod-content-redis-replica}
+    environment:
+      REDIS_REPLICATION_MODE: replica
+      REDIS_MASTER_HOST: content-redis-master
+      REDIS_MASTER_PORT_NUMBER: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      REDIS_MASTER_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_replica_data:/bitnami/redis
+    depends_on:
+      content-redis-master:
+        condition: service_healthy
+
+  content-redis-sentinel-1:
+    <<: *redis-sentinel-common
+    container_name: ${REDIS_SENTINEL_1_CONTAINER:-prod-content-redis-sentinel-1}
+    ports:
+      - "${REDIS_SENTINEL_EXT_PORT:-26379}:26379"
+
+  content-redis-sentinel-2:
+    <<: *redis-sentinel-common
+    container_name: ${REDIS_SENTINEL_2_CONTAINER:-prod-content-redis-sentinel-2}
+
+  content-redis-sentinel-3:
+    <<: *redis-sentinel-common
+    container_name: ${REDIS_SENTINEL_3_CONTAINER:-prod-content-redis-sentinel-3}
+
+volumes:
+  redis_master_data:
+  redis_replica_data:
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK:-topos_prod_network}

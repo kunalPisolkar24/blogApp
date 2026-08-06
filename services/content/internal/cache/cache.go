@@ -25,13 +25,22 @@ type Cache struct {
 	client *redis.Client
 }
 
-// New dials the address and returns a ready cache. It fails fast so the
-// caller can decide whether to disable caching.
-func New(ctx context.Context, addr string) (*Cache, error) {
-	client := redis.NewClient(&redis.Options{
-		Addr:        addr,
-		DialTimeout: 2 * time.Second,
-	})
+// Options configures the redis connection. Either a single Addr or a
+// sentinel-managed master (MasterName + Sentinels) must be provided.
+type Options struct {
+	Addr             string   // single-node address, used when Sentinels is empty
+	MasterName       string   // sentinel master name, used when Sentinels is set
+	Sentinels        []string // sentinel addresses
+	Password         string   // optional auth password
+	SentinelPassword string   // optional sentinel auth password (failover only)
+}
+
+// New dials redis and returns a ready cache. When sentinels are configured
+// it connects through them (failover-aware); otherwise it connects to the
+// single address. It fails fast so the caller can decide whether to
+// disable caching.
+func New(ctx context.Context, opts Options) (*Cache, error) {
+	client := newClient(opts)
 
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -41,6 +50,24 @@ func New(ctx context.Context, addr string) (*Cache, error) {
 	}
 
 	return &Cache{client: client}, nil
+}
+
+func newClient(opts Options) *redis.Client {
+	if len(opts.Sentinels) > 0 {
+		return redis.NewFailoverClient(&redis.FailoverOptions{
+			MasterName:       opts.MasterName,
+			SentinelAddrs:    opts.Sentinels,
+			Password:         opts.Password,
+			SentinelPassword: opts.SentinelPassword,
+			DialTimeout:      2 * time.Second,
+		})
+	}
+
+	return redis.NewClient(&redis.Options{
+		Addr:        opts.Addr,
+		Password:    opts.Password,
+		DialTimeout: 2 * time.Second,
+	})
 }
 
 func (c *Cache) Close() error {
