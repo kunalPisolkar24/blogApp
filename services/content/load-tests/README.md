@@ -1,123 +1,79 @@
-# Content Service Load Tests (k6)
+# Content Service Load Tests
 
-Self-contained load test rig for the content service. Everything runs in
-Docker containers on a private `content-loadtest-net` network — no host installs,
-no shared dev infra, no port collisions.
+k6 load tests for the content service API and the content worker, run as two
+independent Docker Compose rigs.
 
-## Stack
+## Rigs
 
-| Container | Image | Purpose |
-|---|---|---|
-| `content-mongo` | `mongo:7.0` | Single primary, no journal |
-| `content-redis` | `redis:7-alpine` | Single node, no sentinel, LRU-only |
-| `content-kafka` | `apache/kafka:3.7.0` | Single-node KRaft (no ZK) |
-| `content-init-kafka` | `apache/kafka:3.7.0` | One-shot `kafka-topics --create posts` |
-| `content-seed` | service `seed` stage | Inserts `SEED_POST_COUNT` posts + tags, mints JWTs |
-| `content-service` | service `content-service` stage | The system under test |
-| `content-worker` | service `content-worker` stage | Async consumer (Kafka → AI → Mongo summary) |
-| `k6` | `grafana/k6:latest` | Load driver |
+### Service profile (`compose.loadtest.yml`)
 
-## Quick start
+k6 exercises the GraphQL API (`content-service:4002`). Only the service's own
+dependencies are running: Mongo, Redis and Kafka (no worker, no AI service).
 
-```bash
-# from repo root
-make -C services/content load-test RPS=10 VUS=5 DURATION=10s
+- **Seed** — `setup()` mints `SEED_USERS` JWTs and creates `SEED_POST_COUNT`
+  posts through the API, so read queries have a populated dataset. On the
+  service, `generatePostContent`/`generateTags` fall back to the noop path
+  because no AI service is running.
+- **Scripts**
+  - `mixed.js` — weighted mix of reads and writes (`WEIGHTS` variable)
+  - `reads.js` — posts list, post by id, tags, author posts
+  - `writes.js` — create/update/delete; writers only modify posts they created
+- **JWT** — minted in k6 with `k6/crypto` HMAC-SHA256 using `JWT_SECRET`,
+  matching the service's `JwtIssuer`/`JwtAudience` defaults.
 
-# or with default (mixed scenario, 50 RPS, 20 VUS, 30s)
-make -C services/content load-test
+### Worker profile (`compose.worker-loadtest.yml`)
+
+A Go producer (`producer/`) publishes events to Kafka and the worker consumes
+them; k6 polls the worker's Prometheus endpoint and asserts on consumer lag.
+No content service, no AI service (the producer writes synthetic events that
+reference non-existent posts, so the worker consumes and skips them, plus one
+tombstone every 20 messages).
+
+- `producer/` — standalone kafka-go producer, `main.go` + own `go.mod`.
+- `worker.js` — scrapes `/metrics` and tracks `content_worker_consumer_lag`
+  (reported every ~15s) and `content_worker_messages_total{result=...}`.
+  `worker_skipped max>0` proves messages flowed end to end.
+
+## Usage
+
+```sh
+make load-test            # service profile, default script (mixed)
+make load-test-reads      # service profile, reads only
+make load-test-writes     # service profile, writes only
+make load-test-worker     # worker profile (producer + worker + k6)
 ```
 
-k6 prints its standard end-of-run summary. The exit code propagates:
-threshold failures cause the Make target to fail.
+Variables (defaults in brackets):
 
-## Scenarios
+| Variable        | Default | Purpose                                   |
+|-----------------|---------|-------------------------------------------|
+| `RPS`           | 50      | arrival rate for k6 (and producer)        |
+| `VUS`           | 20      | pre-allocated VUs                         |
+| `DURATION`      | 30s     | run length                                |
+| `SCRIPT`        | mixed   | k6 script (service profile)               |
+| `WEIGHTS`       | see Makefile | operation mix for `mixed.js`        |
+| `SEED_POST_COUNT` | 1000  | posts created in `setup()`                |
+| `SEED_USERS`    | 20      | JWT identities used for seeding and writes |
+| `PARTITIONS`    | 3       | partitions for the `posts` topic          |
+| `JWT_SECRET`    | local-dev-secret | secret used for minting JWTs      |
+| `MONGO_MEM`/`REDIS_MEM`/`SVC_MEM`/`K6_MEM` | 768M/640M/768M/384M | memory limits |
 
-| `SCRIPT=` | Operation | Auth | Notes |
-|---|---|---|---|
-| `posts-list` | `posts(page,limit)` | none | Paginated list, cycles pages 1-5 |
-| `post-by-id` | `post(id)` | none | Single fetch, round-robin over seeded IDs |
-| `tags-list` | `tags(query,limit)` | none | List all tags |
-| `posts-by-tag` | `postsByTag(tag,page,limit)` | none | Round-robin over seeded tags |
-| `create-post` | `createPost(input)` | bearer | Pre-minted JWTs from seed |
-| `create-and-verify` | createPost → poll → verify summary | bearer | End-to-end: API → Kafka → Worker → Mongo |
-| `mixed` (default) | weighted mix | mixed | `WEIGHTS` env tunable |
+Examples:
 
-## Tunables (Make env)
-
-| Var | Default | Meaning |
-|---|---|---|
-| `RPS` | `50` | Aggregate target rate (mixed splits it across scenarios) |
-| `VUS` | `20` | Pre-allocated VUs per scenario |
-| `DURATION` | `30s` | Test wall clock |
-| `SCRIPT` | `mixed` | One of the scenarios above |
-| `WEIGHTS` | `reads:50,post:20,tag:10,bytag:10,create:10` | Only used by `mixed` |
-| `SEED_POST_COUNT` | `5000` | Pool of pre-seeded posts |
-| `CONTENT_JWT_SECRET` | `local-loadtest-secret` | Must match between seed and service |
-| `MONGO_MEM` `REDIS_MEM` `KAFKA_MEM` `SVC_MEM` `WORKER_MEM` `K6_MEM` | `1G` `512mb` `768M` `768M` `512M` `384M` | Container memory caps |
-
-## Common invocations
-
-```bash
-# Smoke test, 10s
-make -C services/content load-test RPS=10 VUS=5 DURATION=10s
-
-# Realistic steady-state, 2 min
-make -C services/content load-test RPS=100 VUS=50 DURATION=2m
-
-# Read-only: posts list
-make -C services/content load-test-posts-list RPS=200 VUS=10 DURATION=1m
-
-# Write-heavy: create posts
-make -C services/content load-test-create-post RPS=20 VUS=10 DURATION=2m
-
-# Full pipeline: create + verify worker processed it
-make -C services/content load-test-create-verify RPS=5 VUS=5 DURATION=1m
-
-# Cold cache (FLUSHALL before run)
-make -C services/content load-test-cold RPS=50 VUS=20 DURATION=30s
-
-# Reweight the mix
-make -C services/content load-test WEIGHTS=reads:80,create:20 DURATION=1m
+```sh
+make load-test RPS=100 DURATION=2m WEIGHTS=posts:40,post:20,tag:10,author:10,create:10,update:5,delete:5
+make load-test-reads RPS=200 DURATION=1m SEED_POST_COUNT=5000
+make load-test-worker RPS=200 DURATION=2m PARTITIONS=6 VUS=10
 ```
 
-## What k6 reports
+Cleanup: `make load-test-clean` (down + remove containers), `make load-test-stop`
+(down only), `make load-test-tail` (follow service logs).
 
-- `http_req_duration{group:read}` — reads, p95<200, p99<500
-- `http_req_duration{group:write}` — writes, p95<1500, p99<3000
-- `http_req_failed{group:read|write}` — error rate
-- `e2e_latency` — create-to-verified-summary latency (p95<5s)
-- `create_success` / `create_conflict` / `create_errors` — custom counters
-- `verify_success` / `verify_timeout` — e2e verification counters
-- `read_duration` / `write_duration` / `e2e_latency` — custom Trends
+## Thresholds
 
-## Inspecting state
+Service profile: read `p(95)<300ms` / `p(99)<800ms`, write `p(95)<500ms` /
+`p(99)<1200ms`, error rate `<1%` (grouped via request tags).
 
-```bash
-# After a run (or during, in another terminal):
-docker compose -p topos-content-loadtest exec content-redis redis-cli INFO stats
-docker compose -p topos-content-loadtest exec content-mongo mongosh --quiet --eval 'db.posts.countDocuments()'
-docker compose -p topos-content-loadtest exec content-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group content-summary-worker-group --describe
-```
-
-## Cleanup
-
-```bash
-make -C services/content load-test-stop
-make -C services/content load-test-clean   # alias
-```
-
-All containers and volumes are removed.
-
-## Lifecycle
-
-1. `compose up` starts `content-mongo`, `content-redis`, `content-kafka` (healthcheck wait)
-2. `content-init-kafka` creates the `posts` topic
-3. `content-seed` inserts posts/tags into Mongo, mints JWTs, writes `posts.json`, `tokens.json`, `tags.json` to `k6/seed_data/`
-4. `content-service` starts; `/health` returns 200 once Mongo + Redis + Kafka are reachable
-5. `content-worker` starts; consumes from Kafka, generates summaries (via noop AI fallback)
-6. `k6` starts, reads seed files via `open()` at init context, runs the chosen scenario
-7. k6 exits with non-zero on threshold breach; Makefile propagates the code
-8. `load-test-stop` tears down all containers and volumes
-
-The seed container is **idempotent**: if Mongo already holds `>= SEED_POST_COUNT` posts,
-the insert is skipped (it still rewrites the seed data files from the existing rows).
+Worker profile: lag `p(95)<500`, no failed messages, `worker_skipped max>0`,
+scrape error rate `<1%`. Tune `worker_lag` if the worker is expected to lag
+behind a high producer rate.

@@ -3,8 +3,8 @@ package domain
 import "context"
 
 type Tag struct {
-	ID   string `bson:"_id,omitempty"`
-	Name string `bson:"name"`
+	ID   string `bson:"_id,omitempty" json:"id,omitempty"`
+	Name string `bson:"name" json:"name"`
 }
 
 type TagRepository interface {

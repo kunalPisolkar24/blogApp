@@ -1,131 +1,83 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Port            string
-	MongoURI        string
-	DbName          string
-	JwtSecret       string
-	KafkaBrokers    []string
-	KafkaTopic      string
-	KafkaConsumerGroupID string
-	KafkaConsumerTopics  []string
-	KafkaDLQTopic        string
-	RedisAddrs      []string
-	RedisMasterName string
-	RedisURL        string
-	RedisMode       string
-	AIServiceURL    string
-	AIRequired      bool
-	AIDialTimeout   time.Duration
-	CORSOrigins     []string
+	Port                  string
+	MongoURI              string
+	DbName                string
+	RedisAddr             string
+	RedisMasterName       string
+	RedisSentinels        []string
+	RedisPassword         string
+	RedisSentinelPassword string
+	JwtSecret             string
+	JwtIssuer             string
+	JwtAudience           string
+	AIServiceURL          string
+	KafkaBrokers          []string
+	KafkaTopic            string
+	KafkaConsumerGroupID  string
+	KafkaDLQTopic         string
+	WorkerConcurrency     int
+	LogFormat             string
+	LogLevel              string
+	OtelEndpoint          string
 }
 
-var envLoadOnce sync.Once
+var loadOnce sync.Once
 
-func LoadConfig() (*Config, error) {
-	loadEnvIfPresent()
+// LoadConfig reads configuration from the environment, falling back to a
+// local .env file when present, then to sane defaults.
+func LoadConfig() Config {
+	loadEnvFile()
 
-	kafkaTopic := getEnvAny([]string{"CONTENT_KAFKA_TOPIC", "KAFKA_TOPIC"}, "posts")
-	kafkaConsumerTopics := splitAndTrim(getEnv("KAFKA_CONSUMER_TOPICS", ""))
-	if len(kafkaConsumerTopics) == 0 {
-		kafkaConsumerTopics = splitAndTrim(kafkaTopic)
+	return Config{
+		Port:                  getEnv("PORT", "4002"),
+		MongoURI:              getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		DbName:                getEnv("DB_NAME", "blog_content"),
+		RedisAddr:             getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisMasterName:       getEnv("REDIS_MASTER_NAME", "mymaster"),
+		RedisSentinels:        splitAndTrim(getEnv("REDIS_SENTINELS", "")),
+		RedisPassword:         getEnv("REDIS_PASSWORD", ""),
+		RedisSentinelPassword: getEnv("REDIS_SENTINEL_PASSWORD", ""),
+		JwtSecret:             getEnv("JWT_SECRET", ""),
+		JwtIssuer:             getEnv("JWT_ISSUER", "user-service"),
+		JwtAudience:           getEnv("JWT_AUDIENCE", "topos"),
+		AIServiceURL:          getEnv("AI_SERVICE_URL", "ai-service:50051"),
+		KafkaBrokers:          splitAndTrim(getEnv("KAFKA_BROKERS", "kafka-1:9092")),
+		KafkaTopic:            getEnv("KAFKA_TOPIC", "posts"),
+		KafkaConsumerGroupID:  getEnv("KAFKA_CONSUMER_GROUP_ID", "content-summary-worker-group"),
+		KafkaDLQTopic:         getEnv("KAFKA_DLQ_TOPIC", "posts-dlq"),
+		WorkerConcurrency:     getEnvInt("WORKER_CONCURRENCY", 3),
+		LogFormat:             getEnv("LOG_FORMAT", "json"),
+		LogLevel:              getEnv("LOG_LEVEL", "info"),
+		OtelEndpoint:          getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 	}
-
-	jwtSecret := strings.TrimSpace(getEnv("JWT_SECRET", ""))
-	if jwtSecret == "" {
-		return nil, errors.New("JWT_SECRET is required")
-	}
-
-	return &Config{
-		Port:            getEnv("PORT", "4002"),
-		MongoURI:        getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		DbName:          getEnv("DB_NAME", "blog_content"),
-		JwtSecret:       jwtSecret,
-		KafkaBrokers:    splitAndTrim(getEnv("KAFKA_BROKERS", "kafka-1:9092,kafka-2:9092,kafka-3:9092")),
-		KafkaTopic:      kafkaTopic,
-		KafkaConsumerGroupID: getEnv("KAFKA_CONSUMER_GROUP_ID", "content-summary-worker-group"),
-		KafkaConsumerTopics:  kafkaConsumerTopics,
-		KafkaDLQTopic:       getEnv("KAFKA_DLQ_TOPIC", kafkaTopic+"-dlq"),
-		RedisAddrs:      splitAndTrim(getEnv("REDIS_ADDRS", "")),
-		RedisMasterName: getEnv("REDIS_MASTER_NAME", ""),
-		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
-		RedisMode:       detectRedisMode(),
-		AIServiceURL:    getEnvAny([]string{"AI_SERVICE_URL", "AI_SERVICE_ADDR"}, "ai-service:50051"),
-		AIRequired:      getEnvBool("AI_REQUIRED", false),
-		AIDialTimeout:   time.Duration(getEnvInt("AI_DIAL_TIMEOUT_SECONDS", 5)) * time.Second,
-		CORSOrigins:     loadCORSOrigins(),
-	}, nil
 }
 
-func loadEnvIfPresent() {
-	envLoadOnce.Do(func() {
-		paths := []string{
-			".env",
-			"/app/.env",
-			"../.env",
-			"../../.env",
-			"../../../.env",
-		}
-
-		for _, path := range paths {
-			if _, err := os.Stat(path); err == nil {
-				_ = godotenv.Overload(path)
-				return
-			}
-		}
+func loadEnvFile() {
+	loadOnce.Do(func() {
+		_ = godotenv.Load()
 	})
 }
 
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists && strings.TrimSpace(value) != "" {
-		return value
+		return strings.TrimSpace(value)
 	}
 	return fallback
-}
-
-func getEnvAny(keys []string, fallback string) string {
-	for _, key := range keys {
-		if value, exists := os.LookupEnv(key); exists && strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return fallback
-}
-
-func getEnvBool(key string, fallback bool) bool {
-	raw, exists := os.LookupEnv(key)
-	if !exists {
-		return fallback
-	}
-
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return fallback
-	}
 }
 
 func getEnvInt(key string, fallback int) int {
-	raw, exists := os.LookupEnv(key)
-	if !exists {
-		return fallback
-	}
-
-	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(key)))
 	if err != nil || value <= 0 {
 		return fallback
 	}
@@ -136,26 +88,9 @@ func splitAndTrim(value string) []string {
 	parts := strings.Split(value, ",")
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
 			result = append(result, trimmed)
 		}
 	}
 	return result
-}
-
-func detectRedisMode() string {
-	masterName, exists := os.LookupEnv("REDIS_MASTER_NAME")
-	if exists && strings.TrimSpace(masterName) != "" {
-		return "sentinel"
-	}
-	return "standalone"
-}
-
-func loadCORSOrigins() []string {
-	raw := getEnv("CORS_ALLOWED_ORIGINS", "")
-	if raw == "" {
-		return []string{"*"}
-	}
-	return splitAndTrim(raw)
 }

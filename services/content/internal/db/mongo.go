@@ -7,32 +7,25 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 )
 
-func Connect(uri string) (*mongo.Client, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+const pingTimeout = 5 * time.Second
+
+// Connect dials mongo and verifies the connection with a ping. The
+// client is wired into the active tracer provider, which is a no-op
+// unless tracing was enabled at startup.
+func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri).SetMonitor(otelmongo.NewMonitor()))
+	if err != nil {
+		return nil, err
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
 	defer cancel()
 
-	clientOptions := options.Client().ApplyURI(uri)
-
-	wc := writeconcern.New(writeconcern.WMajority())
-	clientOptions.SetWriteConcern(wc)
-
-	rp, err := readpref.New(readpref.PrimaryPreferredMode)
-	if err != nil {
+	if err := client.Ping(pingCtx, readpref.Primary()); err != nil {
 		return nil, err
 	}
-	clientOptions.SetReadPreference(rp)
-
-	client, err := mongo.Connect(ctx, clientOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		return nil, err
-	}
-
 	return client, nil
 }

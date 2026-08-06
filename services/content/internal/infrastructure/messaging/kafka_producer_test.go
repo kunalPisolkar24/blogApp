@@ -1,39 +1,127 @@
 package messaging
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestBuildDeadLetterPayload(t *testing.T) {
-	cause := errors.New("processing failed")
-	value := []byte(`{"postId":"post-123"}`)
-
-	data, err := buildDeadLetterPayload("posts", value, cause)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, data)
-
-	var payload struct {
-		OriginalTopic string          `json:"originalTopic"`
-		Error         string          `json:"error"`
-		Payload       json.RawMessage `json:"payload"`
-		Timestamp     string          `json:"timestamp"`
-	}
-	assert.NoError(t, json.Unmarshal(data, &payload))
-
-	assert.Equal(t, "posts", payload.OriginalTopic)
-	assert.Equal(t, "processing failed", payload.Error)
-	assert.JSONEq(t, string(value), string(payload.Payload))
-	assert.NotEmpty(t, payload.Timestamp)
+type fakeWriter struct {
+	messages []kafka.Message
+	err      error
+	closed   bool
 }
 
-func TestBuildDeadLetterPayload_PropagatesMarshalError(t *testing.T) {
-	cause := errors.New("boom")
-	invalid := json.RawMessage(`{`)
+func (w *fakeWriter) WriteMessages(ctx context.Context, msgs ...kafka.Message) error {
+	if w.err != nil {
+		return w.err
+	}
+	w.messages = append(w.messages, msgs...)
+	return nil
+}
 
-	_, err := buildDeadLetterPayload("posts", invalid, cause)
-	assert.Error(t, err)
+func (w *fakeWriter) Close() error {
+	w.closed = true
+	return nil
+}
+
+func newTestProducer(t *testing.T, w messageWriter) *kafkaProducer {
+	t.Helper()
+	return &kafkaProducer{writer: w, topic: "posts", brokers: []string{"localhost:9092"}}
+}
+
+func ptr(s string) *string { return &s }
+
+func TestPublishPostEvent(t *testing.T) {
+	w := &fakeWriter{}
+	producer := newTestProducer(t, w)
+
+	post := &domain.Post{ID: "p_1", Title: "Hello", Body: "World", ImageUrl: ptr("http://img"), Summary: "S", SummaryStatus: domain.PostStatusPending, CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+
+	require.NoError(t, producer.PublishPostCreated(context.Background(), post))
+	require.Len(t, w.messages, 1)
+	assert.Equal(t, "posts", w.messages[0].Topic)
+	assert.Equal(t, []byte("p_1"), w.messages[0].Key)
+
+	var payload domain.PostEventPayload
+	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
+	assert.Equal(t, "p_1", payload.PostID)
+	assert.Equal(t, "Hello", payload.Title)
+	assert.Equal(t, string(domain.PostStatusPending), payload.SummaryStatus)
+
+	require.NoError(t, producer.PublishPostUpdated(context.Background(), post))
+	assert.Len(t, w.messages, 2)
+}
+
+func TestPublishPostTombstone(t *testing.T) {
+	w := &fakeWriter{}
+	producer := newTestProducer(t, w)
+
+	require.NoError(t, producer.PublishPostDeleted(context.Background(), "p_42"))
+	require.Len(t, w.messages, 1)
+	assert.Equal(t, []byte("p_42"), w.messages[0].Key)
+	assert.Nil(t, w.messages[0].Value, "tombstones carry no value")
+}
+
+func TestPublishDeadLetter(t *testing.T) {
+	w := &fakeWriter{}
+	producer := newTestProducer(t, w)
+
+	require.NoError(t, producer.PublishDeadLetter(context.Background(), "posts", "dlq", []byte("key"), []byte(`{"x":1}`), errors.New("boom")))
+	require.Len(t, w.messages, 1)
+	assert.Equal(t, "dlq", w.messages[0].Topic)
+	assert.Equal(t, []byte("key"), w.messages[0].Key)
+
+	var payload deadLetterPayload
+	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
+	assert.Equal(t, "posts", payload.OriginalTopic)
+	assert.Equal(t, "boom", payload.Error)
+	assert.Equal(t, `{"x":1}`, string(payload.Payload))
+	assert.False(t, payload.Timestamp.IsZero())
+}
+
+func TestPublishDeadLetterPreservesMalformedPayload(t *testing.T) {
+	w := &fakeWriter{}
+	producer := newTestProducer(t, w)
+
+	require.NoError(t, producer.PublishDeadLetter(context.Background(), "posts", "dlq", []byte("k"), []byte("not json"), errors.New("parse")))
+	var payload deadLetterPayload
+	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
+	assert.Equal(t, "not json", string(payload.Payload))
+}
+
+func TestPublishForwardsWriterError(t *testing.T) {
+	w := &fakeWriter{err: errors.New("kafka down")}
+	producer := newTestProducer(t, w)
+
+	err := producer.PublishPostCreated(context.Background(), &domain.Post{ID: "p_1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kafka down")
+}
+
+func TestClose(t *testing.T) {
+	w := &fakeWriter{}
+	producer := newTestProducer(t, w)
+
+	require.NoError(t, producer.Close())
+	assert.True(t, w.closed)
+}
+
+func TestPingNoBrokers(t *testing.T) {
+	producer := &kafkaProducer{writer: &fakeWriter{}, brokers: nil}
+	require.Error(t, producer.Ping(context.Background()))
+}
+
+func TestPingUnreachableBroker(t *testing.T) {
+	producer := &kafkaProducer{writer: &fakeWriter{}, brokers: []string{"127.0.0.1:1"}}
+	err := producer.Ping(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unreachable")
 }

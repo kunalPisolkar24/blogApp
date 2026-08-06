@@ -1,45 +1,171 @@
+# MongoDB sharded cluster (bitnami image): three config servers, two shards
+# of one primary + one secondary each, and two mongos routers. The shards
+# register themselves with mongos-0 via MONGODB_MONGOS_HOST; mongo-shard-init
+# enables sharding on the posts collection (see mongo-shard-init.yml).
+
+x-mongo-common: &mongo-common
+  image: bitnamilegacy/mongodb-sharded:7.0
+  restart: unless-stopped
+  networks:
+    - app-network
+  healthcheck:
+    test: ["CMD-SHELL", "mongosh --host localhost --port 27017 --username root --password \"$$MONGO_PASSWORD\" --authenticationDatabase admin --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 30s
+
+x-mongo-primary-env: &mongo-primary-env
+  MONGODB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+  MONGODB_REPLICA_SET_KEY: ${MONGO_REPLICA_SET_KEY:?MONGO_REPLICA_SET_KEY is required}
+  MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+
+x-mongo-secondary-env: &mongo-secondary-env
+  MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+  MONGODB_REPLICA_SET_KEY: ${MONGO_REPLICA_SET_KEY:?MONGO_REPLICA_SET_KEY is required}
+  MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+
 services:
-  content-mongo-1:
-    image: mongo:7.0
-    container_name: ${CONTENT_MONGO_1_CONTAINER}
-    command: [ "--replSet", "rs0", "--bind_ip_all", "--port", "${CONTENT_MONGO_INT_PORT}" ]
+  content-mongo-configsvr-0:
+    <<: *mongo-common
+    container_name: ${MONGO_CONFIGSVR_0_CONTAINER:-prod-content-mongo-configsvr-0}
+    environment:
+      <<: *mongo-primary-env
+      MONGODB_SHARDING_MODE: configsvr
+      MONGODB_REPLICA_SET_MODE: primary
+      MONGODB_REPLICA_SET_NAME: cfgrs
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-configsvr-0
+    volumes:
+      - mongo_configsvr_0_data:/bitnami/mongodb
+
+  content-mongo-configsvr-1:
+    <<: *mongo-common
+    container_name: ${MONGO_CONFIGSVR_1_CONTAINER:-prod-content-mongo-configsvr-1}
+    environment:
+      <<: *mongo-secondary-env
+      MONGODB_SHARDING_MODE: configsvr
+      MONGODB_REPLICA_SET_MODE: secondary
+      MONGODB_REPLICA_SET_NAME: cfgrs
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-configsvr-1
+      MONGODB_INITIAL_PRIMARY_HOST: content-mongo-configsvr-0
+    volumes:
+      - mongo_configsvr_1_data:/bitnami/mongodb
+    depends_on:
+      content-mongo-configsvr-0:
+        condition: service_healthy
+
+  content-mongo-configsvr-2:
+    <<: *mongo-common
+    container_name: ${MONGO_CONFIGSVR_2_CONTAINER:-prod-content-mongo-configsvr-2}
+    environment:
+      <<: *mongo-secondary-env
+      MONGODB_SHARDING_MODE: configsvr
+      MONGODB_REPLICA_SET_MODE: secondary
+      MONGODB_REPLICA_SET_NAME: cfgrs
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-configsvr-2
+      MONGODB_INITIAL_PRIMARY_HOST: content-mongo-configsvr-0
+    volumes:
+      - mongo_configsvr_2_data:/bitnami/mongodb
+    depends_on:
+      content-mongo-configsvr-0:
+        condition: service_healthy
+
+  content-mongo-shard0-0:
+    <<: *mongo-common
+    container_name: ${MONGO_SHARD0_0_CONTAINER:-prod-content-mongo-shard0-0}
+    environment:
+      <<: *mongo-primary-env
+      MONGODB_SHARDING_MODE: shardsvr
+      MONGODB_REPLICA_SET_MODE: primary
+      MONGODB_REPLICA_SET_NAME: shard0
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-shard0-0
+      MONGODB_MONGOS_HOST: content-mongo-mongos-0
+    volumes:
+      - mongo_shard0_0_data:/bitnami/mongodb
+
+  content-mongo-shard0-1:
+    <<: *mongo-common
+    container_name: ${MONGO_SHARD0_1_CONTAINER:-prod-content-mongo-shard0-1}
+    environment:
+      <<: *mongo-secondary-env
+      MONGODB_SHARDING_MODE: shardsvr
+      MONGODB_REPLICA_SET_MODE: secondary
+      MONGODB_REPLICA_SET_NAME: shard0
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-shard0-1
+      MONGODB_INITIAL_PRIMARY_HOST: content-mongo-shard0-0
+    volumes:
+      - mongo_shard0_1_data:/bitnami/mongodb
+    depends_on:
+      content-mongo-shard0-0:
+        condition: service_healthy
+
+  content-mongo-shard1-0:
+    <<: *mongo-common
+    container_name: ${MONGO_SHARD1_0_CONTAINER:-prod-content-mongo-shard1-0}
+    environment:
+      <<: *mongo-primary-env
+      MONGODB_SHARDING_MODE: shardsvr
+      MONGODB_REPLICA_SET_MODE: primary
+      MONGODB_REPLICA_SET_NAME: shard1
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-shard1-0
+      MONGODB_MONGOS_HOST: content-mongo-mongos-0
+    volumes:
+      - mongo_shard1_0_data:/bitnami/mongodb
+
+  content-mongo-shard1-1:
+    <<: *mongo-common
+    container_name: ${MONGO_SHARD1_1_CONTAINER:-prod-content-mongo-shard1-1}
+    environment:
+      <<: *mongo-secondary-env
+      MONGODB_SHARDING_MODE: shardsvr
+      MONGODB_REPLICA_SET_MODE: secondary
+      MONGODB_REPLICA_SET_NAME: shard1
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-shard1-1
+      MONGODB_INITIAL_PRIMARY_HOST: content-mongo-shard1-0
+    volumes:
+      - mongo_shard1_1_data:/bitnami/mongodb
+    depends_on:
+      content-mongo-shard1-0:
+        condition: service_healthy
+
+  content-mongo-mongos-0:
+    <<: *mongo-common
+    container_name: ${MONGO_MONGOS_0_CONTAINER:-prod-content-mongo-mongos-0}
     ports:
-      - "${CONTENT_MONGO_EXT_PORT}:${CONTENT_MONGO_INT_PORT}"
-    volumes:
-      - content_mongo1_data:/data/db
-    networks:
-      - app-network
-    healthcheck:
-      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'${CONTENT_MONGO_1_CONTAINER}:${CONTENT_MONGO_INT_PORT}'},{_id:1,host:'${CONTENT_MONGO_2_CONTAINER}:${CONTENT_MONGO_INT_PORT}'},{_id:2,host:'${CONTENT_MONGO_3_CONTAINER}:${CONTENT_MONGO_INT_PORT}'}]}) }" | mongosh --port ${CONTENT_MONGO_INT_PORT} --quiet
-      interval: 10s
-      timeout: 10s
-      retries: 5
-      start_period: 5s
+      - "${MONGO_MONGOS_EXT_PORT:-27017}:27017"
+    environment:
+      <<: *mongo-primary-env
+      MONGODB_SHARDING_MODE: mongos
+      MONGODB_CFG_PRIMARY_HOST: content-mongo-configsvr-0
+      MONGODB_CFG_REPLICA_SET_NAME: cfgrs
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-mongos-0
+    depends_on:
+      content-mongo-configsvr-0:
+        condition: service_healthy
 
-  content-mongo-2:
-    image: mongo:7.0
-    container_name: ${CONTENT_MONGO_2_CONTAINER}
-    command: [ "--replSet", "rs0", "--bind_ip_all", "--port", "${CONTENT_MONGO_INT_PORT}" ]
-    volumes:
-      - content_mongo2_data:/data/db
-    networks:
-      - app-network
+  content-mongo-mongos-1:
+    <<: *mongo-common
+    container_name: ${MONGO_MONGOS_1_CONTAINER:-prod-content-mongo-mongos-1}
+    environment:
+      <<: *mongo-primary-env
+      MONGODB_SHARDING_MODE: mongos
+      MONGODB_CFG_PRIMARY_HOST: content-mongo-configsvr-0
+      MONGODB_CFG_REPLICA_SET_NAME: cfgrs
+      MONGODB_ADVERTISED_HOSTNAME: content-mongo-mongos-1
+    depends_on:
+      content-mongo-configsvr-0:
+        condition: service_healthy
 
-  content-mongo-3:
-    image: mongo:7.0
-    container_name: ${CONTENT_MONGO_3_CONTAINER}
-    command: [ "--replSet", "rs0", "--bind_ip_all", "--port", "${CONTENT_MONGO_INT_PORT}" ]
-    volumes:
-      - content_mongo3_data:/data/db
-    networks:
-      - app-network
+volumes:
+  mongo_configsvr_0_data:
+  mongo_configsvr_1_data:
+  mongo_configsvr_2_data:
+  mongo_shard0_0_data:
+  mongo_shard0_1_data:
+  mongo_shard1_0_data:
+  mongo_shard1_1_data:
 
 networks:
   app-network:
     external: true
-    name: ${APP_NETWORK}
-
-volumes:
-  content_mongo1_data:
-  content_mongo2_data:
-  content_mongo3_data:
+    name: ${APP_NETWORK:-topos_prod_network}

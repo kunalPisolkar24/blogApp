@@ -6,24 +6,29 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type mongoPostRepo struct {
+const (
+	defaultLimit = 10
+	maxLimit     = 100
+)
+
+type MongoPostRepository struct {
 	collection *mongo.Collection
 }
 
-func NewMongoPostRepository(db *mongo.Database) domain.PostRepository {
-	return &mongoPostRepo{
+func NewMongoPostRepository(db *mongo.Database) *MongoPostRepository {
+	return &MongoPostRepository{
 		collection: db.Collection("posts"),
 	}
 }
 
-func (r *mongoPostRepo) Create(ctx context.Context, post *domain.Post) (*domain.Post, error) {
+func (r *MongoPostRepository) Create(ctx context.Context, post *domain.Post) (*domain.Post, error) {
 	result, err := r.collection.InsertOne(ctx, post)
 	if err != nil {
 		return nil, err
@@ -34,106 +39,112 @@ func (r *mongoPostRepo) Create(ctx context.Context, post *domain.Post) (*domain.
 	return post, nil
 }
 
-func (r *mongoPostRepo) Update(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
+func (r *MongoPostRepository) Update(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return nil, err
-	}
-
-	update := bson.M{
-		"$set": buildPostUpdateFields(post),
+		return nil, fmt.Errorf("%w: invalid id format", domain.ErrNotFound)
 	}
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
-
-	var updatedPost domain.Post
-	err = r.collection.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, opts).Decode(&updatedPost)
+	var updated domain.Post
+	err = r.collection.FindOneAndUpdate(ctx, bson.M{"_id": oid}, bson.M{"$set": updateFields(post)}, opts).Decode(&updated)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, fmt.Errorf("%w: %w", domain.ErrNotFound, err)
-		}
-		return nil, err
+		return nil, wrapNotFound(err)
 	}
-
-	return &updatedPost, nil
+	return &updated, nil
 }
 
-func buildPostUpdateFields(post *domain.Post) bson.M {
-	updateFields := bson.M{
-		"updatedAt": post.UpdatedAt,
-	}
+// updateFields builds the $set document from the non-nil fields of post.
+func updateFields(post *domain.Post) bson.M {
+	fields := bson.M{"updatedAt": post.UpdatedAt}
 
 	if post.Title != "" {
-		updateFields["title"] = post.Title
+		fields["title"] = post.Title
 	}
 	if post.Body != "" {
-		updateFields["body"] = post.Body
+		fields["body"] = post.Body
 	}
 	if post.Tags != nil {
-		updateFields["tags"] = post.Tags
+		fields["tags"] = post.Tags
 	}
 	if post.ImageUrl != nil {
-		updateFields["imageUrl"] = post.ImageUrl
+		fields["imageUrl"] = post.ImageUrl
 	}
 	if post.Slug != "" {
-		updateFields["slug"] = post.Slug
+		fields["slug"] = post.Slug
 	}
+
 	if post.ResetSummary {
-		updateFields["summary"] = ""
-		updateFields["summaryStatus"] = domain.PostStatusPending
-		return updateFields
+		fields["summary"] = ""
+		fields["summaryStatus"] = domain.PostStatusPending
+		return fields
 	}
 	if post.Summary != "" {
-		updateFields["summary"] = post.Summary
+		fields["summary"] = post.Summary
 	}
 	if post.SummaryStatus != "" {
-		updateFields["summaryStatus"] = post.SummaryStatus
+		fields["summaryStatus"] = post.SummaryStatus
 	}
-	return updateFields
+	return fields
 }
 
-func (r *mongoPostRepo) UpdateSummary(ctx context.Context, id string, summary string, status domain.PostStatus) error {
+func (r *MongoPostRepository) UpdateSummary(ctx context.Context, id string, summary string, status domain.PostStatus) error {
 	oid, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: invalid id format", domain.ErrNotFound)
 	}
 
-	update := bson.M{
-		"$set": bson.M{
-			"summary":       summary,
-			"summaryStatus": status,
-		},
-	}
-
-	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": oid}, update)
+	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{
+		"$set": bson.M{"summary": summary, "summaryStatus": status},
+	})
 	return err
 }
 
-func (r *mongoPostRepo) Delete(ctx context.Context, id string) error {
+func (r *MongoPostRepository) Delete(ctx context.Context, id string) error {
 	oid, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: invalid id format", domain.ErrNotFound)
 	}
 	_, err = r.collection.DeleteOne(ctx, bson.M{"_id": oid})
 	return err
 }
 
-func (r *mongoPostRepo) findWithPagination(ctx context.Context, filter bson.M, page, limit int) (*domain.PaginatedPosts, error) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 10
-	}
-	skip := (page - 1) * limit
+func (r *MongoPostRepository) FindAll(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error) {
+	return r.findWithPagination(ctx, bson.M{}, page, limit)
+}
 
-	totalCount, err := r.collection.CountDocuments(ctx, filter)
+func (r *MongoPostRepository) FindByID(ctx context.Context, id string) (*domain.Post, error) {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid id format", domain.ErrNotFound)
+	}
+
+	var post domain.Post
+	err = r.collection.FindOne(ctx, bson.M{"_id": oid}).Decode(&post)
+	if err != nil {
+		return nil, wrapNotFound(err)
+	}
+	return &post, nil
+}
+
+func (r *MongoPostRepository) FindByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
+	return r.findWithPagination(ctx, bson.M{"authorId": authorID}, page, limit)
+}
+
+func (r *MongoPostRepository) FindByTag(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error) {
+	return r.findWithPagination(ctx, bson.M{"tags": tag}, page, limit)
+}
+
+func (r *MongoPostRepository) findWithPagination(ctx context.Context, filter bson.M, page, limit int) (*domain.PaginatedPosts, error) {
+	page, limit = normalizePagination(page, limit)
+
+	total, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
 	opts := options.Find().
-		SetSkip(int64(skip)).
+		SetSkip(int64((page - 1) * limit)).
 		SetLimit(int64(limit)).
 		SetSort(bson.M{"createdAt": -1})
 
@@ -144,48 +155,34 @@ func (r *mongoPostRepo) findWithPagination(ctx context.Context, filter bson.M, p
 	defer cursor.Close(ctx)
 
 	posts := make([]*domain.Post, 0)
-	if err = cursor.All(ctx, &posts); err != nil {
+	if err := cursor.All(ctx, &posts); err != nil {
 		return nil, err
-	}
-
-	totalPages := 0
-	if limit > 0 {
-		totalPages = int(math.Ceil(float64(totalCount) / float64(limit)))
 	}
 
 	return &domain.PaginatedPosts{
 		Posts:      posts,
-		TotalPages: totalPages,
-		TotalPosts: totalCount,
+		TotalPages: int(math.Ceil(float64(total) / float64(limit))),
+		TotalPosts: total,
 		Page:       page,
 	}, nil
 }
 
-func (r *mongoPostRepo) FindAll(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error) {
-	return r.findWithPagination(ctx, bson.M{}, page, limit)
-}
-
-func (r *mongoPostRepo) FindByID(ctx context.Context, id string) (*domain.Post, error) {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid id format", domain.ErrNotFound)
+func normalizePagination(page, limit int) (int, int) {
+	if page < 1 {
+		page = 1
 	}
-
-	var post domain.Post
-	err = r.collection.FindOne(ctx, bson.M{"_id": oid}).Decode(&post)
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, fmt.Errorf("%w: %w", domain.ErrNotFound, err)
-		}
-		return nil, err
+	if limit < 1 {
+		limit = defaultLimit
 	}
-	return &post, nil
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	return page, limit
 }
 
-func (r *mongoPostRepo) FindByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
-	return r.findWithPagination(ctx, bson.M{"authorId": authorID}, page, limit)
-}
-
-func (r *mongoPostRepo) FindByTag(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error) {
-	return r.findWithPagination(ctx, bson.M{"tags": tag}, page, limit)
+func wrapNotFound(err error) error {
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return fmt.Errorf("%w: %w", domain.ErrNotFound, err)
+	}
+	return err
 }

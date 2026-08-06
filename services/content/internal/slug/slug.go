@@ -6,6 +6,8 @@ import (
 	"unicode"
 )
 
+// Generate converts a title into a URL-friendly slug with a
+// timestamp suffix to keep slugs unique.
 func Generate(title string, now time.Time) string {
 	var b strings.Builder
 	b.Grow(len(title) + 16)

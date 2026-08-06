@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ai;
 
-option go_package = "github.com/kunalPisolkar24/blogapp/services/content/proto/ai";
+option go_package = "github.com/kunalPisolkar24/topos/services/content/proto/ai";
 
 service AIService {
   rpc GenerateSummary (ContentRequest) returns (ContentResponse);

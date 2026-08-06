@@ -5,23 +5,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
-	"github.com/kunalPisolkar24/blogapp/services/content/pkg/logger"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/compress"
 )
 
-type kafkaProducer struct {
-	writer  *kafka.Writer
-	brokers []string
+// messageWriter abstracts the kafka writer so tests can exercise the
+// publish paths without a broker. *kafka.Writer satisfies it.
+type messageWriter interface {
+	WriteMessages(ctx context.Context, msgs ...kafka.Message) error
+	Close() error
 }
 
+type kafkaProducer struct {
+	writer  messageWriter
+	brokers []string
+	topic   string
+}
+
+// NewKafkaProducer returns a producer for the given topic. The hash
+// balancer keys messages by post id so every event for a post lands on
+// the same partition, in order. The writer is topic-less; each message
+// carries its own topic so the same writer can serve the DLQ.
 func NewKafkaProducer(brokers []string, topic string) domain.EventProducer {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
-		Topic:        topic,
 		Balancer:     &kafka.Hash{},
 		MaxAttempts:  10,
 		BatchSize:    100,
@@ -30,14 +41,8 @@ func NewKafkaProducer(brokers []string, topic string) domain.EventProducer {
 		WriteTimeout: 10 * time.Second,
 		RequiredAcks: kafka.RequireAll,
 		Compression:  compress.Gzip,
-		Logger: kafka.LoggerFunc(func(msg string, args ...interface{}) {
-			logger.Info(fmt.Sprintf("Kafka Producer: "+msg, args...))
-		}),
-		ErrorLogger: kafka.LoggerFunc(func(msg string, args ...interface{}) {
-			logger.Error(fmt.Sprintf("Kafka Producer Error: "+msg, args...))
-		}),
 	}
-	return &kafkaProducer{writer: writer, brokers: append([]string(nil), brokers...)}
+	return &kafkaProducer{writer: writer, brokers: append([]string(nil), brokers...), topic: topic}
 }
 
 func (k *kafkaProducer) PublishPostCreated(ctx context.Context, post *domain.Post) error {
@@ -48,53 +53,29 @@ func (k *kafkaProducer) PublishPostUpdated(ctx context.Context, post *domain.Pos
 	return k.publish(ctx, post)
 }
 
+// PublishPostDeleted publishes a tombstone: a message with the post id
+// as key and a nil value, signalling deletion to consumers.
 func (k *kafkaProducer) PublishPostDeleted(ctx context.Context, id string) error {
-	message := kafka.Message{
-		Key:   []byte(id),
-		Value: nil,
-		Time:  time.Now(),
-	}
-	return k.writeMessages(ctx, message)
+	return k.writeMessages(ctx, kafka.Message{Topic: k.topic, Key: []byte(id), Time: time.Now()})
 }
 
 func (k *kafkaProducer) PublishDeadLetter(ctx context.Context, originalTopic, dlqTopic string, key, value []byte, cause error) error {
-	dlqValue, err := buildDeadLetterPayload(originalTopic, value, cause)
-	if err != nil {
-		return err
-	}
-
-	message := kafka.Message{
-		Topic: dlqTopic,
-		Key:   key,
-		Value: dlqValue,
-		Time:  time.Now(),
-	}
-
-	return k.writeMessages(ctx, message)
-}
-
-func buildDeadLetterPayload(originalTopic string, value []byte, cause error) ([]byte, error) {
-	dlqPayload := struct {
-		OriginalTopic string            `json:"originalTopic"`
-		Error         string            `json:"error"`
-		Payload       json.RawMessage   `json:"payload"`
-		Timestamp     time.Time         `json:"timestamp"`
-	}{
+	payload, err := json.Marshal(deadLetterPayload{
 		OriginalTopic: originalTopic,
 		Error:         cause.Error(),
 		Payload:       value,
 		Timestamp:     time.Now(),
+	})
+	if err != nil {
+		return fmt.Errorf("marshal dlq payload: %w", err)
 	}
 
-	dlqValue, marshalErr := json.Marshal(dlqPayload)
-	if marshalErr != nil {
-		return nil, fmt.Errorf("failed to marshal dlq payload: %w", marshalErr)
-	}
-	return dlqValue, nil
-}
-
-func (k *kafkaProducer) Close() error {
-	return k.writer.Close()
+	return k.writeMessages(ctx, kafka.Message{
+		Topic: dlqTopic,
+		Key:   key,
+		Value: payload,
+		Time:  time.Now(),
+	})
 }
 
 func (k *kafkaProducer) Ping(ctx context.Context) error {
@@ -110,6 +91,10 @@ func (k *kafkaProducer) Ping(ctx context.Context) error {
 	return conn.Close()
 }
 
+func (k *kafkaProducer) Close() error {
+	return k.writer.Close()
+}
+
 func (k *kafkaProducer) publish(ctx context.Context, post *domain.Post) error {
 	payload := domain.PostEventPayload{
 		PostID:        post.ID,
@@ -123,20 +108,28 @@ func (k *kafkaProducer) publish(ctx context.Context, post *domain.Post) error {
 
 	value, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal kafka payload: %w", err)
+		return fmt.Errorf("marshal kafka payload: %w", err)
 	}
 
-	message := kafka.Message{
-		Key:   []byte(post.ID),
-		Value: value,
-		Time:  time.Now(),
-	}
-
-	return k.writeMessages(ctx, message)
+	return k.writeMessages(ctx, kafka.Message{Topic: k.topic, Key: []byte(post.ID), Value: value, Time: time.Now()})
 }
 
 func (k *kafkaProducer) writeMessages(ctx context.Context, msgs ...kafka.Message) error {
 	publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	return k.writer.WriteMessages(publishCtx, msgs...)
+
+	if err := k.writer.WriteMessages(publishCtx, msgs...); err != nil {
+		slog.Error("kafka write failed", "error", err)
+		return err
+	}
+	return nil
+}
+
+type deadLetterPayload struct {
+	OriginalTopic string `json:"originalTopic"`
+	Error         string `json:"error"`
+	// Payload holds the original message bytes; json encodes []byte as
+	// base64 so even malformed payloads survive the trip to the DLQ.
+	Payload   []byte    `json:"payload"`
+	Timestamp time.Time `json:"timestamp"`
 }

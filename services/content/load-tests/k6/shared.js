@@ -1,121 +1,69 @@
 import http from 'k6/http';
 import { check } from 'k6';
-import { Counter, Trend } from 'k6/metrics';
+import { Trend } from 'k6/metrics';
 import crypto from 'k6/crypto';
+import encoding from 'k6/encoding';
 
 const BASE_URL = __ENV.TARGET || 'http://content-service:4002';
-const GRAPHQL_PATH = `${BASE_URL}/query`;
-const OUTPUT_DIR = 'seed_data';
+const QUERY_PATH = `${BASE_URL}/query`;
 
-const HTTP_OK = 200;
+export const JWT_SECRET = __ENV.JWT_SECRET || 'local-dev-secret';
+export const JWT_ISSUER = __ENV.JWT_ISSUER || 'user-service';
+export const JWT_AUDIENCE = __ENV.JWT_AUDIENCE || 'topos';
+
+export const SEED_POST_COUNT = parseInt(__ENV.SEED_POST_COUNT) || 1000;
+export const SEED_USERS = parseInt(__ENV.SEED_USERS) || 20;
+
+export const TAG_POOL = ['go', 'web', 'devops', 'ai', 'rust'];
+export const MAX_PAGE = Math.max(1, Math.ceil(SEED_POST_COUNT / 10));
 
 export const readDuration = new Trend('read_duration', true);
 export const writeDuration = new Trend('write_duration', true);
-export const e2eDuration = new Trend('e2e_latency', true);
-export const createSuccess = new Counter('create_success');
-export const createConflict = new Counter('create_conflict');
-export const createErrors = new Counter('create_errors');
-export const verifySuccess = new Counter('verify_success');
-export const verifyTimeout = new Counter('verify_timeout');
 
-export const POSTS_QUERY = `
-    query Posts($page: Int, $limit: Int) {
-        posts(page: $page, limit: $limit) {
-            posts { id title slug summaryStatus }
-            totalPages currentPage totalPosts
-        }
-    }
-`;
+// --- JWT minting ----------------------------------------------------------
 
-export const POST_QUERY = `
-    query Post($id: ID!) {
-        post(id: $id) {
-            id title body slug summary summaryStatus tags { name }
-            createdAt updatedAt
-        }
-    }
-`;
+export function mintToken(userID) {
+    const header = encoding.b64encode(
+        JSON.stringify({ alg: 'HS256', typ: 'JWT' }),
+        'rawurl',
+    );
+    const payload = encoding.b64encode(
+        JSON.stringify({
+            id: userID,
+            iss: JWT_ISSUER,
+            aud: JWT_AUDIENCE,
+            exp: Math.floor(Date.now() / 1000) + 3600,
+        }),
+        'rawurl',
+    );
 
-export const TAGS_QUERY = `
-    query Tags($query: String, $limit: Int) {
-        tags(query: $query, limit: $limit) {
-            id name
-        }
-    }
-`;
+    const hmac = crypto.createHMAC('sha256', JWT_SECRET);
+    hmac.update(`${header}.${payload}`);
+    const signature = hmac.digest('base64rawurl');
 
-export const POSTS_BY_TAG_QUERY = `
-    query PostsByTag($tag: String!, $page: Int, $limit: Int) {
-        postsByTag(tag: $tag, page: $page, limit: $limit) {
-            posts { id title slug }
-            totalPages currentPage totalPosts
-        }
-    }
-`;
-
-export const CREATE_POST_MUTATION = `
-    mutation CreatePost($input: CreatePostInput!) {
-        createPost(input: $input) {
-            id title slug summaryStatus
-        }
-    }
-`;
-
-const _rawPosts = open(`${OUTPUT_DIR}/posts.json`);
-const _rawTokens = open(`${OUTPUT_DIR}/tokens.json`);
-const _rawTags = open(`${OUTPUT_DIR}/tags.json`);
-
-export function loadSeed() {
-    const posts = JSON.parse(_rawPosts);
-    const tokens = JSON.parse(_rawTokens);
-    const tags = JSON.parse(_rawTags);
-    if (!Array.isArray(posts) || posts.length === 0) {
-        throw new Error(`seed posts.json empty or missing at ${OUTPUT_DIR}`);
-    }
-    if (!Array.isArray(tokens) || tokens.length === 0) {
-        throw new Error(`tokens.json empty or missing`);
-    }
-    const ids = posts.map((p) => p.id);
-    return { posts, tokens, tags, ids };
+    return `${header}.${payload}.${signature}`;
 }
 
-export function pickPost(seed, index) {
-    return seed.posts[index % seed.posts.length];
-}
-
-export function pickToken(seed, index) {
-    return seed.tokens[index % seed.tokens.length];
-}
-
-export function pickTag(seed, index) {
-    return seed.tags[index % seed.tags.length];
-}
-
-export function genPostContent(vuId, iter) {
-    const nonce = `${vuId}_${iter}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-    const suffix = nonce.slice(0, 16);
-    const hash = crypto.sha256(`loadtest:${suffix}`, 'hex');
-    return {
-        title: `Load Test Post ${suffix}`,
-        body: `This is a load test post body created at ${new Date().toISOString()}. The hash is ${hash.slice(0, 32)}. `.repeat(20),
-        tags: ['loadtest', 'benchmark', 'k6'],
-    };
-}
+// --- GraphQL ---------------------------------------------------------------
 
 export function postGraphQL(query, variables, token, group) {
-    const body = JSON.stringify({ query, variables: variables || {} });
     const headers = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
     const tags = group ? { group } : {};
-    return http.post(GRAPHQL_PATH, body, { headers, tags });
+    return http.post(QUERY_PATH, JSON.stringify({ query, variables: variables || {} }), {
+        headers,
+        tags,
+    });
 }
 
 export function checkOk(res, name) {
     return check(res, {
-        [`${name} status 200`]: (r) => r.status === HTTP_OK,
+        [`${name} status 200`]: (r) => r.status === 200,
         [`${name} no http error`]: (r) => r.error_code === 0,
         [`${name} no graphql errors`]: (r) => {
-            if (r.status !== HTTP_OK) return true;
+            if (r.status !== 200) return true;
             try {
                 const body = JSON.parse(r.body);
                 return !body.errors || body.errors.length === 0;
@@ -126,26 +74,78 @@ export function checkOk(res, name) {
     });
 }
 
-export function parseBody(res) {
-    try {
-        return JSON.parse(res.body);
-    } catch (_) {
-        return null;
-    }
+// --- Payloads ---------------------------------------------------------------
+
+export function createPayload(index) {
+    return {
+        input: {
+            title: `Load Test Article ${index}`,
+            body: `<p>Body of load test article ${index}. ${sentence(6)}</p>`,
+            tags: [TAG_POOL[index % TAG_POOL.length]],
+        },
+    };
 }
 
-export function getDefaultOptions({ vus, duration, rps, readThresholds, writeThresholds, e2eThresholds }) {
-    const readT = readThresholds || {
-        'http_req_duration{group:read}': ['p(95)<200', 'p(99)<500'],
-        'http_req_failed{group:read}': ['rate<0.01'],
+export function updatePayload(index) {
+    return {
+        input: {
+            title: `Load Test Article ${index} (updated)`,
+            tags: [TAG_POOL[(index + 1) % TAG_POOL.length]],
+        },
     };
-    const writeT = writeThresholds || {
-        'http_req_duration{group:write}': ['p(95)<1500', 'p(99)<3000'],
-        'http_req_failed{group:write}': ['rate<0.02'],
-    };
-    const e2eT = e2eThresholds || {
-        'e2e_latency': ['p(95)<5000'],
-    };
+}
+
+function sentence(times) {
+    return 'Topos is a content platform for long-form writing and discovery. '.repeat(times);
+}
+
+// --- Seed setup -------------------------------------------------------------
+
+// setupSeed mints one token per test user and creates SEED_POST_COUNT posts
+// through the GraphQL API. The returned ids and tags feed the read scripts.
+export function setupSeed() {
+    const tokens = [];
+    for (let i = 1; i <= SEED_USERS; i++) {
+        tokens.push(mintToken(`u_load_${i}`));
+    }
+
+    const ids = [];
+    const perUser = Math.ceil(SEED_POST_COUNT / SEED_USERS);
+    let created = 0;
+
+    for (let u = 0; u < SEED_USERS && created < SEED_POST_COUNT; u++) {
+        for (let i = 0; i < perUser && created < SEED_POST_COUNT; i++, created++) {
+            const res = postGraphQL(
+                `mutation($input: CreatePostInput!) { createPost(input: $input) { id } }`,
+                createPayload(created),
+                tokens[u],
+            );
+            if (res.status !== 200) {
+                continue;
+            }
+            const body = JSON.parse(res.body);
+            if (body.errors && body.errors.length > 0) {
+                continue;
+            }
+            ids.push(body.data.createPost.id);
+        }
+    }
+
+    if (ids.length === 0) {
+        throw new Error('seeding failed: no posts created');
+    }
+
+    console.log(`seeded ${ids.length} posts across ${SEED_USERS} users`);
+    return { ids, tags: TAG_POOL };
+}
+
+export function pick(list, index) {
+    return list[index % list.length];
+}
+
+// --- Options -----------------------------------------------------------------
+
+export function getDefaultOptions({ vus, duration, rps }) {
     return {
         scenarios: {
             default: {
@@ -157,8 +157,31 @@ export function getDefaultOptions({ vus, duration, rps, readThresholds, writeThr
                 maxVUs: vus * 2,
             },
         },
-        thresholds: { ...readT, ...writeT, ...e2eT },
+        thresholds: {
+            'http_req_failed{group:read}': ['rate<0.01'],
+            'http_req_failed{group:write}': ['rate<0.01'],
+            'http_req_duration{group:read}': ['p(95)<300', 'p(99)<800'],
+            'http_req_duration{group:write}': ['p(95)<500', 'p(99)<1200'],
+        },
         summaryTrendStats: ['avg', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
-        noVUConnectionReuse: false,
     };
+}
+
+export function parseWeights(spec) {
+    const weights = [];
+    for (const part of spec.split(',')) {
+        const [name, weight] = part.split(':');
+        weights.push({ name, weight: parseFloat(weight) });
+    }
+    return weights;
+}
+
+export function pickWeighted(weights, rnd) {
+    const total = weights.reduce((sum, w) => sum + w.weight, 0);
+    let cursor = rnd * total;
+    for (const w of weights) {
+        cursor -= w.weight;
+        if (cursor <= 0) return w.name;
+    }
+    return weights[weights.length - 1].name;
 }

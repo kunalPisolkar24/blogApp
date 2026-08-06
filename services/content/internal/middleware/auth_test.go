@@ -7,74 +7,130 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/config"
+	"github.com/kunalPisolkar24/topos/services/content/internal/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAuthMiddleware(t *testing.T) {
-	secret := "test_secret"
-	cfg := &config.Config{JwtSecret: secret}
+const testSecret = "test-secret"
 
-	tests := []struct {
-		name           string
-		tokenGenerator func() string
-		expectUserID   string
-	}{
-		{
-			name: "NoToken",
-			tokenGenerator: func() string {
-				return ""
-			},
-			expectUserID: "",
-		},
-		{
-			name: "ValidToken",
-			tokenGenerator: func() string {
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-					"id": "user123",
-					"exp": time.Now().Add(time.Hour).Unix(),
-				})
-				s, _ := token.SignedString([]byte(secret))
-				return "Bearer " + s
-			},
-			expectUserID: "user123",
-		},
-		{
-			name: "InvalidSignature",
-			tokenGenerator: func() string {
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-					"id": "user123",
-				})
-				s, _ := token.SignedString([]byte("wrong_secret"))
-				return "Bearer " + s
-			},
-			expectUserID: "",
-		},
+func testConfig() config.Config {
+	return config.Config{
+		JwtSecret:   testSecret,
+		JwtIssuer:   "user-service",
+		JwtAudience: "topos",
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler := AuthMiddleware(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				userID, ok := r.Context().Value(UserIDKey).(string)
-				if !ok {
-					userID = ""
-				}
-				if userID != tt.expectUserID {
-					t.Errorf("expected userID %s, got %s", tt.expectUserID, userID)
-				}
-				w.WriteHeader(http.StatusOK)
-			}))
+func signToken(t *testing.T, claims jwt.MapClaims) string {
+	t.Helper()
 
-			req := httptest.NewRequest("GET", "/", nil)
-			token := tt.tokenGenerator()
-			if token != "" {
-				req.Header.Set("Authorization", token)
-			}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(testSecret))
+	require.NoError(t, err)
+	return signed
+}
 
-			w := httptest.NewRecorder()
-			handler.ServeHTTP(w, req)
-
-			assert.Equal(t, http.StatusOK, w.Code)
-		})
+func validClaims(id string) jwt.MapClaims {
+	return jwt.MapClaims{
+		"id":  id,
+		"iss": "user-service",
+		"aud": "topos",
+		"exp": time.Now().Add(time.Hour).Unix(),
 	}
+}
+
+func runThroughAuth(t *testing.T, header string) (userID string, ok bool) {
+	t.Helper()
+
+	handler := AuthMiddleware(testConfig())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok = UserIDFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	if header != "" {
+		req.Header.Set("Authorization", header)
+	}
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	return userID, ok
+}
+
+func TestAuthValidToken(t *testing.T) {
+	userID, ok := runThroughAuth(t, "Bearer "+signToken(t, validClaims("u_1")))
+	assert.True(t, ok)
+	assert.Equal(t, "u_1", userID)
+}
+
+func TestAuthNumericID(t *testing.T) {
+	claims := validClaims("42")
+	claims["id"] = float64(42)
+	userID, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	assert.True(t, ok)
+	assert.Equal(t, "42", userID)
+}
+
+func TestAuthMissingHeader(t *testing.T) {
+	_, ok := runThroughAuth(t, "")
+	assert.False(t, ok)
+}
+
+func TestAuthNonBearerHeader(t *testing.T) {
+	_, ok := runThroughAuth(t, "Basic abc")
+	assert.False(t, ok)
+}
+
+func TestAuthExpiredToken(t *testing.T) {
+	claims := validClaims("u_1")
+	claims["exp"] = time.Now().Add(-time.Hour).Unix()
+	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	assert.False(t, ok)
+}
+
+func TestAuthWrongIssuer(t *testing.T) {
+	claims := validClaims("u_1")
+	claims["iss"] = "someone-else"
+	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	assert.False(t, ok)
+}
+
+func TestAuthWrongAudience(t *testing.T) {
+	claims := validClaims("u_1")
+	claims["aud"] = "someone-else"
+	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	assert.False(t, ok)
+}
+
+func TestAuthWrongSigningMethod(t *testing.T) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, validClaims("u_1"))
+	signed, err := token.SignedString([]byte(testSecret))
+	require.NoError(t, err)
+	_, ok := runThroughAuth(t, "Bearer "+signed)
+	assert.False(t, ok)
+}
+
+func TestAuthMissingIDClaim(t *testing.T) {
+	claims := validClaims("")
+	delete(claims, "id")
+	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	assert.False(t, ok)
+}
+
+func TestAuthEmptyIDClaim(t *testing.T) {
+	_, ok := runThroughAuth(t, "Bearer "+signToken(t, validClaims("")))
+	assert.False(t, ok)
+}
+
+func TestAuthGarbageToken(t *testing.T) {
+	_, ok := runThroughAuth(t, "Bearer not.a.token")
+	assert.False(t, ok)
+}
+
+func TestIDFromClaimsUnsupportedType(t *testing.T) {
+	_, ok := idFromClaims(jwt.MapClaims{"id": []string{"x"}})
+	assert.False(t, ok)
+
+	userID, ok := idFromClaims(jwt.MapClaims{"id": 3.5})
+	assert.True(t, ok)
+	assert.Equal(t, "4", userID)
 }

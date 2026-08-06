@@ -3,41 +3,41 @@ package repository
 import (
 	"context"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type mongoTagRepo struct {
+type MongoTagRepository struct {
 	collection *mongo.Collection
 }
 
-func NewMongoTagRepository(db *mongo.Database) domain.TagRepository {
-	return &mongoTagRepo{
+func NewMongoTagRepository(db *mongo.Database) *MongoTagRepository {
+	return &MongoTagRepository{
 		collection: db.Collection("tags"),
 	}
 }
 
-func (r *mongoTagRepo) CreateOrFind(ctx context.Context, name string) (*domain.Tag, error) {
+// CreateOrFind returns the existing tag or creates it atomically.
+func (r *MongoTagRepository) CreateOrFind(ctx context.Context, name string) (*domain.Tag, error) {
 	filter := bson.M{"name": name}
 	update := bson.M{"$setOnInsert": bson.M{"name": name}}
-	
+
 	opts := options.FindOneAndUpdate().
 		SetUpsert(true).
 		SetReturnDocument(options.After)
 
 	var tag domain.Tag
-	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&tag)
-	if err != nil {
+	if err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&tag); err != nil {
 		return nil, err
 	}
 	return &tag, nil
 }
 
-func (r *mongoTagRepo) FindAll(ctx context.Context) ([]*domain.Tag, error) {
+func (r *MongoTagRepository) FindAll(ctx context.Context) ([]*domain.Tag, error) {
 	opts := options.Find().SetSort(bson.M{"name": 1})
-	
+
 	cursor, err := r.collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
@@ -45,20 +45,20 @@ func (r *mongoTagRepo) FindAll(ctx context.Context) ([]*domain.Tag, error) {
 	defer cursor.Close(ctx)
 
 	tags := make([]*domain.Tag, 0)
-	if err = cursor.All(ctx, &tags); err != nil {
+	if err := cursor.All(ctx, &tags); err != nil {
 		return nil, err
 	}
 	return tags, nil
 }
 
-func (r *mongoTagRepo) Search(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
+func (r *MongoTagRepository) Search(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
 	filter := bson.M{}
 	if query != "" {
 		filter = bson.M{"name": bson.M{"$regex": query, "$options": "i"}}
 	}
 
 	if limit < 1 {
-		limit = 10
+		limit = defaultLimit
 	}
 
 	opts := options.Find().
@@ -72,7 +72,7 @@ func (r *mongoTagRepo) Search(ctx context.Context, query string, limit int) ([]*
 	defer cursor.Close(ctx)
 
 	tags := make([]*domain.Tag, 0)
-	if err = cursor.All(ctx, &tags); err != nil {
+	if err := cursor.All(ctx, &tags); err != nil {
 		return nil, err
 	}
 	return tags, nil

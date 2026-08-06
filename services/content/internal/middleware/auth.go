@@ -7,55 +7,86 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/config"
+	"github.com/kunalPisolkar24/topos/services/content/internal/config"
 )
 
-type ContextKey string
+type contextKey string
 
-const UserIDKey ContextKey = "userId"
+const userIDKey contextKey = "userId"
+
+// UserIDFromContext returns the authenticated user id, if any.
+// WithUserID returns a context carrying the authenticated user id.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
 
 func UserIDFromContext(ctx context.Context) (string, bool) {
-	v, ok := ctx.Value(UserIDKey).(string)
+	v, ok := ctx.Value(userIDKey).(string)
 	return v, ok && v != ""
 }
 
-func AuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+// AuthMiddleware parses the Bearer token, validates it against the JWT
+// config, and injects the user id into the request context. Requests
+// without a valid token pass through unauthenticated.
+func AuthMiddleware(cfg config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-
-			if authHeader == "" {
+			userID, ok := userIDFromRequest(r, cfg)
+			if !ok {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-				}
-				return []byte(cfg.JwtSecret), nil
-			})
-
-			if err != nil || !token.Valid {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				if id, ok := claims["id"]; ok {
-					var userID string
-					switch v := id.(type) {
-					case float64:
-						userID = fmt.Sprintf("%.0f", v)
-					case string:
-						userID = v
-					}
-
-					ctx := context.WithValue(r.Context(), UserIDKey, userID)
-					next.ServeHTTP(w, r.WithContext(ctx))
-				}
-			}
+			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+func userIDFromRequest(r *http.Request, cfg config.Config) (string, bool) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return "", false
+	}
+
+	token, err := jwt.Parse(
+		strings.TrimPrefix(authHeader, "Bearer "),
+		func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte(cfg.JwtSecret), nil
+		},
+		jwt.WithValidMethods([]string{"HS256"}),
+		jwt.WithIssuer(cfg.JwtIssuer),
+		jwt.WithAudience(cfg.JwtAudience),
+		jwt.WithExpirationRequired(),
+	)
+	if err != nil || !token.Valid {
+		return "", false
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", false
+	}
+
+	userID, ok := idFromClaims(claims)
+	return userID, ok
+}
+
+func idFromClaims(claims jwt.MapClaims) (string, bool) {
+	id, exists := claims["id"]
+	if !exists {
+		return "", false
+	}
+
+	switch v := id.(type) {
+	case string:
+		return v, v != ""
+	case float64:
+		return fmt.Sprintf("%.0f", v), true
+	default:
+		return "", false
 	}
 }

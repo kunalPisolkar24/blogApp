@@ -4,46 +4,87 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestLoadConfig_RequiresJWTSecret(t *testing.T) {
-	t.Setenv("JWT_SECRET", "")
+func TestLoadConfigDefaults(t *testing.T) {
+	cfg := LoadConfig()
 
-	_, err := LoadConfig()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "JWT_SECRET")
+	assert.Equal(t, "4002", cfg.Port)
+	assert.Equal(t, "mongodb://localhost:27017", cfg.MongoURI)
+	assert.Equal(t, "blog_content", cfg.DbName)
+	assert.Equal(t, "localhost:6379", cfg.RedisAddr)
+	assert.Equal(t, "", cfg.JwtSecret)
+	assert.Equal(t, "user-service", cfg.JwtIssuer)
+	assert.Equal(t, "topos", cfg.JwtAudience)
+	assert.Equal(t, []string{"kafka-1:9092"}, cfg.KafkaBrokers)
+	assert.Equal(t, "posts", cfg.KafkaTopic)
+	assert.Equal(t, "content-summary-worker-group", cfg.KafkaConsumerGroupID)
+	assert.Equal(t, "posts-dlq", cfg.KafkaDLQTopic)
+	assert.Equal(t, 3, cfg.WorkerConcurrency)
+	assert.Equal(t, "json", cfg.LogFormat)
+	assert.Equal(t, "info", cfg.LogLevel)
+	assert.Equal(t, "", cfg.OtelEndpoint)
 }
 
-func TestLoadConfig_AcceptsValidJWTSecret(t *testing.T) {
-	t.Setenv("JWT_SECRET", "test-secret-value")
+func TestLoadConfigFromEnv(t *testing.T) {
+	t.Setenv("PORT", "5000")
+	t.Setenv("MONGO_URI", "mongodb://mongo:27017")
+	t.Setenv("DB_NAME", "test_db")
+	t.Setenv("REDIS_ADDR", "redis:6380")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("JWT_ISSUER", "issuer")
+	t.Setenv("JWT_AUDIENCE", "audience")
+	t.Setenv("AI_SERVICE_URL", "ai:50051")
+	t.Setenv("KAFKA_BROKERS", "kafka-1:9092, kafka-2:9092,  ")
+	t.Setenv("KAFKA_TOPIC", "events")
+	t.Setenv("KAFKA_CONSUMER_GROUP_ID", "group")
+	t.Setenv("KAFKA_DLQ_TOPIC", "dlq")
+	t.Setenv("WORKER_CONCURRENCY", "7")
+	t.Setenv("LOG_FORMAT", "text")
+	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4317")
 
-	cfg, err := LoadConfig()
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
-	assert.Equal(t, "test-secret-value", cfg.JwtSecret)
+	cfg := LoadConfig()
+
+	assert.Equal(t, "5000", cfg.Port)
+	assert.Equal(t, "mongodb://mongo:27017", cfg.MongoURI)
+	assert.Equal(t, "test_db", cfg.DbName)
+	assert.Equal(t, "redis:6380", cfg.RedisAddr)
+	assert.Equal(t, "secret", cfg.JwtSecret)
+	assert.Equal(t, "issuer", cfg.JwtIssuer)
+	assert.Equal(t, "audience", cfg.JwtAudience)
+	assert.Equal(t, "ai:50051", cfg.AIServiceURL)
+	assert.Equal(t, []string{"kafka-1:9092", "kafka-2:9092"}, cfg.KafkaBrokers)
+	assert.Equal(t, "events", cfg.KafkaTopic)
+	assert.Equal(t, "group", cfg.KafkaConsumerGroupID)
+	assert.Equal(t, "dlq", cfg.KafkaDLQTopic)
+	assert.Equal(t, 7, cfg.WorkerConcurrency)
+	assert.Equal(t, "text", cfg.LogFormat)
+	assert.Equal(t, "debug", cfg.LogLevel)
+	assert.Equal(t, "collector:4317", cfg.OtelEndpoint)
 }
 
-func TestLoadConfig_TrimsWhitespaceJWTSecret(t *testing.T) {
-	t.Setenv("JWT_SECRET", "   ")
+func TestGetEnvIgnoresBlankValues(t *testing.T) {
+	t.Setenv("PORT", "   ")
 
-	_, err := LoadConfig()
-	assert.Error(t, err)
+	assert.Equal(t, "4002", getEnv("PORT", "4002"))
 }
 
-func TestLoadConfig_DefaultCORSOrigins(t *testing.T) {
-	t.Setenv("JWT_SECRET", "test-secret")
-	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+func TestGetEnvInt(t *testing.T) {
+	t.Setenv("WORKER_CONCURRENCY", "4")
+	assert.Equal(t, 4, getEnvInt("WORKER_CONCURRENCY", 3))
 
-	cfg, err := LoadConfig()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"*"}, cfg.CORSOrigins)
+	t.Setenv("WORKER_CONCURRENCY", "abc")
+	assert.Equal(t, 3, getEnvInt("WORKER_CONCURRENCY", 3))
+
+	t.Setenv("WORKER_CONCURRENCY", "0")
+	assert.Equal(t, 3, getEnvInt("WORKER_CONCURRENCY", 3))
 }
 
-func TestLoadConfig_ConfiguredCORSOrigins(t *testing.T) {
-	t.Setenv("JWT_SECRET", "test-secret")
-	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com, https://admin.example.com")
-
-	cfg, err := LoadConfig()
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"https://app.example.com", "https://admin.example.com"}, cfg.CORSOrigins)
+func TestSplitAndTrim(t *testing.T) {
+	require.Equal(t, []string{"a", "b"}, splitAndTrim("a,b"))
+	require.Equal(t, []string{"a", "b"}, splitAndTrim(" a , b "))
+	require.Empty(t, splitAndTrim(" , "))
+	require.Empty(t, splitAndTrim(""))
 }

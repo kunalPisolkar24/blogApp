@@ -8,9 +8,9 @@ package graph
 import (
 	"context"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/graph/model"
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/middleware"
+	"github.com/kunalPisolkar24/topos/services/content/graph/model"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 )
 
 // CreatePost is the resolver for the createPost field.
@@ -25,12 +25,11 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePos
 		tags = append(tags, input.Tags...)
 	}
 
-	domainPost, err := r.PostService.CreatePost(ctx, input.Title, input.Body, userID, tags, input.ImageURL, input.Summary)
+	post, err := r.PostService.CreatePost(ctx, input.Title, input.Body, userID, tags, input.ImageURL, input.Summary)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
-
-	return mapDomainPostToModel(domainPost), nil
+	return mapDomainPostToModel(post), nil
 }
 
 // UpdatePost is the resolver for the updatePost field.
@@ -45,12 +44,11 @@ func (r *mutationResolver) UpdatePost(ctx context.Context, id string, input mode
 		tags = append(tags, input.Tags...)
 	}
 
-	domainPost, err := r.PostService.UpdatePost(ctx, id, userID, input.Title, input.Body, tags, input.ImageURL)
+	post, err := r.PostService.UpdatePost(ctx, id, userID, input.Title, input.Body, tags, input.ImageURL)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
-
-	return mapDomainPostToModel(domainPost), nil
+	return mapDomainPostToModel(post), nil
 }
 
 // DeletePost is the resolver for the deletePost field.
@@ -63,7 +61,6 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 	if err := r.PostService.DeletePost(ctx, id, userID); err != nil {
 		return false, mapDomainError(err)
 	}
-
 	return true, nil
 }
 
@@ -72,13 +69,7 @@ func (r *mutationResolver) GenerateTags(ctx context.Context, title string, body 
 	if _, ok := middleware.UserIDFromContext(ctx); !ok {
 		return nil, mapDomainError(domain.ErrUnauthorized)
 	}
-
-	tags, err := r.PostService.GenerateTags(ctx, title, body)
-	if err != nil {
-		return nil, mapDomainError(err)
-	}
-
-	return tags, nil
+	return r.PostService.GenerateTags(ctx, title, body)
 }
 
 // GeneratePostContent is the resolver for the generatePostContent field.
@@ -86,109 +77,56 @@ func (r *mutationResolver) GeneratePostContent(ctx context.Context, prompt strin
 	if _, ok := middleware.UserIDFromContext(ctx); !ok {
 		return nil, mapDomainError(domain.ErrUnauthorized)
 	}
-
-	generated, err := r.PostService.GeneratePostContent(ctx, prompt)
+	post, err := r.PostService.GeneratePostContent(ctx, prompt)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
-
-	return &model.GeneratedPost{
-		Title:   generated.Title,
-		Body:    generated.Body,
-		Summary: generated.Summary,
-		Tags:    generated.Tags,
-	}, nil
+	return mapDomainGeneratedPostToModel(post), nil
 }
 
 // Posts is the resolver for the posts field.
 func (r *queryResolver) Posts(ctx context.Context, page *int, limit *int) (*model.PaginatedPosts, error) {
-	p := 1
-	if page != nil {
-		p = *page
-	}
-	l := 10
-	if limit != nil {
-		l = *limit
-	}
-
-	domainPaginated, err := r.PostService.GetPosts(ctx, p, l)
+	posts, err := r.PostService.GetPosts(ctx, deref(page), deref(limit))
 	if err != nil {
-		return nil, err
+		return nil, mapDomainError(err)
 	}
-
-	return mapDomainPaginatedToModel(domainPaginated), nil
+	return mapDomainPaginatedToModel(posts), nil
 }
 
 // Post is the resolver for the post field.
 func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
-	dp, err := r.PostService.GetPost(ctx, id)
+	post, err := r.PostService.GetPost(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, mapDomainError(err)
 	}
-	if dp == nil {
-		return nil, nil
-	}
-	return mapDomainPostToModel(dp), nil
+	return mapDomainPostToModel(post), nil
 }
 
 // Tags is the resolver for the tags field.
 func (r *queryResolver) Tags(ctx context.Context, query *string, limit *int) ([]*model.Tag, error) {
-	l := 0
-	if limit != nil {
-		l = *limit
-	}
-
-	domainTags, err := r.TagService.GetTags(ctx, query, l)
+	tags, err := r.TagService.GetTags(ctx, query, deref(limit))
 	if err != nil {
-		return nil, err
+		return nil, mapDomainError(err)
 	}
-
-	var tags []*model.Tag
-	for _, dt := range domainTags {
-		tags = append(tags, &model.Tag{
-			ID:   dt.ID,
-			Name: dt.Name,
-		})
-	}
-	return tags, nil
+	return mapDomainTagsToModel(tags), nil
 }
 
 // PostsByTag is the resolver for the postsByTag field.
 func (r *queryResolver) PostsByTag(ctx context.Context, tag string, page *int, limit *int) (*model.PaginatedPosts, error) {
-	p := 1
-	if page != nil {
-		p = *page
-	}
-	l := 10
-	if limit != nil {
-		l = *limit
-	}
-
-	domainPaginated, err := r.PostService.GetPostsByTag(ctx, tag, p, l)
+	posts, err := r.PostService.GetPostsByTag(ctx, tag, deref(page), deref(limit))
 	if err != nil {
-		return nil, err
+		return nil, mapDomainError(err)
 	}
-
-	return mapDomainPaginatedToModel(domainPaginated), nil
+	return mapDomainPaginatedToModel(posts), nil
 }
 
 // Posts is the resolver for the posts field.
 func (r *userResolver) Posts(ctx context.Context, obj *model.User, page *int, limit *int) (*model.PaginatedPosts, error) {
-	p := 1
-	if page != nil {
-		p = *page
-	}
-	l := 10
-	if limit != nil {
-		l = *limit
-	}
-
-	domainPaginated, err := r.PostService.GetPostsByAuthor(ctx, obj.ID, p, l)
+	posts, err := r.PostService.GetPostsByAuthor(ctx, obj.ID, deref(page), deref(limit))
 	if err != nil {
-		return nil, err
+		return nil, mapDomainError(err)
 	}
-
-	return mapDomainPaginatedToModel(domainPaginated), nil
+	return mapDomainPaginatedToModel(posts), nil
 }
 
 // Mutation returns MutationResolver implementation.
@@ -199,6 +137,13 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 // User returns UserResolver implementation.
 func (r *Resolver) User() UserResolver { return &userResolver{r} }
+
+func deref(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }

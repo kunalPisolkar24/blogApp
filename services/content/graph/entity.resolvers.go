@@ -8,19 +8,17 @@ package graph
 import (
 	"context"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/graph/model"
+	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 )
 
 // FindPostByID is the resolver for the findPostByID field.
 func (r *entityResolver) FindPostByID(ctx context.Context, id string) (*model.Post, error) {
-	return r.Resolver.Query().Post(ctx, id)
+	return r.Query().Post(ctx, id)
 }
 
 // FindUserByID is the resolver for the findUserByID field.
 func (r *entityResolver) FindUserByID(ctx context.Context, id string) (*model.User, error) {
-	return &model.User{
-		ID: id,
-	}, nil
+	return &model.User{ID: id}, nil
 }
 
 // Entity returns EntityResolver implementation.

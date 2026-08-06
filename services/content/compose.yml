@@ -1,80 +1,92 @@
+# Production compose for the content service: HA redis (sentinel), sharded
+# mongodb and replicated kafka, plus the API and the worker.
+#
+# Prerequisites:
+#   docker network create ${APP_NETWORK:-topos_prod_network}
+#   export JWT_SECRET=... REDIS_PASSWORD=... MONGO_ROOT_PASSWORD=... MONGO_REPLICA_SET_KEY=...
+#
+# Bring up:   docker compose up -d
+# Tear down:  docker compose down -v
+
+name: topos-content-prod
+
 include:
-  - path: infra/mongo.yml
   - path: infra/redis.yml
+  - path: infra/mongo.yml
+  - path: infra/mongo-shard-init.yml
+  - path: infra/kafka.yml
+
+x-content-env: &content-env
+  PORT: ${CONTENT_SERVICE_INT_PORT:-4002}
+  MONGO_URI: ${CONTENT_MONGO_URI:-mongodb://root:${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}@content-mongo-mongos-0:27017,content-mongo-mongos-1:27017/blog_content?authSource=admin}
+  DB_NAME: ${CONTENT_DB_NAME:-blog_content}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  JWT_ISSUER: ${JWT_ISSUER:-user-service}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-topos}
+  REDIS_MASTER_NAME: ${REDIS_MASTER_NAME:-mymaster}
+  REDIS_SENTINELS: ${CONTENT_REDIS_SENTINELS:-content-redis-sentinel-1:26379,content-redis-sentinel-2:26379,content-redis-sentinel-3:26379}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+  AI_SERVICE_URL: ${AI_SERVICE_URL:-ai-service:50051}
+  KAFKA_BROKERS: ${CONTENT_KAFKA_BROKERS:-kafka-1:9092,kafka-2:9092,kafka-3:9092}
+  KAFKA_TOPIC: ${KAFKA_TOPIC:-posts}
+  KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-posts-dlq}
 
 services:
   content-service:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${CONTENT_SERVICE_CONTAINER}
+    container_name: ${CONTENT_SERVICE_CONTAINER:-prod-content-service}
     restart: unless-stopped
     ports:
-      - "${CONTENT_SERVICE_EXT_PORT}:${CONTENT_SERVICE_INT_PORT}"
-    environment:
-      - PORT=${CONTENT_SERVICE_INT_PORT}
-      - MONGO_URI=${CONTENT_MONGO_URI}
-      - DB_NAME=${CONTENT_DB_NAME}
-      - JWT_SECRET=${CONTENT_JWT_SECRET}
-      - KAFKA_BROKERS=${KAFKA_BROKERS}
-      - KAFKA_TOPIC=${KAFKA_TOPIC}
-      - REDIS_ADDRS=${CONTENT_REDIS_ADDRS}
-      - REDIS_MASTER_NAME=${CONTENT_REDIS_MASTER_NAME}
-      - AI_SERVICE_URL=${AI_SERVICE_URL:-ai-service:50051}
-      - AI_REQUIRED=${CONTENT_AI_REQUIRED:-false}
-      - AI_DIAL_TIMEOUT_SECONDS=${CONTENT_AI_DIAL_TIMEOUT_SECONDS:-5}
+      - "${CONTENT_SERVICE_EXT_PORT:-4002}:${CONTENT_SERVICE_INT_PORT:-4002}"
+    environment: *content-env
+    depends_on:
+      content-redis-sentinel-1:
+        condition: service_healthy
+      mongo-shard-init:
+        condition: service_completed_successfully
+      init-kafka:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:${CONTENT_SERVICE_INT_PORT}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - app-network
-    depends_on:
-      content-mongo-1:
-        condition: service_healthy
-      content-redis-master:
-        condition: service_healthy
-      content-redis-sentinel-1:
-        condition: service_healthy
 
   content-worker:
     build:
       context: .
       dockerfile: Dockerfile
-      target: content-worker
-    container_name: ${CONTENT_WORKER_CONTAINER}
+    container_name: ${CONTENT_WORKER_CONTAINER:-prod-content-worker}
     restart: unless-stopped
-    command: [ "./content-worker" ]
+    command: ["./content-worker"]
     ports:
-      - "${CONTENT_WORKER_EXT_PORT}:${CONTENT_WORKER_INT_PORT}"
+      - "${CONTENT_WORKER_EXT_PORT:-4003}:${CONTENT_WORKER_INT_PORT:-4003}"
     environment:
-      - PORT=${CONTENT_WORKER_INT_PORT}
-      - MONGO_URI=${CONTENT_MONGO_URI}
-      - DB_NAME=${CONTENT_DB_NAME}
-      - KAFKA_BROKERS=${KAFKA_BROKERS}
-      - KAFKA_TOPIC=${KAFKA_TOPIC}
-      - REDIS_ADDRS=${CONTENT_REDIS_ADDRS}
-      - REDIS_MASTER_NAME=${CONTENT_REDIS_MASTER_NAME}
-      - AI_SERVICE_URL=${AI_SERVICE_URL:-ai-service:50051}
-      - AI_REQUIRED=${CONTENT_AI_REQUIRED:-false}
-      - AI_DIAL_TIMEOUT_SECONDS=${CONTENT_AI_DIAL_TIMEOUT_SECONDS:-5}
+      <<: *content-env
+      PORT: ${CONTENT_WORKER_INT_PORT:-4003}
+      KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-content-summary-worker-group}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}
+    depends_on:
+      content-redis-sentinel-1:
+        condition: service_healthy
+      mongo-shard-init:
+        condition: service_completed_successfully
+      init-kafka:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:${CONTENT_WORKER_INT_PORT}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_WORKER_INT_PORT:-4003}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
       - app-network
-    depends_on:
-      content-mongo-1:
-        condition: service_healthy
-      content-redis-master:
-        condition: service_healthy
-      content-redis-sentinel-1:
-        condition: service_healthy
 
 networks:
   app-network:
     external: true
-    name: ${APP_NETWORK}
+    name: ${APP_NETWORK:-topos_prod_network}

@@ -19,6 +19,7 @@ infra/
 gqlgen.yml
 makefile
 tools.go
+.env
 .env.example
 
 *.test

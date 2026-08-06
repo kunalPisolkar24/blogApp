@@ -1,8 +1,8 @@
 package graph
 
 import (
-	"github.com/kunalPisolkar24/blogapp/services/content/graph/model"
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/graph/model"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 )
 
 func mapTags(tagNames []string) []*model.Tag {
@@ -63,5 +63,28 @@ func mapDomainPaginatedToModel(pp *domain.PaginatedPosts) *model.PaginatedPosts 
 		TotalPages:  pp.TotalPages,
 		TotalPosts:  int(pp.TotalPosts),
 		CurrentPage: pp.Page,
+	}
+}
+
+func mapDomainTagsToModel(tags []*domain.Tag) []*model.Tag {
+	out := make([]*model.Tag, 0, len(tags))
+	for _, t := range tags {
+		if t == nil {
+			continue
+		}
+		out = append(out, &model.Tag{ID: t.ID, Name: t.Name})
+	}
+	return out
+}
+
+func mapDomainGeneratedPostToModel(gp *domain.GeneratedPost) *model.GeneratedPost {
+	if gp == nil {
+		return nil
+	}
+	return &model.GeneratedPost{
+		Title:   gp.Title,
+		Body:    gp.Body,
+		Summary: gp.Summary,
+		Tags:    gp.Tags,
 	}
 }

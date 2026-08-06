@@ -1,12 +1,105 @@
-include:
-  - path: infra/compose.local.yml
-
 services:
+  content-mongo:
+    image: mongo:7
+    container_name: local-content-mongo
+    restart: unless-stopped
+    ports:
+      - "${CONTENT_MONGO_EXT_PORT:-27017}:27017"
+    volumes:
+      - content_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh --quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  content-redis:
+    image: redis:7-alpine
+    container_name: local-content-redis
+    restart: unless-stopped
+    ports:
+      - "${CONTENT_REDIS_EXT_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: ${CONTENT_KAFKA_CONTAINER:-local-content-kafka}
+    hostname: kafka-1
+    restart: unless-stopped
+    ports:
+      - "${KAFKA_EXT_PORT:-9092}:${KAFKA_INT_PORT:-9092}"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:${KAFKA_INT_PORT:-9092},CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:${KAFKA_INT_PORT:-9092}
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+    volumes:
+      - content_kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:${KAFKA_INT_PORT:-9092} --list"]
+      interval: 10s
+      timeout: 15s
+      start_period: 20s
+      retries: 5
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  init-kafka:
+    image: apache/kafka:3.7.0
+    container_name: ${CONTENT_INIT_KAFKA_CONTAINER:-local-content-init-kafka}
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:${KAFKA_INT_PORT:-9092} --create --if-not-exists --topic ${KAFKA_TOPIC:-posts} --replication-factor 1 --partitions 3
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:${KAFKA_INT_PORT:-9092} --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 1 --partitions 1"
+    networks:
+      - app-network
+
   content-service:
     build:
       context: .
       dockerfile: Dockerfile
-      target: content-service
     container_name: ${CONTENT_SERVICE_CONTAINER:-local-content-service}
     restart: unless-stopped
     ports:
@@ -15,61 +108,66 @@ services:
       - PORT=${CONTENT_SERVICE_INT_PORT:-4002}
       - MONGO_URI=${CONTENT_MONGO_URI:-mongodb://local-content-mongo:27017}
       - DB_NAME=${CONTENT_DB_NAME:-blog_content}
+      - REDIS_ADDR=${CONTENT_REDIS_ADDR:-local-content-redis:6379}
       - JWT_SECRET=${CONTENT_JWT_SECRET:-local-dev-secret}
-      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka-1:9092}
+      - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
+      - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-posts}
-      - REDIS_URL=${CONTENT_REDIS_URL:-redis://local-content-redis:6379}
-      - REDIS_MASTER_NAME=
-      - AI_SERVICE_URL=${AI_SERVICE_URL:-ai-service:50051}
-      - AI_REQUIRED=${CONTENT_AI_REQUIRED:-false}
-      - AI_DIAL_TIMEOUT_SECONDS=${CONTENT_AI_DIAL_TIMEOUT_SECONDS:-5}
+      - KAFKA_DLQ_TOPIC=${KAFKA_DLQ_TOPIC:-posts-dlq}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - app-network
     depends_on:
       content-mongo:
         condition: service_healthy
       content-redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - app-network
 
   content-worker:
     build:
       context: .
       dockerfile: Dockerfile
-      target: content-worker
-    container_name: ${CONTENT_WORKER_CONTAINER:-local-content-worker}
     restart: unless-stopped
-    command: [ "./content-worker" ]
-    ports:
-      - "${CONTENT_WORKER_EXT_PORT:-4012}:${CONTENT_WORKER_INT_PORT:-4012}"
+    expose:
+      - "${CONTENT_WORKER_INT_PORT:-4003}"
+    command: ["./content-worker"]
     environment:
-      - PORT=${CONTENT_WORKER_INT_PORT:-4012}
+      - PORT=${CONTENT_WORKER_INT_PORT:-4003}
       - MONGO_URI=${CONTENT_MONGO_URI:-mongodb://local-content-mongo:27017}
       - DB_NAME=${CONTENT_DB_NAME:-blog_content}
-      - JWT_SECRET=${CONTENT_JWT_SECRET:-local-dev-secret}
-      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka-1:9092}
+      - REDIS_ADDR=${CONTENT_REDIS_ADDR:-local-content-redis:6379}
+      - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
+      - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-posts}
-      - REDIS_URL=${CONTENT_REDIS_URL:-redis://local-content-redis:6379}
-      - REDIS_MASTER_NAME=
-      - AI_SERVICE_URL=${AI_SERVICE_URL:-ai-service:50051}
-      - AI_REQUIRED=${CONTENT_AI_REQUIRED:-false}
-      - AI_DIAL_TIMEOUT_SECONDS=${CONTENT_AI_DIAL_TIMEOUT_SECONDS:-5}
+      - KAFKA_DLQ_TOPIC=${KAFKA_DLQ_TOPIC:-posts-dlq}
+      - KAFKA_CONSUMER_GROUP_ID=${KAFKA_CONSUMER_GROUP_ID:-content-summary-worker-group}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-3}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:${CONTENT_WORKER_INT_PORT:-4012}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_WORKER_INT_PORT:-4003}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - app-network
     depends_on:
       content-mongo:
         condition: service_healthy
       content-redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
+volumes:
+  content_mongo_data:
+  content_kafka_data:
 
 networks:
   app-network:

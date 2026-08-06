@@ -3,7 +3,7 @@ package graph
 import (
 	"errors"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 

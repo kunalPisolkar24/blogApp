@@ -2,107 +2,78 @@ package service
 
 import (
 	"context"
-	"errors"
 	"testing"
 
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain"
-	"github.com/kunalPisolkar24/blogapp/services/content/internal/domain/mocks"
+	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/testutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
-func TestTagService_GetTags(t *testing.T) {
-	qTech := "tech"
-	empty := ""
-
-	tests := []struct {
-		name       string
-		query      *string
-		limit      int
-		setupMocks func(*mocks.TagRepository)
-		wantErr    bool
-		wantLen    int
-	}{
-		{
-			name:  "NoQuery_ZeroLimit_CallsFindAll",
-			query: nil,
-			limit: 0,
-			setupMocks: func(tr *mocks.TagRepository) {
-				tr.On("FindAll", mock.Anything).Return([]*domain.Tag{
-					{Name: "Go"}, {Name: "Rust"},
-				}, nil)
-			},
-			wantErr: false,
-			wantLen: 2,
+func TestGetTagsAll(t *testing.T) {
+	repo := &testutil.MockTagRepository{
+		FindAllFn: func(ctx context.Context) ([]*domain.Tag, error) {
+			return []*domain.Tag{{ID: "go", Name: "go"}}, nil
 		},
-		{
-			name:  "EmptyQuery_ZeroLimit_CallsFindAll",
-			query: &empty,
-			limit: 0,
-			setupMocks: func(tr *mocks.TagRepository) {
-				tr.On("FindAll", mock.Anything).Return([]*domain.Tag{}, nil)
-			},
-			wantErr: false,
-			wantLen: 0,
-		},
-		{
-			name:  "QueryProvided_CallsSearch",
-			query: &qTech,
-			limit: 5,
-			setupMocks: func(tr *mocks.TagRepository) {
-				tr.On("Search", mock.Anything, "tech", 5).Return([]*domain.Tag{
-					{Name: "technology"},
-				}, nil)
-			},
-			wantErr: false,
-			wantLen: 1,
-		},
-		{
-			name:  "QueryProvided_ZeroLimit_DefaultsTo10",
-			query: &qTech,
-			limit: 0,
-			setupMocks: func(tr *mocks.TagRepository) {
-				// The service logic sets limit=10 if limit<=0 inside the search branch
-				tr.On("Search", mock.Anything, "tech", 10).Return([]*domain.Tag{}, nil)
-			},
-			wantErr: false,
-			wantLen: 0,
-		},
-		{
-			name:  "FindAll_Error",
-			query: nil,
-			limit: 0,
-			setupMocks: func(tr *mocks.TagRepository) {
-				tr.On("FindAll", mock.Anything).Return(nil, errors.New("db fail"))
-			},
-			wantErr: true,
-		},
-		{
-			name:  "Search_Error",
-			query: &qTech,
-			limit: 5,
-			setupMocks: func(tr *mocks.TagRepository) {
-				tr.On("Search", mock.Anything, "tech", 5).Return(nil, errors.New("db fail"))
-			},
-			wantErr: true,
+		SearchFn: func(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
+			t.Fatal("Search must not be called without a query")
+			return nil, nil
 		},
 	}
+	s := NewTagService(repo, nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tr := new(mocks.TagRepository)
-			tt.setupMocks(tr)
+	tags, err := s.GetTags(context.Background(), nil, 0)
+	require.NoError(t, err)
+	assert.Len(t, tags, 1)
+}
 
-			s := NewTagService(tr)
-			got, err := s.GetTags(context.Background(), tt.query, tt.limit)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.wantLen, len(got))
-			}
-			tr.AssertExpectations(t)
-		})
+func TestGetTagsSearch(t *testing.T) {
+	repo := &testutil.MockTagRepository{
+		SearchFn: func(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
+			assert.Equal(t, "go", query)
+			assert.Equal(t, 10, limit, "limit <= 0 defaults to 10")
+			return []*domain.Tag{{ID: "golang", Name: "golang"}}, nil
+		},
 	}
+	s := NewTagService(repo, nil)
+
+	query := "go"
+	tags, err := s.GetTags(context.Background(), &query, 0)
+	require.NoError(t, err)
+	assert.Len(t, tags, 1)
+}
+
+func TestGetTagsSearchCached(t *testing.T) {
+	calls := 0
+	repo := &testutil.MockTagRepository{
+		SearchFn: func(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
+			calls++
+			return []*domain.Tag{{Name: "go"}}, nil
+		},
+	}
+	s := NewTagService(repo, newMemCache(t))
+
+	query := "go"
+	for i := 0; i < 2; i++ {
+		_, err := s.GetTags(context.Background(), &query, 10)
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 1, calls)
+}
+
+func TestGetTagsAllCached(t *testing.T) {
+	calls := 0
+	repo := &testutil.MockTagRepository{
+		FindAllFn: func(ctx context.Context) ([]*domain.Tag, error) {
+			calls++
+			return nil, nil
+		},
+	}
+	s := NewTagService(repo, newMemCache(t))
+
+	for i := 0; i < 2; i++ {
+		_, err := s.GetTags(context.Background(), nil, 0)
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 1, calls)
 }

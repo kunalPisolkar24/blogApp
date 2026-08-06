@@ -1,6 +1,8 @@
 package domain
 
-import "context"
+import (
+	"context"
+)
 
 type GeneratedPost struct {
 	Title   string
@@ -10,7 +12,7 @@ type GeneratedPost struct {
 }
 
 type AIService interface {
-	GenerateSummary(ctx context.Context, content string) (string, error)
+	GenerateSummary(ctx context.Context, text string) (string, error)
 	GenerateTags(ctx context.Context, title, body string) ([]string, error)
 	GeneratePost(ctx context.Context, prompt string) (*GeneratedPost, error)
 	Close() error
