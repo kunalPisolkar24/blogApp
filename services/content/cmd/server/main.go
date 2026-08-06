@@ -119,13 +119,18 @@ func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.
 	return middleware.RequestIDMiddleware(mux)
 }
 
+// pinger abstracts the mongo connectivity check so tests can fake it.
+type pinger interface {
+	Ping(ctx context.Context, rp *readpref.ReadPref) error
+}
+
 // healthHandler reports 200 when mongo and kafka are reachable.
-func healthHandler(mongoClient *mongo.Client, producer domain.EventProducer) http.HandlerFunc {
+func healthHandler(p pinger, producer domain.EventProducer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), healthTimeout)
 		defer cancel()
 
-		if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
+		if err := p.Ping(ctx, readpref.Primary()); err != nil {
 			http.Error(w, "mongo unreachable", http.StatusServiceUnavailable)
 			return
 		}

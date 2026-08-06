@@ -13,8 +13,15 @@ import (
 	"github.com/segmentio/kafka-go/compress"
 )
 
+// messageWriter abstracts the kafka writer so tests can exercise the
+// publish paths without a broker. *kafka.Writer satisfies it.
+type messageWriter interface {
+	WriteMessages(ctx context.Context, msgs ...kafka.Message) error
+	Close() error
+}
+
 type kafkaProducer struct {
-	writer  *kafka.Writer
+	writer  messageWriter
 	brokers []string
 	topic   string
 }

@@ -71,7 +71,9 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		if err == nil {
 			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
 			metrics.PostsCreated.Inc()
-			s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
+			if s.eventPublisher != nil {
+				s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
+			}
 			return created, nil
 		}
 		if !isDuplicateKey(err) {
@@ -122,7 +124,9 @@ func (s *PostService) UpdatePost(ctx context.Context, id, actorID string, title,
 	if err == nil {
 		s.invalidatePost(ctx, id)
 		metrics.PostsUpdated.Inc()
-		s.publishEvent(ctx, "post updated", updated.ID, s.eventPublisher.PublishPostUpdated, updated)
+		if s.eventPublisher != nil {
+			s.publishEvent(ctx, "post updated", updated.ID, s.eventPublisher.PublishPostUpdated, updated)
+		}
 	}
 	return updated, err
 }
@@ -140,9 +144,11 @@ func (s *PostService) DeletePost(ctx context.Context, id, actorID string) error 
 	}
 	s.invalidatePost(ctx, id)
 	metrics.PostsDeleted.Inc()
-	s.publishEvent(ctx, "post deleted", id, func(ctx context.Context, _ *domain.Post) error {
-		return s.eventPublisher.PublishPostDeleted(ctx, id)
-	}, nil)
+	if s.eventPublisher != nil {
+		s.publishEvent(ctx, "post deleted", id, func(ctx context.Context, _ *domain.Post) error {
+			return s.eventPublisher.PublishPostDeleted(ctx, id)
+		}, nil)
+	}
 	return nil
 }
 
