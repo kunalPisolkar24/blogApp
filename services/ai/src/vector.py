@@ -142,7 +142,10 @@ class SearchIndex:
                 collection_name=settings.QDRANT_COLLECTION,
                 prefetch=[
                     models.Prefetch(
-                        query=dense, using=DENSE_VECTOR, limit=prefetch_limit
+                        query=dense,
+                        using=DENSE_VECTOR,
+                        limit=prefetch_limit,
+                        score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
                     ),
                     models.Prefetch(
                         query=_sparse_vector(sparse),
@@ -159,6 +162,7 @@ class SearchIndex:
                 collection_name=settings.QDRANT_COLLECTION,
                 query=dense,
                 using=DENSE_VECTOR,
+                score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
                 offset=offset,
                 limit=limit,
             )

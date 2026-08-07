@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     SEARCH_MAX_RESULT_WINDOW: int = 1000
     SEARCH_MAX_QUERY_CHARS: int = 512
     SEARCH_MAX_LIMIT: int = 100
+    # Minimum dense cosine similarity for a point to be a search result.
+    # Keeps semantically unrelated text (e.g. gibberish queries) from
+    # surfacing as "best matches"; tune per embedding model.
+    SEARCH_DENSE_SCORE_THRESHOLD: float = 0.3
 
     EMBEDDING_MODE: Literal["fake", "ollama"] = "fake"
     EMBEDDING_URL: str = "http://embedding-service:11434"

@@ -3,7 +3,33 @@ from uuid import uuid4
 import grpc
 import pytest
 
+from src.config import settings
 from src.generated import ai_service_pb2
+from src.generated import ai_service_pb2_grpc as ai_stubs
+
+
+class ScriptedEmbedding:
+    """Embedding provider with two hand-crafted unit vectors.
+
+    Documents containing "beta" map to axis 1, everything else to axis 0,
+    so the cosine similarity between the two groups is exactly 0 and
+    within a group exactly 1.
+    """
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        vectors = []
+        for text in texts:
+            vectors.append(self._unit(1 if "beta" in text else 0))
+        return vectors
+
+    async def close(self) -> None:
+        return None
+
+    @staticmethod
+    def _unit(axis: int) -> list[float]:
+        vector = [0.0] * settings.QDRANT_VECTOR_SIZE
+        vector[axis] = 1.0
+        return vector
 
 
 def _index_request(post_id: str | None = None) -> ai_service_pb2.IndexRequest:
@@ -39,6 +65,43 @@ async def test_index_and_search_roundtrip_objectid_hex(stub) -> None:
     )
     assert response.post_ids == [post_id]
     assert response.total == 1
+
+
+async def test_search_keeps_relevant_semantic_matches(running_server_factory) -> None:
+    channel, _, _ = await running_server_factory(ScriptedEmbedding())
+    stub = ai_stubs.AIServiceStub(channel)
+    alpha = str(uuid4())
+    beta = str(uuid4())
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(post_id=alpha, title="Alpha document", body="<p>alpha body</p>")
+    )
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(post_id=beta, title="Beta document", body="<p>beta body</p>")
+    )
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="alpha", offset=0, limit=10)
+    )
+
+    assert response.post_ids == [alpha]
+    assert response.total == 1
+
+
+async def test_search_ignores_irrelevant_semantic_matches(running_server_factory) -> None:
+    channel, _, _ = await running_server_factory(ScriptedEmbedding())
+    stub = ai_stubs.AIServiceStub(channel)
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(
+            post_id=str(uuid4()), title="Beta document", body="<p>beta body</p>"
+        )
+    )
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="alpha", offset=0, limit=10)
+    )
+
+    assert response.post_ids == []
+    assert response.total == 0
 
 
 async def test_search_does_not_return_deleted_post(stub) -> None:
