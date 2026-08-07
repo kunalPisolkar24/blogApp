@@ -23,8 +23,11 @@ import (
 )
 
 const (
-	maxRetries = 3
-	retryBase  = 2 * time.Second
+	// maxRetries and retryBase give the search worker roughly a minute
+	// of backoff (5s, 10s, ... 25s) to ride out short AI service blips
+	// before a message is dead lettered.
+	maxRetries = 5
+	retryBase  = 5 * time.Second
 
 	lagReportInterval = 15 * time.Second
 )

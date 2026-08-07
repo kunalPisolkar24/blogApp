@@ -79,7 +79,7 @@ func TestPublishDeadLetter(t *testing.T) {
 	assert.Equal(t, "dlq", w.messages[0].Topic)
 	assert.Equal(t, []byte("key"), w.messages[0].Key)
 
-	var payload deadLetterPayload
+	var payload DeadLetterMessage
 	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
 	assert.Equal(t, "posts", payload.OriginalTopic)
 	assert.Equal(t, "boom", payload.Error)
@@ -92,7 +92,7 @@ func TestPublishDeadLetterPreservesMalformedPayload(t *testing.T) {
 	producer := newTestProducer(t, w)
 
 	require.NoError(t, producer.PublishDeadLetter(context.Background(), "posts", "dlq", []byte("k"), []byte("not json"), errors.New("parse")))
-	var payload deadLetterPayload
+	var payload DeadLetterMessage
 	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
 	assert.Equal(t, "not json", string(payload.Payload))
 }

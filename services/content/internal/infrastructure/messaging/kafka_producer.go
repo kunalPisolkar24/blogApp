@@ -60,7 +60,7 @@ func (k *kafkaProducer) PublishPostDeleted(ctx context.Context, id string) error
 }
 
 func (k *kafkaProducer) PublishDeadLetter(ctx context.Context, originalTopic, dlqTopic string, key, value []byte, cause error) error {
-	payload, err := json.Marshal(deadLetterPayload{
+	payload, err := json.Marshal(DeadLetterMessage{
 		OriginalTopic: originalTopic,
 		Error:         cause.Error(),
 		Payload:       value,
@@ -125,11 +125,22 @@ func (k *kafkaProducer) writeMessages(ctx context.Context, msgs ...kafka.Message
 	return nil
 }
 
-type deadLetterPayload struct {
+// DeadLetterMessage is the envelope written to a dead letter topic. It
+// preserves the original event so it can be replayed later.
+type DeadLetterMessage struct {
 	OriginalTopic string `json:"originalTopic"`
 	Error         string `json:"error"`
 	// Payload holds the original message bytes; json encodes []byte as
 	// base64 so even malformed payloads survive the trip to the DLQ.
 	Payload   []byte    `json:"payload"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// ParseDeadLetter decodes a message value read from a dead letter topic.
+func ParseDeadLetter(value []byte) (*DeadLetterMessage, error) {
+	var msg DeadLetterMessage
+	if err := json.Unmarshal(value, &msg); err != nil {
+		return nil, fmt.Errorf("unmarshal dead letter message: %w", err)
+	}
+	return &msg, nil
 }

@@ -194,7 +194,7 @@ func dlqHasMessage(t *testing.T, ctx context.Context, brokers []string, key stri
 			return false
 		}
 		if string(m.Key) == key {
-			var payload deadLetterPayload
+			var payload DeadLetterMessage
 			_ = json.Unmarshal(m.Value, &payload)
 			return payload.OriginalTopic == "posts"
 		}
