@@ -11,6 +11,7 @@ service AIService {
   rpc IndexPost (IndexRequest) returns (IndexResponse);
   rpc DeletePost (DeleteRequest) returns (DeleteResponse);
   rpc SearchPosts (SearchRequest) returns (SearchResponse);
+  rpc RelatedPosts (RelatedRequest) returns (RelatedResponse);
 }
 
 message ContentRequest {
@@ -67,4 +68,13 @@ message SearchRequest {
 message SearchResponse {
   repeated string post_ids = 1;
   int32 total = 2;
+}
+
+message RelatedRequest {
+  string post_id = 1;
+  uint32 limit = 2;
+}
+
+message RelatedResponse {
+  repeated string post_ids = 1;
 }

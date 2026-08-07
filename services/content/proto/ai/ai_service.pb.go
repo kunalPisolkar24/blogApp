@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.21.12
-// source: ai_service.proto
+// source: proto/ai/ai_service.proto
 
 package ai
 
@@ -30,7 +30,7 @@ type ContentRequest struct {
 
 func (x *ContentRequest) Reset() {
 	*x = ContentRequest{}
-	mi := &file_ai_service_proto_msgTypes[0]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +42,7 @@ func (x *ContentRequest) String() string {
 func (*ContentRequest) ProtoMessage() {}
 
 func (x *ContentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[0]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *ContentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentRequest.ProtoReflect.Descriptor instead.
 func (*ContentRequest) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{0}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ContentRequest) GetText() string {
@@ -74,7 +74,7 @@ type ContentResponse struct {
 
 func (x *ContentResponse) Reset() {
 	*x = ContentResponse{}
-	mi := &file_ai_service_proto_msgTypes[1]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86,7 +86,7 @@ func (x *ContentResponse) String() string {
 func (*ContentResponse) ProtoMessage() {}
 
 func (x *ContentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[1]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -99,7 +99,7 @@ func (x *ContentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContentResponse.ProtoReflect.Descriptor instead.
 func (*ContentResponse) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{1}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ContentResponse) GetSummary() string {
@@ -119,7 +119,7 @@ type ContextRequest struct {
 
 func (x *ContextRequest) Reset() {
 	*x = ContextRequest{}
-	mi := &file_ai_service_proto_msgTypes[2]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -131,7 +131,7 @@ func (x *ContextRequest) String() string {
 func (*ContextRequest) ProtoMessage() {}
 
 func (x *ContextRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[2]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -144,7 +144,7 @@ func (x *ContextRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContextRequest.ProtoReflect.Descriptor instead.
 func (*ContextRequest) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{2}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ContextRequest) GetTitle() string {
@@ -170,7 +170,7 @@ type TagsResponse struct {
 
 func (x *TagsResponse) Reset() {
 	*x = TagsResponse{}
-	mi := &file_ai_service_proto_msgTypes[3]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +182,7 @@ func (x *TagsResponse) String() string {
 func (*TagsResponse) ProtoMessage() {}
 
 func (x *TagsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[3]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +195,7 @@ func (x *TagsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TagsResponse.ProtoReflect.Descriptor instead.
 func (*TagsResponse) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{3}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *TagsResponse) GetTags() []string {
@@ -214,7 +214,7 @@ type PostGenerationRequest struct {
 
 func (x *PostGenerationRequest) Reset() {
 	*x = PostGenerationRequest{}
-	mi := &file_ai_service_proto_msgTypes[4]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -226,7 +226,7 @@ func (x *PostGenerationRequest) String() string {
 func (*PostGenerationRequest) ProtoMessage() {}
 
 func (x *PostGenerationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[4]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -239,7 +239,7 @@ func (x *PostGenerationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostGenerationRequest.ProtoReflect.Descriptor instead.
 func (*PostGenerationRequest) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{4}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PostGenerationRequest) GetPrompt() string {
@@ -261,7 +261,7 @@ type PostGenerationResponse struct {
 
 func (x *PostGenerationResponse) Reset() {
 	*x = PostGenerationResponse{}
-	mi := &file_ai_service_proto_msgTypes[5]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -273,7 +273,7 @@ func (x *PostGenerationResponse) String() string {
 func (*PostGenerationResponse) ProtoMessage() {}
 
 func (x *PostGenerationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[5]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -286,7 +286,7 @@ func (x *PostGenerationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostGenerationResponse.ProtoReflect.Descriptor instead.
 func (*PostGenerationResponse) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{5}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PostGenerationResponse) GetTitle() string {
@@ -331,7 +331,7 @@ type IndexRequest struct {
 
 func (x *IndexRequest) Reset() {
 	*x = IndexRequest{}
-	mi := &file_ai_service_proto_msgTypes[6]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -343,7 +343,7 @@ func (x *IndexRequest) String() string {
 func (*IndexRequest) ProtoMessage() {}
 
 func (x *IndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[6]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -356,7 +356,7 @@ func (x *IndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexRequest.ProtoReflect.Descriptor instead.
 func (*IndexRequest) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{6}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *IndexRequest) GetPostId() string {
@@ -409,7 +409,7 @@ type IndexResponse struct {
 
 func (x *IndexResponse) Reset() {
 	*x = IndexResponse{}
-	mi := &file_ai_service_proto_msgTypes[7]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -421,7 +421,7 @@ func (x *IndexResponse) String() string {
 func (*IndexResponse) ProtoMessage() {}
 
 func (x *IndexResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[7]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -434,7 +434,7 @@ func (x *IndexResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexResponse.ProtoReflect.Descriptor instead.
 func (*IndexResponse) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{7}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{7}
 }
 
 type DeleteRequest struct {
@@ -446,7 +446,7 @@ type DeleteRequest struct {
 
 func (x *DeleteRequest) Reset() {
 	*x = DeleteRequest{}
-	mi := &file_ai_service_proto_msgTypes[8]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -458,7 +458,7 @@ func (x *DeleteRequest) String() string {
 func (*DeleteRequest) ProtoMessage() {}
 
 func (x *DeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[8]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -471,7 +471,7 @@ func (x *DeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRequest) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{8}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DeleteRequest) GetPostId() string {
@@ -489,7 +489,7 @@ type DeleteResponse struct {
 
 func (x *DeleteResponse) Reset() {
 	*x = DeleteResponse{}
-	mi := &file_ai_service_proto_msgTypes[9]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -501,7 +501,7 @@ func (x *DeleteResponse) String() string {
 func (*DeleteResponse) ProtoMessage() {}
 
 func (x *DeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[9]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -514,7 +514,7 @@ func (x *DeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteResponse.ProtoReflect.Descriptor instead.
 func (*DeleteResponse) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{9}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{9}
 }
 
 type SearchRequest struct {
@@ -528,7 +528,7 @@ type SearchRequest struct {
 
 func (x *SearchRequest) Reset() {
 	*x = SearchRequest{}
-	mi := &file_ai_service_proto_msgTypes[10]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -540,7 +540,7 @@ func (x *SearchRequest) String() string {
 func (*SearchRequest) ProtoMessage() {}
 
 func (x *SearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[10]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -553,7 +553,7 @@ func (x *SearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
 func (*SearchRequest) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{10}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SearchRequest) GetQuery() string {
@@ -587,7 +587,7 @@ type SearchResponse struct {
 
 func (x *SearchResponse) Reset() {
 	*x = SearchResponse{}
-	mi := &file_ai_service_proto_msgTypes[11]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +599,7 @@ func (x *SearchResponse) String() string {
 func (*SearchResponse) ProtoMessage() {}
 
 func (x *SearchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_service_proto_msgTypes[11]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +612,7 @@ func (x *SearchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResponse.ProtoReflect.Descriptor instead.
 func (*SearchResponse) Descriptor() ([]byte, []int) {
-	return file_ai_service_proto_rawDescGZIP(), []int{11}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SearchResponse) GetPostIds() []string {
@@ -629,11 +629,107 @@ func (x *SearchResponse) GetTotal() int32 {
 	return 0
 }
 
-var File_ai_service_proto protoreflect.FileDescriptor
+type RelatedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PostId        string                 `protobuf:"bytes,1,opt,name=post_id,json=postId,proto3" json:"post_id,omitempty"`
+	Limit         uint32                 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_ai_service_proto_rawDesc = "" +
+func (x *RelatedRequest) Reset() {
+	*x = RelatedRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelatedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelatedRequest) ProtoMessage() {}
+
+func (x *RelatedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelatedRequest.ProtoReflect.Descriptor instead.
+func (*RelatedRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RelatedRequest) GetPostId() string {
+	if x != nil {
+		return x.PostId
+	}
+	return ""
+}
+
+func (x *RelatedRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type RelatedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PostIds       []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RelatedResponse) Reset() {
+	*x = RelatedResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelatedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelatedResponse) ProtoMessage() {}
+
+func (x *RelatedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelatedResponse.ProtoReflect.Descriptor instead.
+func (*RelatedResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RelatedResponse) GetPostIds() []string {
+	if x != nil {
+		return x.PostIds
+	}
+	return nil
+}
+
+var File_proto_ai_ai_service_proto protoreflect.FileDescriptor
+
+const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\n" +
-	"\x10ai_service.proto\x12\x02ai\"$\n" +
+	"\x19proto/ai/ai_service.proto\x12\x02ai\"$\n" +
 	"\x0eContentRequest\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\"+\n" +
 	"\x0fContentResponse\x12\x18\n" +
@@ -668,7 +764,12 @@ const file_ai_service_proto_rawDesc = "" +
 	"\x05limit\x18\x03 \x01(\rR\x05limit\"A\n" +
 	"\x0eSearchResponse\x12\x19\n" +
 	"\bpost_ids\x18\x01 \x03(\tR\apostIds\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total2\xe1\x02\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"?\n" +
+	"\x0eRelatedRequest\x12\x17\n" +
+	"\apost_id\x18\x01 \x01(\tR\x06postId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\",\n" +
+	"\x0fRelatedResponse\x12\x19\n" +
+	"\bpost_ids\x18\x01 \x03(\tR\apostIds2\x9a\x03\n" +
 	"\tAIService\x12:\n" +
 	"\x0fGenerateSummary\x12\x12.ai.ContentRequest\x1a\x13.ai.ContentResponse\x124\n" +
 	"\fGenerateTags\x12\x12.ai.ContextRequest\x1a\x10.ai.TagsResponse\x12E\n" +
@@ -676,22 +777,23 @@ const file_ai_service_proto_rawDesc = "" +
 	"\tIndexPost\x12\x10.ai.IndexRequest\x1a\x11.ai.IndexResponse\x123\n" +
 	"\n" +
 	"DeletePost\x12\x11.ai.DeleteRequest\x1a\x12.ai.DeleteResponse\x124\n" +
-	"\vSearchPosts\x12\x11.ai.SearchRequest\x1a\x12.ai.SearchResponseB<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
+	"\vSearchPosts\x12\x11.ai.SearchRequest\x1a\x12.ai.SearchResponse\x127\n" +
+	"\fRelatedPosts\x12\x12.ai.RelatedRequest\x1a\x13.ai.RelatedResponseB<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
 
 var (
-	file_ai_service_proto_rawDescOnce sync.Once
-	file_ai_service_proto_rawDescData []byte
+	file_proto_ai_ai_service_proto_rawDescOnce sync.Once
+	file_proto_ai_ai_service_proto_rawDescData []byte
 )
 
-func file_ai_service_proto_rawDescGZIP() []byte {
-	file_ai_service_proto_rawDescOnce.Do(func() {
-		file_ai_service_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_ai_service_proto_rawDesc), len(file_ai_service_proto_rawDesc)))
+func file_proto_ai_ai_service_proto_rawDescGZIP() []byte {
+	file_proto_ai_ai_service_proto_rawDescOnce.Do(func() {
+		file_proto_ai_ai_service_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_ai_ai_service_proto_rawDesc), len(file_proto_ai_ai_service_proto_rawDesc)))
 	})
-	return file_ai_service_proto_rawDescData
+	return file_proto_ai_ai_service_proto_rawDescData
 }
 
-var file_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
-var file_ai_service_proto_goTypes = []any{
+var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_ai_ai_service_proto_goTypes = []any{
 	(*ContentRequest)(nil),         // 0: ai.ContentRequest
 	(*ContentResponse)(nil),        // 1: ai.ContentResponse
 	(*ContextRequest)(nil),         // 2: ai.ContextRequest
@@ -704,47 +806,51 @@ var file_ai_service_proto_goTypes = []any{
 	(*DeleteResponse)(nil),         // 9: ai.DeleteResponse
 	(*SearchRequest)(nil),          // 10: ai.SearchRequest
 	(*SearchResponse)(nil),         // 11: ai.SearchResponse
+	(*RelatedRequest)(nil),         // 12: ai.RelatedRequest
+	(*RelatedResponse)(nil),        // 13: ai.RelatedResponse
 }
-var file_ai_service_proto_depIdxs = []int32{
+var file_proto_ai_ai_service_proto_depIdxs = []int32{
 	0,  // 0: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
 	2,  // 1: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
 	4,  // 2: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
 	6,  // 3: ai.AIService.IndexPost:input_type -> ai.IndexRequest
 	8,  // 4: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
 	10, // 5: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
-	1,  // 6: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
-	3,  // 7: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
-	5,  // 8: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
-	7,  // 9: ai.AIService.IndexPost:output_type -> ai.IndexResponse
-	9,  // 10: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
-	11, // 11: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
-	6,  // [6:12] is the sub-list for method output_type
-	0,  // [0:6] is the sub-list for method input_type
+	12, // 6: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
+	1,  // 7: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
+	3,  // 8: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
+	5,  // 9: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
+	7,  // 10: ai.AIService.IndexPost:output_type -> ai.IndexResponse
+	9,  // 11: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
+	11, // 12: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
+	13, // 13: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
+	7,  // [7:14] is the sub-list for method output_type
+	0,  // [0:7] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_ai_service_proto_init() }
-func file_ai_service_proto_init() {
-	if File_ai_service_proto != nil {
+func init() { file_proto_ai_ai_service_proto_init() }
+func file_proto_ai_ai_service_proto_init() {
+	if File_proto_ai_ai_service_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ai_service_proto_rawDesc), len(file_ai_service_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ai_ai_service_proto_rawDesc), len(file_proto_ai_ai_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_ai_service_proto_goTypes,
-		DependencyIndexes: file_ai_service_proto_depIdxs,
-		MessageInfos:      file_ai_service_proto_msgTypes,
+		GoTypes:           file_proto_ai_ai_service_proto_goTypes,
+		DependencyIndexes: file_proto_ai_ai_service_proto_depIdxs,
+		MessageInfos:      file_proto_ai_ai_service_proto_msgTypes,
 	}.Build()
-	File_ai_service_proto = out.File
-	file_ai_service_proto_goTypes = nil
-	file_ai_service_proto_depIdxs = nil
+	File_proto_ai_ai_service_proto = out.File
+	file_proto_ai_ai_service_proto_goTypes = nil
+	file_proto_ai_ai_service_proto_depIdxs = nil
 }

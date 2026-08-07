@@ -84,6 +84,15 @@ func (r *mutationResolver) GeneratePostContent(ctx context.Context, prompt strin
 	return mapDomainGeneratedPostToModel(post), nil
 }
 
+// Related is the resolver for the related field.
+func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error) {
+	posts, err := r.PostService.RelatedPosts(ctx, obj.ID, deref(limit))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPostsToModel(posts), nil
+}
+
 // Posts is the resolver for the posts field.
 func (r *queryResolver) Posts(ctx context.Context, page *int, limit *int) (*model.PaginatedPosts, error) {
 	posts, err := r.PostService.GetPosts(ctx, deref(page), deref(limit))
@@ -141,6 +150,9 @@ func (r *userResolver) Posts(ctx context.Context, obj *model.User, page *int, li
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
+// Post returns PostResolver implementation.
+func (r *Resolver) Post() PostResolver { return &postResolver{r} }
+
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
@@ -148,12 +160,6 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 func (r *Resolver) User() UserResolver { return &userResolver{r} }
 
 type mutationResolver struct{ *Resolver }
+type postResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
-
-func deref(v *int) int {
-	if v == nil {
-		return 0
-	}
-	return *v
-}

@@ -19,6 +19,7 @@ type Post @key(fields: "id") {
   tags: [Tag!]!
   createdAt: String!
   updatedAt: String!
+  related(limit: Int = 5): [Post!]!
 }
 
 type Tag {

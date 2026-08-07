@@ -74,6 +74,11 @@ func (a *NoopAI) SearchPosts(_ context.Context, _ string, _ int, _ int) (*domain
 	return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
 }
 
+// RelatedPosts degrades to an empty result instead of failing the request.
+func (a *NoopAI) RelatedPosts(_ context.Context, _ string, _ int) (*domain.SearchResult, error) {
+	return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
+}
+
 func (a *NoopAI) Close() error {
 	return nil
 }

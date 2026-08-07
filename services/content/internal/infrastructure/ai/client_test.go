@@ -13,6 +13,7 @@ import (
 
 type stubAI struct {
 	summary string
+	related []string
 	err     error
 	closed  bool
 }
@@ -39,6 +40,13 @@ func (s *stubAI) DeletePost(ctx context.Context, postID string) error {
 
 func (s *stubAI) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
 	return nil, s.err
+}
+
+func (s *stubAI) RelatedPosts(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &domain.SearchResult{PostIDs: s.related, Total: len(s.related)}, nil
 }
 
 func (s *stubAI) Close() error {
@@ -177,4 +185,22 @@ func TestResilientClientDeletePostOpenBreaker(t *testing.T) {
 
 	err := client.DeletePost(context.Background(), "p1")
 	require.ErrorIs(t, err, errCircuitOpen)
+}
+
+func TestResilientClientRelatedPostsUsesPrimaryOnSuccess(t *testing.T) {
+	primary := &stubAI{related: []string{"p2", "p3"}}
+	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+
+	result, err := client.RelatedPosts(context.Background(), "p1", 5)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p2", "p3"}, result.PostIDs)
+}
+
+func TestResilientClientRelatedPostsFallsBackOnError(t *testing.T) {
+	primary := &stubAI{err: errors.New("unavailable")}
+	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+
+	result, err := client.RelatedPosts(context.Background(), "p1", 5)
+	require.NoError(t, err)
+	assert.Empty(t, result.PostIDs)
 }

@@ -16,6 +16,7 @@ Topos platform over gRPC.
 | `IndexPost` | `IndexRequest` | `IndexResponse` |
 | `DeletePost` | `DeleteRequest` | `DeleteResponse` |
 | `SearchPosts` | `SearchRequest` | `SearchResponse` |
+| `RelatedPosts` | `RelatedRequest` | `RelatedResponse` |
 
 ## Layout
 
@@ -25,7 +26,7 @@ src/
 ├── config.py            # pydantic settings (env-driven)
 ├── llm.py               # LLM provider client (real + fake)
 ├── embeddings.py        # embedding clients (ollama + fake)
-├── vector.py            # Qdrant index: upsert, delete, hybrid search
+├── vector.py            # Qdrant index: upsert, delete, hybrid search, related
 ├── sparse.py            # sparse (lexical) tokenizer for hybrid search
 ├── api/                 # gRPC server construction + RPC handlers
 ├── domain/              # models, prompts, sanitization, text cleaning
@@ -52,6 +53,10 @@ Search requires a running Qdrant (`QDRANT_URL`, default
 the default `fake` mode produces deterministic vectors (exact text matches
 score ~1.0, unrelated text ~0.0). Unrelated results are filtered by
 `SEARCH_DENSE_SCORE_THRESHOLD` (default `0.3`).
+
+`RelatedPosts` returns the nearest neighbours of an already-indexed post
+by querying Qdrant with the post's stored dense vector — no embedding call
+at read time. Unknown post ids yield an empty result.
 
 ## Docker
 

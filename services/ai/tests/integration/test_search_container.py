@@ -82,3 +82,32 @@ def test_search_filters_irrelevant_semantic_match(service) -> None:
 
     assert response.post_ids == []
     assert response.total == 0
+
+
+def test_related_finds_similar_posts(service) -> None:
+    _index(service, "6a75a41221a9752ec47bc606", "Kubernetes deployment guide")
+    _index(service, "6a75a41221a9752ec47bc607", "Kubernetes deployment guide")
+    _index(service, "6a75a41221a9752ec47bc608", "Italian pasta recipes")
+
+    response = service.stub.RelatedPosts(
+        ai_service_pb2.RelatedRequest(
+            post_id="6a75a41221a9752ec47bc606", limit=10
+        )
+    )
+
+    # The collection is shared with the search tests, so assert on the
+    # properties of the result rather than its exact contents.
+    assert "6a75a41221a9752ec47bc607" in response.post_ids
+    assert "6a75a41221a9752ec47bc608" not in response.post_ids
+
+
+def test_related_excludes_the_post_itself(service) -> None:
+    _index(service, "6a75a41221a9752ec47bc609", "Scaling Kafka Consumers")
+
+    response = service.stub.RelatedPosts(
+        ai_service_pb2.RelatedRequest(
+            post_id="6a75a41221a9752ec47bc609", limit=10
+        )
+    )
+
+    assert "6a75a41221a9752ec47bc609" not in response.post_ids

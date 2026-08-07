@@ -97,3 +97,17 @@ class SearchResponse(_message.Message):
     post_ids: _containers.RepeatedScalarFieldContainer[str]
     total: int
     def __init__(self, post_ids: _Optional[_Iterable[str]] = ..., total: _Optional[int] = ...) -> None: ...
+
+class RelatedRequest(_message.Message):
+    __slots__ = ("post_id", "limit")
+    POST_ID_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    post_id: str
+    limit: int
+    def __init__(self, post_id: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+
+class RelatedResponse(_message.Message):
+    __slots__ = ("post_ids",)
+    POST_IDS_FIELD_NUMBER: _ClassVar[int]
+    post_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, post_ids: _Optional[_Iterable[str]] = ...) -> None: ...

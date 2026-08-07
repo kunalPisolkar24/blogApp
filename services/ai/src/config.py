@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     SEARCH_MAX_RESULT_WINDOW: int = 1000
     SEARCH_MAX_QUERY_CHARS: int = 512
     SEARCH_MAX_LIMIT: int = 100
+    # Default number of related posts returned when the request omits limit.
+    RELATED_DEFAULT_LIMIT: int = 10
     # Minimum dense cosine similarity for a point to be a search result.
     # Keeps semantically unrelated text (e.g. gibberish queries) from
     # surfacing as "best matches"; tune per embedding model.

@@ -24,5 +24,6 @@ type AIService interface {
 	IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
 	DeletePost(ctx context.Context, postID string) error
 	SearchPosts(ctx context.Context, query string, offset, limit int) (*SearchResult, error)
+	RelatedPosts(ctx context.Context, postID string, limit int) (*SearchResult, error)
 	Close() error
 }

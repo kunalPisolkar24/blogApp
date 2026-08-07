@@ -11,6 +11,7 @@ import {
   AISummaryDialog,
   BlogHeader,
   BlogBody,
+  BlogRelatedSection,
   type PostForEditing,
 } from "@/features/blog";
 import { BlogAuthorSidebar } from "@/widgets";
@@ -120,6 +121,7 @@ const ViewBlogPage: React.FC = () => {
                       }
                     />
                   </div>
+                  <BlogRelatedSection posts={post.related} />
                 </section>
 
                 <BlogAuthorSidebar

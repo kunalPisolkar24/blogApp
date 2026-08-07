@@ -230,3 +230,16 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         return ai_service_pb2.SearchResponse(
             post_ids=result.post_ids, total=result.total
         )
+
+    @rpc_metrics("/ai.AIService/RelatedPosts")
+    async def RelatedPosts(
+        self, request: ai_service_pb2.RelatedRequest, context: grpc.aio.ServicerContext
+    ) -> ai_service_pb2.RelatedResponse:
+        if not request.post_id:
+            raise ValidationError("post_id must be a non-empty string")
+        limit = request.limit or settings.RELATED_DEFAULT_LIMIT
+        if limit > settings.SEARCH_MAX_LIMIT:
+            raise ValidationError(f"limit must be <= {settings.SEARCH_MAX_LIMIT}")
+
+        post_ids = await self._search.related(request.post_id, limit)
+        return ai_service_pb2.RelatedResponse(post_ids=post_ids)

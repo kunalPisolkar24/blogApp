@@ -50,6 +50,12 @@ def stub(running_server) -> ai_stubs.AIServiceStub:
 async def running_server_factory(fake_llm: FakeLLM, unused_tcp_port: int):
     """Builds a running gRPC server backed by a custom embedding provider."""
 
+    # A running grpc.aio.Server is torn down when it is garbage collected,
+    # so each created server is pinned to this list until the test ends and
+    # then stopped explicitly, instead of relying on callers to keep a
+    # reference to it.
+    servers: list[grpc.aio.Server] = []
+
     async def make(embeddings) -> tuple[grpc.aio.Channel, SearchIndex, object]:
         index = SearchIndex(embeddings, AsyncQdrantClient(location=":memory:"))
         await index.ensure_collection()
@@ -59,8 +65,12 @@ async def running_server_factory(fake_llm: FakeLLM, unused_tcp_port: int):
         await server.start()
         channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
         await channel.channel_ready()
+        servers.append(server)
         # The server is returned alongside the channel so it stays alive
         # for the duration of the test.
         return channel, index, server
 
-    return make
+    yield make
+
+    for server in servers:
+        await server.stop(grace=None)

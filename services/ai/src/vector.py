@@ -132,6 +132,32 @@ class SearchIndex:
             points_selector=[_point_id(post_id)],
         )
 
+    async def related(self, post_id: str, limit: int) -> list[str]:
+        """Return the post_ids of the nearest neighbours of a stored post.
+
+        Queries Qdrant with the post's own dense vector (no re-embedding)
+        and excludes the post itself. An unindexed post yields an empty
+        result rather than an error, so new posts degrade gracefully while
+        the index worker catches up.
+        """
+        point_id = _point_id(post_id)
+        if not await self._client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION,
+            ids=[point_id],
+        ):
+            return []
+        response = await self._client.query_points(
+            collection_name=settings.QDRANT_COLLECTION,
+            query=point_id,
+            using=DENSE_VECTOR,
+            limit=limit,
+            score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+            query_filter=models.Filter(
+                must_not=[models.HasIdCondition(has_id=[point_id])]
+            ),
+        )
+        return [_post_id_from_point(point.id) for point in response.points]
+
     async def search(self, query: str, offset: int, limit: int) -> SearchResult:
         dense = (await self._embeddings.embed([query]))[0]
         sparse = sparse_embed(query)
