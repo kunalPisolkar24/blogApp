@@ -317,6 +317,318 @@ func (x *PostGenerationResponse) GetTags() []string {
 	return nil
 }
 
+type IndexRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PostId        string                 `protobuf:"bytes,1,opt,name=post_id,json=postId,proto3" json:"post_id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Body          string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	Summary       string                 `protobuf:"bytes,4,opt,name=summary,proto3" json:"summary,omitempty"`
+	Tags          []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IndexRequest) Reset() {
+	*x = IndexRequest{}
+	mi := &file_ai_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IndexRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IndexRequest) ProtoMessage() {}
+
+func (x *IndexRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IndexRequest.ProtoReflect.Descriptor instead.
+func (*IndexRequest) Descriptor() ([]byte, []int) {
+	return file_ai_service_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *IndexRequest) GetPostId() string {
+	if x != nil {
+		return x.PostId
+	}
+	return ""
+}
+
+func (x *IndexRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *IndexRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *IndexRequest) GetSummary() string {
+	if x != nil {
+		return x.Summary
+	}
+	return ""
+}
+
+func (x *IndexRequest) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *IndexRequest) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+type IndexResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IndexResponse) Reset() {
+	*x = IndexResponse{}
+	mi := &file_ai_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IndexResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IndexResponse) ProtoMessage() {}
+
+func (x *IndexResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IndexResponse.ProtoReflect.Descriptor instead.
+func (*IndexResponse) Descriptor() ([]byte, []int) {
+	return file_ai_service_proto_rawDescGZIP(), []int{7}
+}
+
+type DeleteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PostId        string                 `protobuf:"bytes,1,opt,name=post_id,json=postId,proto3" json:"post_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteRequest) Reset() {
+	*x = DeleteRequest{}
+	mi := &file_ai_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteRequest) ProtoMessage() {}
+
+func (x *DeleteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteRequest.ProtoReflect.Descriptor instead.
+func (*DeleteRequest) Descriptor() ([]byte, []int) {
+	return file_ai_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *DeleteRequest) GetPostId() string {
+	if x != nil {
+		return x.PostId
+	}
+	return ""
+}
+
+type DeleteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteResponse) Reset() {
+	*x = DeleteResponse{}
+	mi := &file_ai_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteResponse) ProtoMessage() {}
+
+func (x *DeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteResponse.ProtoReflect.Descriptor instead.
+func (*DeleteResponse) Descriptor() ([]byte, []int) {
+	return file_ai_service_proto_rawDescGZIP(), []int{9}
+}
+
+type SearchRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Query         string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	Offset        uint32                 `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	Limit         uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchRequest) Reset() {
+	*x = SearchRequest{}
+	mi := &file_ai_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchRequest) ProtoMessage() {}
+
+func (x *SearchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
+func (*SearchRequest) Descriptor() ([]byte, []int) {
+	return file_ai_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SearchRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchRequest) GetOffset() uint32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *SearchRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type SearchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PostIds       []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchResponse) Reset() {
+	*x = SearchResponse{}
+	mi := &file_ai_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchResponse) ProtoMessage() {}
+
+func (x *SearchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchResponse.ProtoReflect.Descriptor instead.
+func (*SearchResponse) Descriptor() ([]byte, []int) {
+	return file_ai_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SearchResponse) GetPostIds() []string {
+	if x != nil {
+		return x.PostIds
+	}
+	return nil
+}
+
+func (x *SearchResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
 var File_ai_service_proto protoreflect.FileDescriptor
 
 const file_ai_service_proto_rawDesc = "" +
@@ -337,11 +649,34 @@ const file_ai_service_proto_rawDesc = "" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x12\x18\n" +
 	"\asummary\x18\x03 \x01(\tR\asummary\x12\x12\n" +
-	"\x04tags\x18\x04 \x03(\tR\x04tags2\xc4\x01\n" +
+	"\x04tags\x18\x04 \x03(\tR\x04tags\"\x9e\x01\n" +
+	"\fIndexRequest\x12\x17\n" +
+	"\apost_id\x18\x01 \x01(\tR\x06postId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\x03 \x01(\tR\x04body\x12\x18\n" +
+	"\asummary\x18\x04 \x01(\tR\asummary\x12\x12\n" +
+	"\x04tags\x18\x05 \x03(\tR\x04tags\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"\x0f\n" +
+	"\rIndexResponse\"(\n" +
+	"\rDeleteRequest\x12\x17\n" +
+	"\apost_id\x18\x01 \x01(\tR\x06postId\"\x10\n" +
+	"\x0eDeleteResponse\"S\n" +
+	"\rSearchRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12\x16\n" +
+	"\x06offset\x18\x02 \x01(\rR\x06offset\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\"A\n" +
+	"\x0eSearchResponse\x12\x19\n" +
+	"\bpost_ids\x18\x01 \x03(\tR\apostIds\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total2\xe1\x02\n" +
 	"\tAIService\x12:\n" +
 	"\x0fGenerateSummary\x12\x12.ai.ContentRequest\x1a\x13.ai.ContentResponse\x124\n" +
 	"\fGenerateTags\x12\x12.ai.ContextRequest\x1a\x10.ai.TagsResponse\x12E\n" +
-	"\fGeneratePost\x12\x19.ai.PostGenerationRequest\x1a\x1a.ai.PostGenerationResponseB<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
+	"\fGeneratePost\x12\x19.ai.PostGenerationRequest\x1a\x1a.ai.PostGenerationResponse\x120\n" +
+	"\tIndexPost\x12\x10.ai.IndexRequest\x1a\x11.ai.IndexResponse\x123\n" +
+	"\n" +
+	"DeletePost\x12\x11.ai.DeleteRequest\x1a\x12.ai.DeleteResponse\x124\n" +
+	"\vSearchPosts\x12\x11.ai.SearchRequest\x1a\x12.ai.SearchResponseB<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
 
 var (
 	file_ai_service_proto_rawDescOnce sync.Once
@@ -355,7 +690,7 @@ func file_ai_service_proto_rawDescGZIP() []byte {
 	return file_ai_service_proto_rawDescData
 }
 
-var file_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_ai_service_proto_goTypes = []any{
 	(*ContentRequest)(nil),         // 0: ai.ContentRequest
 	(*ContentResponse)(nil),        // 1: ai.ContentResponse
@@ -363,19 +698,31 @@ var file_ai_service_proto_goTypes = []any{
 	(*TagsResponse)(nil),           // 3: ai.TagsResponse
 	(*PostGenerationRequest)(nil),  // 4: ai.PostGenerationRequest
 	(*PostGenerationResponse)(nil), // 5: ai.PostGenerationResponse
+	(*IndexRequest)(nil),           // 6: ai.IndexRequest
+	(*IndexResponse)(nil),          // 7: ai.IndexResponse
+	(*DeleteRequest)(nil),          // 8: ai.DeleteRequest
+	(*DeleteResponse)(nil),         // 9: ai.DeleteResponse
+	(*SearchRequest)(nil),          // 10: ai.SearchRequest
+	(*SearchResponse)(nil),         // 11: ai.SearchResponse
 }
 var file_ai_service_proto_depIdxs = []int32{
-	0, // 0: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
-	2, // 1: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
-	4, // 2: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
-	1, // 3: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
-	3, // 4: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
-	5, // 5: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
+	2,  // 1: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
+	4,  // 2: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
+	6,  // 3: ai.AIService.IndexPost:input_type -> ai.IndexRequest
+	8,  // 4: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
+	10, // 5: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
+	1,  // 6: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
+	3,  // 7: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
+	5,  // 8: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
+	7,  // 9: ai.AIService.IndexPost:output_type -> ai.IndexResponse
+	9,  // 10: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
+	11, // 11: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
+	6,  // [6:12] is the sub-list for method output_type
+	0,  // [0:6] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_ai_service_proto_init() }
@@ -389,7 +736,7 @@ func file_ai_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ai_service_proto_rawDesc), len(file_ai_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

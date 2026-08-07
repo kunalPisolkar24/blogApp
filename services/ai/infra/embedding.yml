@@ -1,0 +1,47 @@
+services:
+  embedding-service:
+    image: ollama/ollama:latest
+    container_name: ${EMBEDDING_CONTAINER:-local-embedding-service}
+    restart: unless-stopped
+    ports:
+      - "${EMBEDDING_EXT_PORT:-11434}:${EMBEDDING_INT_PORT:-11434}"
+    volumes:
+      - embedding_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # One-shot init: downloads the embedding model into the shared volume
+  # so the embedding service starts with the model already available.
+  embedding-model-init:
+    image: ollama/ollama:latest
+    container_name: ${EMBEDDING_MODEL_INIT_CONTAINER:-local-embedding-model-init}
+    restart: "no"
+    depends_on:
+      embedding-service:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command: "ollama pull ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}"
+    volumes:
+      - embedding_data:/root/.ollama
+    networks:
+      - app-network
+
+volumes:
+  embedding_data:
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK:-topos_prod_network}

@@ -1,9 +1,12 @@
 import grpc
 import pytest
+from qdrant_client import AsyncQdrantClient
 
 from src.api.server import create_server
 from src.api.service import AIService
+from src.embeddings import FakeEmbeddingClient
 from src.generated import ai_service_pb2_grpc as ai_stubs
+from src.vector import SearchIndex
 from tests.fake_llm import FakeLLM
 
 
@@ -13,9 +16,19 @@ def fake_llm() -> FakeLLM:
 
 
 @pytest.fixture
-async def running_server(unused_tcp_port: int, fake_llm: FakeLLM):
+async def search_index() -> SearchIndex:
+    index = SearchIndex(FakeEmbeddingClient(), AsyncQdrantClient(location=":memory:"))
+    await index.ensure_collection()
+    yield index
+    await index.close()
+
+
+@pytest.fixture
+async def running_server(
+    unused_tcp_port: int, fake_llm: FakeLLM, search_index: SearchIndex
+):
     server, health_servicer = await create_server(
-        AIService(fake_llm), str(unused_tcp_port)
+        AIService(fake_llm, search_index), str(unused_tcp_port)
     )
     await server.start()
     channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
@@ -31,3 +44,23 @@ async def running_server(unused_tcp_port: int, fake_llm: FakeLLM):
 def stub(running_server) -> ai_stubs.AIServiceStub:
     channel, _ = running_server
     return ai_stubs.AIServiceStub(channel)
+
+
+@pytest.fixture
+async def running_server_factory(fake_llm: FakeLLM, unused_tcp_port: int):
+    """Builds a running gRPC server backed by a custom embedding provider."""
+
+    async def make(embeddings) -> tuple[grpc.aio.Channel, SearchIndex, object]:
+        index = SearchIndex(embeddings, AsyncQdrantClient(location=":memory:"))
+        await index.ensure_collection()
+        server, _ = await create_server(
+            AIService(fake_llm, index), str(unused_tcp_port)
+        )
+        await server.start()
+        channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
+        await channel.channel_ready()
+        # The server is returned alongside the channel so it stays alive
+        # for the duration of the test.
+        return channel, index, server
+
+    return make

@@ -29,6 +29,18 @@ func (s *stubAI) GeneratePost(ctx context.Context, prompt string) (*domain.Gener
 	return nil, s.err
 }
 
+func (s *stubAI) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {
+	return s.err
+}
+
+func (s *stubAI) DeletePost(ctx context.Context, postID string) error {
+	return s.err
+}
+
+func (s *stubAI) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+	return nil, s.err
+}
+
 func (s *stubAI) Close() error {
 	s.closed = true
 	return nil
@@ -129,4 +141,40 @@ func TestResilientClientClose(t *testing.T) {
 
 	require.NoError(t, client.Close())
 	assert.True(t, primary.closed)
+}
+
+func TestResilientClientIndexPostPropagatesError(t *testing.T) {
+	primary := &stubAI{err: errors.New("unavailable")}
+	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+
+	err := client.IndexPost(context.Background(), "p1", "t", "b", "", nil, time.Now())
+	require.Error(t, err)
+}
+
+func TestResilientClientIndexPostOpenBreaker(t *testing.T) {
+	client := &resilientClient{primary: &stubAI{}, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	for i := 0; i < failureThreshold; i++ {
+		client.breaker.recordFailure()
+	}
+
+	err := client.IndexPost(context.Background(), "p1", "t", "b", "", nil, time.Now())
+	require.ErrorIs(t, err, errCircuitOpen)
+}
+
+func TestResilientClientDeletePostPropagatesError(t *testing.T) {
+	primary := &stubAI{err: errors.New("unavailable")}
+	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+
+	err := client.DeletePost(context.Background(), "p1")
+	require.Error(t, err)
+}
+
+func TestResilientClientDeletePostOpenBreaker(t *testing.T) {
+	client := &resilientClient{primary: &stubAI{}, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	for i := 0; i < failureThreshold; i++ {
+		client.breaker.recordFailure()
+	}
+
+	err := client.DeletePost(context.Background(), "p1")
+	require.ErrorIs(t, err, errCircuitOpen)
 }

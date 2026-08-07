@@ -76,6 +76,28 @@ func TestQueryResolverPostsByTag(t *testing.T) {
 	assert.Equal(t, "p_1", posts.Posts[0].ID)
 }
 
+func TestQueryResolverSearchPosts(t *testing.T) {
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, "go", query)
+		assert.Equal(t, 0, offset)
+		assert.Equal(t, 10, limit)
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 1}, nil
+	}}
+	postRepo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_1", Title: "Hello"}}, nil
+	}}
+	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil))
+
+	result, err := resolver.Query().SearchPosts(context.Background(), "go", intPtr(1), intPtr(10))
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Total)
+	require.Len(t, result.Hits, 1)
+	assert.Equal(t, "p_1", result.Hits[0].ID)
+	assert.Equal(t, "Hello", result.Hits[0].Title)
+}
+
 func TestQueryResolverTags(t *testing.T) {
 	tagRepo := &testutil.MockTagRepository{SearchFn: func(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
 		assert.Equal(t, "go", query)

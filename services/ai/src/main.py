@@ -9,9 +9,11 @@ from prometheus_client import start_http_server
 from src.api.server import create_server
 from src.api.service import AIService
 from src.config import settings
+from src.embeddings import FakeEmbeddingClient, OllamaEmbeddingClient
 from src.llm import FakeLLMClient, LLMClient
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
+from src.vector import SearchIndex
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,24 @@ def handle_graceful_shutdown(
         loop.add_signal_handler(sig, shutdown)
 
 
+async def _ensure_search_ready(search: SearchIndex) -> None:
+    """Wait for Qdrant with a short backoff instead of crashing on a
+    transient startup blip (e.g. the store still restarting)."""
+    for attempt in range(1, settings.QDRANT_STARTUP_RETRIES + 1):
+        try:
+            await search.ensure_collection()
+            return
+        except Exception:
+            if attempt == settings.QDRANT_STARTUP_RETRIES:
+                raise
+            logger.warning(
+                "qdrant not ready, retrying (%d/%d)",
+                attempt,
+                settings.QDRANT_STARTUP_RETRIES,
+            )
+            await asyncio.sleep(5)
+
+
 async def serve() -> None:
     setup_logging()
     setup_tracing()
@@ -42,13 +62,23 @@ async def serve() -> None:
     logger.info("prometheus metrics exposed on port %s", settings.METRICS_PORT)
 
     llm = FakeLLMClient() if settings.LLM_MODE == "fake" else LLMClient()
-    server, health_servicer = await create_server(AIService(llm))
+    embeddings = (
+        FakeEmbeddingClient()
+        if settings.EMBEDDING_MODE == "fake"
+        else OllamaEmbeddingClient()
+    )
+    search = SearchIndex(embeddings)
+    await _ensure_search_ready(search)
+
+    server, health_servicer = await create_server(AIService(llm, search))
     handle_graceful_shutdown(server, health_servicer)
     try:
         await server.start()
         await server.wait_for_termination()
     finally:
         await llm.close()
+        await search.close()
+        await embeddings.close()
         await server.stop(grace=None)
 
 

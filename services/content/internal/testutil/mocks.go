@@ -4,6 +4,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 )
@@ -15,6 +16,7 @@ type MockPostRepository struct {
 	DeleteFn        func(ctx context.Context, id string) error
 	FindAllFn       func(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error)
 	FindByIDFn      func(ctx context.Context, id string) (*domain.Post, error)
+	FindByIDsFn     func(ctx context.Context, ids []string) ([]*domain.Post, error)
 	FindByAuthorFn  func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error)
 	FindByTagFn     func(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error)
 
@@ -65,6 +67,17 @@ func (m *MockPostRepository) FindByID(ctx context.Context, id string) (*domain.P
 	return &domain.Post{ID: id}, nil
 }
 
+func (m *MockPostRepository) FindByIDs(ctx context.Context, ids []string) ([]*domain.Post, error) {
+	if m.FindByIDsFn != nil {
+		return m.FindByIDsFn(ctx, ids)
+	}
+	posts := make([]*domain.Post, 0, len(ids))
+	for _, id := range ids {
+		posts = append(posts, &domain.Post{ID: id})
+	}
+	return posts, nil
+}
+
 func (m *MockPostRepository) FindByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
 	if m.FindByAuthorFn != nil {
 		return m.FindByAuthorFn(ctx, authorID, page, limit)
@@ -110,6 +123,9 @@ type MockAIService struct {
 	GenerateSummaryFn func(ctx context.Context, text string) (string, error)
 	GenerateTagsFn    func(ctx context.Context, title, body string) ([]string, error)
 	GeneratePostFn    func(ctx context.Context, prompt string) (*domain.GeneratedPost, error)
+	IndexPostFn       func(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
+	DeletePostFn      func(ctx context.Context, postID string) error
+	SearchPostsFn     func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
 }
 
 func (m *MockAIService) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -131,6 +147,27 @@ func (m *MockAIService) GeneratePost(ctx context.Context, prompt string) (*domai
 		return m.GeneratePostFn(ctx, prompt)
 	}
 	return &domain.GeneratedPost{}, nil
+}
+
+func (m *MockAIService) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {
+	if m.IndexPostFn != nil {
+		return m.IndexPostFn(ctx, postID, title, body, summary, tags, createdAt)
+	}
+	return nil
+}
+
+func (m *MockAIService) DeletePost(ctx context.Context, postID string) error {
+	if m.DeletePostFn != nil {
+		return m.DeletePostFn(ctx, postID)
+	}
+	return nil
+}
+
+func (m *MockAIService) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+	if m.SearchPostsFn != nil {
+		return m.SearchPostsFn(ctx, query, offset, limit)
+	}
+	return &domain.SearchResult{}, nil
 }
 
 func (m *MockAIService) Close() error { return nil }

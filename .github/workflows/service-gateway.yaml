@@ -10,7 +10,6 @@ on:
       - "gateway/**"
       - "services/user/schema.graphql"
       - "services/content/graph/schema.graphqls"
-      - "services/search/schema.graphql"
       - ".github/workflows/service-gateway.yaml"
   pull_request:
     branches:
@@ -20,7 +19,6 @@ on:
       - "gateway/**"
       - "services/user/schema.graphql"
       - "services/content/graph/schema.graphqls"
-      - "services/search/schema.graphql"
       - ".github/workflows/service-gateway.yaml"
 
 env:
@@ -51,7 +49,6 @@ jobs:
           mkdir -p subgraphs
           cp services/user/schema.graphql subgraphs/user.graphql
           cp services/content/graph/schema.graphqls subgraphs/content.graphql
-          cp services/search/schema.graphql subgraphs/search.graphql
           cp gateway/supergraph.yaml supergraph.yaml
           rover supergraph compose --config ./supergraph.yaml > /tmp/supergraph.graphql
           test -s /tmp/supergraph.graphql

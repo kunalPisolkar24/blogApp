@@ -53,6 +53,11 @@ func (Post) IsEntity() {}
 type Query struct {
 }
 
+type SearchResult struct {
+	Hits  []*Post `json:"hits"`
+	Total int     `json:"total"`
+}
+
 type Tag struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`

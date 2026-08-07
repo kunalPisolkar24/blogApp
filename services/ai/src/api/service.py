@@ -19,10 +19,12 @@ from src.domain.prompts import (
 )
 from src.domain.sanitize import sanitize_post_html
 from src.domain.text import clean_html
+from src.embeddings import EmbeddingError
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMError, LLMProvider
 from src.observability import metrics
 from src.observability.tracing import get_span_ids
+from src.vector import SearchIndex
 
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("access")
@@ -35,6 +37,13 @@ class TooLargeError(Exception):
 
     def __init__(self, limit: int) -> None:
         self.limit = limit
+
+
+class ValidationError(Exception):
+    """Raised when a request is malformed."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
 
 
 def _extract_json(raw: str) -> str:
@@ -79,11 +88,20 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
                     grpc.StatusCode.INVALID_ARGUMENT,
                     f"Input exceeds the maximum length of {exc.limit} characters",
                 )
+            except ValidationError as exc:
+                status = "INVALID_ARGUMENT"
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, exc.message)
             except LLMError:
                 status = "UNAVAILABLE"
                 logger.exception("LLM provider failed")
                 await context.abort(
                     grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable"
+                )
+            except EmbeddingError:
+                status = "UNAVAILABLE"
+                logger.exception("embedding provider failed")
+                await context.abort(
+                    grpc.StatusCode.UNAVAILABLE, "Embedding provider unavailable"
                 )
             except asyncio.CancelledError:
                 status = "CANCELLED"
@@ -102,8 +120,9 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
 
 
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
-    def __init__(self, llm: LLMProvider) -> None:
+    def __init__(self, llm: LLMProvider, search: SearchIndex) -> None:
         self._llm = llm
+        self._search = search
 
     @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
@@ -157,4 +176,57 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             body=post.body,
             summary=post.summary,
             tags=post.tags,
+        )
+
+    @rpc_metrics("/ai.AIService/IndexPost")
+    async def IndexPost(
+        self, request: ai_service_pb2.IndexRequest, context: grpc.aio.ServicerContext
+    ) -> ai_service_pb2.IndexResponse:
+        if not request.post_id:
+            raise ValidationError("post_id must be a non-empty string")
+        if len(request.body) > settings.MAX_INPUT_CHARS:
+            raise TooLargeError(settings.MAX_INPUT_CHARS)
+
+        await self._search.upsert(
+            post_id=request.post_id,
+            title=request.title,
+            body=request.body,
+            summary=request.summary,
+            tags=list(request.tags),
+            created_at=request.created_at,
+        )
+        return ai_service_pb2.IndexResponse()
+
+    @rpc_metrics("/ai.AIService/DeletePost")
+    async def DeletePost(
+        self, request: ai_service_pb2.DeleteRequest, context: grpc.aio.ServicerContext
+    ) -> ai_service_pb2.DeleteResponse:
+        if not request.post_id:
+            raise ValidationError("post_id must be a non-empty string")
+
+        await self._search.delete(request.post_id)
+        return ai_service_pb2.DeleteResponse()
+
+    @rpc_metrics("/ai.AIService/SearchPosts")
+    async def SearchPosts(
+        self, request: ai_service_pb2.SearchRequest, context: grpc.aio.ServicerContext
+    ) -> ai_service_pb2.SearchResponse:
+        query = request.query.strip()
+        if not query:
+            raise ValidationError("query must be a non-empty string")
+        if len(query) > settings.SEARCH_MAX_QUERY_CHARS:
+            raise ValidationError(
+                f"query length must be <= {settings.SEARCH_MAX_QUERY_CHARS} characters"
+            )
+        limit = request.limit or 10
+        if limit > settings.SEARCH_MAX_LIMIT:
+            raise ValidationError(f"limit must be <= {settings.SEARCH_MAX_LIMIT}")
+        if request.offset + limit > settings.SEARCH_MAX_RESULT_WINDOW:
+            raise ValidationError(
+                f"pagination window exceeds {settings.SEARCH_MAX_RESULT_WINDOW}"
+            )
+
+        result = await self._search.search(query, request.offset, limit)
+        return ai_service_pb2.SearchResponse(
+            post_ids=result.post_ids, total=result.total
         )

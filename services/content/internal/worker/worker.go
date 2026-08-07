@@ -23,11 +23,31 @@ import (
 )
 
 const (
-	maxRetries = 3
-	retryBase  = 2 * time.Second
+	// maxRetries and retryBase give the workers roughly a minute of
+	// backoff (5s, 10s, ... 25s) to ride out short AI service blips
+	// before a message is dead lettered.
+	maxRetries = 5
+	retryBase  = 5 * time.Second
 
 	lagReportInterval = 15 * time.Second
 )
+
+// permanentError marks a message that can never succeed, no matter how
+// many times it is retried (malformed payloads, missing fields).
+type permanentError struct {
+	error
+}
+
+// permanentf wraps err with the permanent marker.
+func permanentf(format string, args ...any) error {
+	return permanentError{fmt.Errorf(format, args...)}
+}
+
+// isPermanent reports whether the error marks a message as unprocessable.
+func isPermanent(err error) bool {
+	var permanent permanentError
+	return errors.As(err, &permanent)
+}
 
 var (
 	htmlTagRegex = regexp.MustCompile(`<[^>]+>`)
@@ -45,6 +65,10 @@ type Worker struct {
 	aiService domain.AIService
 	producer  domain.DLQPublisher
 	dlqTopic  string
+
+	// retry config; overridable by tests to keep them fast
+	maxRetries int
+	retryBase  time.Duration
 
 	running atomic.Bool
 	done    chan struct{}
@@ -67,11 +91,13 @@ func NewWorker(brokers []string, groupID string, topics []string, dlqTopic strin
 	}
 
 	w := &Worker{
-		processor: processor,
-		aiService: aiService,
-		producer:  producer,
-		dlqTopic:  dlqTopic,
-		done:      make(chan struct{}),
+		processor:  processor,
+		aiService:  aiService,
+		producer:   producer,
+		dlqTopic:   dlqTopic,
+		maxRetries: maxRetries,
+		retryBase:  retryBase,
+		done:       make(chan struct{}),
 	}
 
 	for range concurrency {
@@ -139,7 +165,7 @@ func (w *Worker) consume(ctx context.Context, reader *kafka.Reader) {
 		}
 
 		processErr := w.processWithRetries(ctx, reader, m)
-		if processErr != nil {
+		if processErr != nil && ctx.Err() == nil {
 			w.sendToDLQ(ctx, reader, m, processErr)
 		}
 
@@ -151,16 +177,19 @@ func (w *Worker) consume(ctx context.Context, reader *kafka.Reader) {
 
 func (w *Worker) processWithRetries(ctx context.Context, reader *kafka.Reader, m kafka.Message) error {
 	var processErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
+	for attempt := 1; attempt <= w.maxRetries; attempt++ {
 		processErr = w.processMessage(ctx, m)
 		if processErr == nil {
 			return nil
+		}
+		if isPermanent(processErr) {
+			return processErr
 		}
 
 		slog.Warn("message processing failed, retrying",
 			"error", processErr,
 			"attempt", attempt,
-			"maxRetries", maxRetries,
+			"maxRetries", w.maxRetries,
 			"offset", m.Offset,
 			"partition", m.Partition,
 		)
@@ -169,7 +198,7 @@ func (w *Worker) processWithRetries(ctx context.Context, reader *kafka.Reader, m
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(attempt) * retryBase):
+		case <-time.After(time.Duration(attempt) * w.retryBase):
 		}
 	}
 	return processErr
@@ -201,10 +230,10 @@ func (w *Worker) processMessage(ctx context.Context, m kafka.Message) error {
 
 	var event domain.PostEventPayload
 	if err := json.Unmarshal(m.Value, &event); err != nil {
-		return fmt.Errorf("unmarshal event: %w", err)
+		return permanentf("unmarshal event: %w", err)
 	}
 	if strings.TrimSpace(event.PostID) == "" {
-		return errors.New("event is missing postId")
+		return permanentf("event is missing postId")
 	}
 
 	ctx, span := workerTracer.Start(ctx, "process message",

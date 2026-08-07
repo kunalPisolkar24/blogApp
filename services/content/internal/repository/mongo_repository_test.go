@@ -101,6 +101,34 @@ func TestPostRepositoryCRUD(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrNotFound)
 }
 
+func TestPostRepositoryFindByIDs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	repo := NewMongoPostRepository(startMongo(t, ctx))
+
+	first, err := repo.Create(ctx, newTestPost())
+	require.NoError(t, err)
+	second, err := repo.Create(ctx, &domain.Post{
+		Title:    "Second",
+		Body:     "Another body",
+		Slug:     "second",
+		AuthorID: "u_2",
+	})
+	require.NoError(t, err)
+
+	posts, err := repo.FindByIDs(ctx, []string{second.ID, "not-a-valid-objectid", first.ID, "nonexistent"})
+	require.NoError(t, err)
+	require.Len(t, posts, 2)
+
+	ids := map[string]bool{}
+	for _, p := range posts {
+		ids[p.ID] = true
+	}
+	assert.True(t, ids[first.ID], "existing posts are returned")
+	assert.True(t, ids[second.ID], "existing posts are returned")
+}
+
 func TestPostRepositoryDuplicateSlug(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

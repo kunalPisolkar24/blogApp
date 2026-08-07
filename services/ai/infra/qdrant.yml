@@ -1,0 +1,31 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    container_name: ${QDRANT_CONTAINER:-local-qdrant}
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_EXT_PORT:-6333}:${QDRANT_INT_PORT:-6333}"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/${QDRANT_INT_PORT:-6333}'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+volumes:
+  qdrant_data:
+
+networks:
+  app-network:
+    external: true
+    name: ${APP_NETWORK:-topos_prod_network}

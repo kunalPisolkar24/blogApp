@@ -3,10 +3,30 @@ name: topos-ai-loadtest
 x-ai-service-env: &ai-service-env
   PORT: 50051
   LLM_MODE: ${LLM_MODE:-fake}
+  EMBEDDING_MODE: ${EMBEDDING_MODE:-fake}
+  QDRANT_URL: http://qdrant:6333
   LOG_LEVEL: ${LOG_LEVEL:-WARNING}
   METRICS_PORT: 12666
 
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    container_name: loadtest-ai-qdrant
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${QDRANT_MEM:-256M}
+        reservations:
+          memory: 64M
+
   ai-service:
     build:
       context: ..
@@ -14,6 +34,9 @@ services:
     container_name: loadtest-ai-service
     restart: unless-stopped
     environment: *ai-service-env
+    depends_on:
+      qdrant:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "/healthcheck.py"]
       interval: 5s

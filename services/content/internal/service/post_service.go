@@ -69,7 +69,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		var err error
 		created, err = s.postRepo.Create(ctx, post)
 		if err == nil {
-			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
+			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern)
 			metrics.PostsCreated.Inc()
 			if s.eventPublisher != nil {
 				s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
@@ -203,7 +203,7 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tag string, page, limit
 // invalidatePost drops the single-post entry and every list derived from it.
 func (s *PostService) invalidatePost(ctx context.Context, id string) {
 	cache.Del(s.cache, ctx, cache.KeyPost(id))
-	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern)
+	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern)
 }
 
 // normalizePagination mirrors the repository's defaulting so cache keys
@@ -219,6 +219,41 @@ func normalizePagination(page, limit int) (int, int) {
 		limit = 100
 	}
 	return page, limit
+}
+
+// SearchPosts runs a hybrid search through the AI service and hydrates
+// the matching posts from the repository, keeping the relevance order.
+// Results are cached briefly; writes invalidate the whole search cache.
+func (s *PostService) SearchPosts(ctx context.Context, query string, page, limit int) (*domain.SearchPostsResult, error) {
+	page, limit = normalizePagination(page, limit)
+	return withCache(s.cache, ctx, cache.KeySearch(query, page, limit), cache.SearchTTL, func() (*domain.SearchPostsResult, error) {
+		search, err := s.aiService.SearchPosts(ctx, query, (page-1)*limit, limit)
+		if err != nil {
+			return nil, err
+		}
+
+		result := &domain.SearchPostsResult{Total: search.Total}
+		if len(search.PostIDs) == 0 {
+			result.Hits = []*domain.Post{}
+			return result, nil
+		}
+
+		posts, err := s.postRepo.FindByIDs(ctx, search.PostIDs)
+		if err != nil {
+			return nil, err
+		}
+
+		byID := make(map[string]*domain.Post, len(posts))
+		for _, post := range posts {
+			byID[post.ID] = post
+		}
+		for _, id := range search.PostIDs {
+			if post, ok := byID[id]; ok {
+				result.Hits = append(result.Hits, post)
+			}
+		}
+		return result, nil
+	})
 }
 
 func (s *PostService) GenerateTags(ctx context.Context, title, body string) ([]string, error) {

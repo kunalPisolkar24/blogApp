@@ -10,7 +10,6 @@ on:
       - "frontend/**"
       - "services/user/schema.graphql"
       - "services/content/graph/schema.graphqls"
-      - "services/search/schema.graphql"
       - ".github/workflows/service-frontend.yaml"
   pull_request:
     branches:
@@ -20,7 +19,6 @@ on:
       - "frontend/**"
       - "services/user/schema.graphql"
       - "services/content/graph/schema.graphqls"
-      - "services/search/schema.graphql"
       - ".github/workflows/service-frontend.yaml"
 
 env:

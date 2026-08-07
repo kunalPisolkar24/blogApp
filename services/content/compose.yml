@@ -86,6 +86,33 @@ services:
     networks:
       - app-network
 
+  content-search-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${CONTENT_SEARCH_WORKER_CONTAINER:-prod-content-search-worker}
+    restart: unless-stopped
+    command: ["./content-search-worker"]
+    ports:
+      - "${CONTENT_SEARCH_WORKER_EXT_PORT:-4004}:${CONTENT_SEARCH_WORKER_INT_PORT:-4004}"
+    environment:
+      <<: *content-env
+      PORT: ${CONTENT_SEARCH_WORKER_INT_PORT:-4004}
+      KAFKA_SEARCH_CONSUMER_GROUP_ID: ${KAFKA_SEARCH_CONSUMER_GROUP_ID:-content-search-worker-group}
+      WORKER_CONCURRENCY: ${SEARCH_WORKER_CONCURRENCY:-3}
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SEARCH_WORKER_INT_PORT:-4004}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
+
 networks:
   app-network:
     external: true

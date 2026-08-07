@@ -22,6 +22,9 @@ const (
 	AIService_GenerateSummary_FullMethodName = "/ai.AIService/GenerateSummary"
 	AIService_GenerateTags_FullMethodName    = "/ai.AIService/GenerateTags"
 	AIService_GeneratePost_FullMethodName    = "/ai.AIService/GeneratePost"
+	AIService_IndexPost_FullMethodName       = "/ai.AIService/IndexPost"
+	AIService_DeletePost_FullMethodName      = "/ai.AIService/DeletePost"
+	AIService_SearchPosts_FullMethodName     = "/ai.AIService/SearchPosts"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -31,6 +34,9 @@ type AIServiceClient interface {
 	GenerateSummary(ctx context.Context, in *ContentRequest, opts ...grpc.CallOption) (*ContentResponse, error)
 	GenerateTags(ctx context.Context, in *ContextRequest, opts ...grpc.CallOption) (*TagsResponse, error)
 	GeneratePost(ctx context.Context, in *PostGenerationRequest, opts ...grpc.CallOption) (*PostGenerationResponse, error)
+	IndexPost(ctx context.Context, in *IndexRequest, opts ...grpc.CallOption) (*IndexResponse, error)
+	DeletePost(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
+	SearchPosts(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 }
 
 type aIServiceClient struct {
@@ -71,6 +77,36 @@ func (c *aIServiceClient) GeneratePost(ctx context.Context, in *PostGenerationRe
 	return out, nil
 }
 
+func (c *aIServiceClient) IndexPost(ctx context.Context, in *IndexRequest, opts ...grpc.CallOption) (*IndexResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IndexResponse)
+	err := c.cc.Invoke(ctx, AIService_IndexPost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) DeletePost(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteResponse)
+	err := c.cc.Invoke(ctx, AIService_DeletePost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) SearchPosts(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchResponse)
+	err := c.cc.Invoke(ctx, AIService_SearchPosts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -78,6 +114,9 @@ type AIServiceServer interface {
 	GenerateSummary(context.Context, *ContentRequest) (*ContentResponse, error)
 	GenerateTags(context.Context, *ContextRequest) (*TagsResponse, error)
 	GeneratePost(context.Context, *PostGenerationRequest) (*PostGenerationResponse, error)
+	IndexPost(context.Context, *IndexRequest) (*IndexResponse, error)
+	DeletePost(context.Context, *DeleteRequest) (*DeleteResponse, error)
+	SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -96,6 +135,15 @@ func (UnimplementedAIServiceServer) GenerateTags(context.Context, *ContextReques
 }
 func (UnimplementedAIServiceServer) GeneratePost(context.Context, *PostGenerationRequest) (*PostGenerationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GeneratePost not implemented")
+}
+func (UnimplementedAIServiceServer) IndexPost(context.Context, *IndexRequest) (*IndexResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IndexPost not implemented")
+}
+func (UnimplementedAIServiceServer) DeletePost(context.Context, *DeleteRequest) (*DeleteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePost not implemented")
+}
+func (UnimplementedAIServiceServer) SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchPosts not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -172,6 +220,60 @@ func _AIService_GeneratePost_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_IndexPost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IndexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).IndexPost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_IndexPost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).IndexPost(ctx, req.(*IndexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_DeletePost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).DeletePost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_DeletePost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).DeletePost(ctx, req.(*DeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_SearchPosts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).SearchPosts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_SearchPosts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).SearchPosts(ctx, req.(*SearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +292,18 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GeneratePost",
 			Handler:    _AIService_GeneratePost_Handler,
+		},
+		{
+			MethodName: "IndexPost",
+			Handler:    _AIService_IndexPost_Handler,
+		},
+		{
+			MethodName: "DeletePost",
+			Handler:    _AIService_DeletePost_Handler,
+		},
+		{
+			MethodName: "SearchPosts",
+			Handler:    _AIService_SearchPosts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

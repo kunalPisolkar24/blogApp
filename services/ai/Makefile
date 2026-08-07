@@ -74,11 +74,11 @@ LOG_LEVEL ?= WARNING
 SVC_MEM   ?= 512M
 K6_MEM    ?= 384M
 
-LT_VARS := SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
+LT_VARS = SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
 	WEIGHTS=$(WEIGHTS) LLM_MODE=$(LLM_MODE) LOG_LEVEL=$(LOG_LEVEL) \
 	SVC_MEM=$(SVC_MEM) K6_MEM=$(K6_MEM)
 
-VALID_SCRIPTS := mixed generate-summary generate-tags generate-post
+VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search
 
 load-test-build:
 	$(LT_VARS) $(COMPOSE_LT) build
@@ -101,6 +101,9 @@ load-test-tags: load-test
 
 load-test-post: SCRIPT = generate-post
 load-test-post: load-test
+
+load-test-search: SCRIPT = generate-search
+load-test-search: load-test
 
 load-test-stop:
 	$(LT_VARS) $(COMPOSE_LT) down -v --remove-orphans

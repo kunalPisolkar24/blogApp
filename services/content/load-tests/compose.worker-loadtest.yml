@@ -107,6 +107,49 @@ services:
     networks:
       - loadtest-net
 
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    container_name: loadtest-worker-qdrant
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${QDRANT_MEM:-256M}
+        reservations:
+          memory: 64M
+
+  ai-service:
+    build:
+      context: ../../ai
+      dockerfile: Dockerfile
+    container_name: loadtest-worker-ai
+    restart: unless-stopped
+    environment:
+      PORT: 50051
+      LLM_MODE: fake
+      EMBEDDING_MODE: fake
+      QDRANT_URL: http://qdrant:6333
+      LOG_LEVEL: WARNING
+      METRICS_PORT: 12666
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SVC_MEM:-512M}
+        reservations:
+          memory: 128M
+
   content-worker:
     build:
       context: ..
@@ -128,6 +171,45 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_WORKER_INT_PORT:-4003}/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SVC_MEM:-512M}
+        reservations:
+          memory: 128M
+
+  content-search-worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: loadtest-content-search-worker
+    restart: unless-stopped
+    command: ["./content-search-worker"]
+    environment:
+      PORT: 4004
+      AI_SERVICE_URL: ai-service:50051
+      KAFKA_BROKERS: kafka-1:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-posts}
+      KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-posts-dlq}
+      KAFKA_SEARCH_CONSUMER_GROUP_ID: content-loadtest-search-worker-group
+      WORKER_CONCURRENCY: ${SEARCH_WORKER_CONCURRENCY:-3}
+    expose:
+      - "4004"
+    depends_on:
+      ai-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4004/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -173,10 +255,13 @@ services:
     command: ["run", "--summary-trend-stats=avg,med,p(90),p(95),p(99),max", "/load-tests/k6/worker.js"]
     environment:
       TARGET: http://content-worker:${CONTENT_WORKER_INT_PORT:-4003}/metrics
+      TARGET_SEARCH: http://content-search-worker:4004/metrics
       VUS: ${VUS:-5}
       DURATION: ${DURATION:-30s}
     depends_on:
       content-worker:
+        condition: service_healthy
+      content-search-worker:
         condition: service_healthy
     volumes:
       - ./k6:/load-tests/k6:ro

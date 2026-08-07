@@ -7,7 +7,18 @@ x-ai-service-env: &ai-service-env
   LLM_MODEL: ${AI_LIGHTNING_MODEL:-lightning-ai/gpt-oss-20b}
   LLM_MODE: ${AI_LLM_MODE:-fake}
   LLM_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
+  QDRANT_URL: ${AI_QDRANT_URL:-http://qdrant:6333}
+  QDRANT_API_KEY: ${AI_QDRANT_API_KEY:-}
+  QDRANT_VECTOR_SIZE: ${AI_QDRANT_VECTOR_SIZE:-1024}
+  SEARCH_DENSE_SCORE_THRESHOLD: ${AI_SEARCH_DENSE_SCORE_THRESHOLD:-0.3}
+  EMBEDDING_MODE: ${AI_EMBEDDING_MODE:-ollama}
+  EMBEDDING_URL: ${AI_EMBEDDING_URL:-http://embedding-service:11434}
+  EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${AI_OTLP_ENDPOINT:-}
+
+include:
+  - path: infra/qdrant.yml
+  - path: infra/embedding.yml
 
 services:
   ai-service:
@@ -20,6 +31,13 @@ services:
       - "${AI_SERVICE_EXT_PORT:-50051}:${AI_SERVICE_INT_PORT:-50051}"
       - "${AI_METRICS_EXT_PORT:-12666}:${AI_METRICS_INT_PORT:-12666}"
     environment: *ai-service-env
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      embedding-service:
+        condition: service_healthy
+      embedding-model-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD

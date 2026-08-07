@@ -127,6 +127,35 @@ func (r *MongoPostRepository) FindByID(ctx context.Context, id string) (*domain.
 	return &post, nil
 }
 
+// FindByIDs returns the posts matching the given ids. Unparseable or
+// missing ids are dropped so a stale search index entry can never fail
+// the whole query.
+func (r *MongoPostRepository) FindByIDs(ctx context.Context, ids []string) ([]*domain.Post, error) {
+	oids := make([]primitive.ObjectID, 0, len(ids))
+	for _, id := range ids {
+		oid, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			continue
+		}
+		oids = append(oids, oid)
+	}
+	if len(oids) == 0 {
+		return []*domain.Post{}, nil
+	}
+
+	cursor, err := r.collection.Find(ctx, bson.M{"_id": bson.M{"$in": oids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	posts := make([]*domain.Post, 0)
+	if err := cursor.All(ctx, &posts); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
 func (r *MongoPostRepository) FindByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
 	return r.findWithPagination(ctx, bson.M{"authorId": authorID}, page, limit)
 }

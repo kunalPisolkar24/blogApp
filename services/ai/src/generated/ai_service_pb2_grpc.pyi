@@ -24,6 +24,15 @@ class AIServiceStub:
     GeneratePost: grpc.aio.UnaryUnaryMultiCallable[
         ai_service_pb2.PostGenerationRequest, ai_service_pb2.PostGenerationResponse
     ]
+    IndexPost: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.IndexRequest, ai_service_pb2.IndexResponse
+    ]
+    DeletePost: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.DeleteRequest, ai_service_pb2.DeleteResponse
+    ]
+    SearchPosts: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.SearchRequest, ai_service_pb2.SearchResponse
+    ]
 
 
 class AIServiceServicer:
@@ -32,6 +41,12 @@ class AIServiceServicer:
     def GenerateTags(self, request: Any, context: Any) -> Any: ...
 
     def GeneratePost(self, request: Any, context: Any) -> Any: ...
+
+    def IndexPost(self, request: Any, context: Any) -> Any: ...
+
+    def DeletePost(self, request: Any, context: Any) -> Any: ...
+
+    def SearchPosts(self, request: Any, context: Any) -> Any: ...
 
 
 def add_AIServiceServicer_to_server(

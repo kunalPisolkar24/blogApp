@@ -40,6 +40,11 @@ type GeneratedPost {
   tags: [String!]!
 }
 
+type SearchResult {
+  hits: [Post!]!
+  total: Int!
+}
+
 extend type User @key(fields: "id") {
   id: ID! @external
   posts(page: Int, limit: Int): PaginatedPosts!
@@ -50,6 +55,7 @@ type Query {
   post(id: ID!): Post
   tags(query: String, limit: Int): [Tag!]!
   postsByTag(tag: String!, page: Int, limit: Int): PaginatedPosts!
+  searchPosts(query: String!, page: Int, limit: Int): SearchResult!
 }
 
 type Mutation {

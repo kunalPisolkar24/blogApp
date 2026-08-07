@@ -59,10 +59,11 @@ func main() {
 	}
 }
 
-// publish sends one event for post lt-<n>. Every 20th event is a tombstone
-// (nil value), which the worker skips, exercising that path too.
+// publish sends one event for post <n>. Every 20th event is a tombstone
+// (nil value), which the workers skip, exercising that path too. The post ID
+// is a 24-hex-digit string so the AI service can use it as a vector point id.
 func publish(ctx context.Context, w *kafka.Writer, topic string, n int) error {
-	key := fmt.Sprintf("lt-%d", n)
+	key := fmt.Sprintf("%024x", n)
 
 	if n%20 == 0 {
 		return w.WriteMessages(ctx, kafka.Message{Topic: topic, Key: []byte(key)})
