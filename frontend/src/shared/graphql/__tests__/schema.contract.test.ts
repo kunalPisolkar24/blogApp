@@ -25,15 +25,16 @@ describe("content schema contract", () => {
     expect(schema).toContain("postsByTag");
     expect(schema).toContain("tags(query: String, limit: Int)");
   });
-});
 
-describe("search schema contract", () => {
-  it("includes searchPosts in the search subgraph SDL used by the gateway", () => {
+  it("includes searchPosts and SearchResult in the content subgraph SDL", () => {
     const schema = readFileSync(
-      resolve(process.cwd(), "../services/search/schema.graphql"),
+      resolve(process.cwd(), "../services/content/graph/schema.graphqls"),
       "utf8",
     );
 
-    expect(schema).toContain("searchPosts");
+    expect(schema).toContain("searchPosts(query: String!, page: Int, limit: Int): SearchResult!");
+    expect(schema).toContain("type SearchResult");
+    expect(schema).toContain("hits: [Post!]!");
+    expect(schema).toContain("total: Int!");
   });
 });

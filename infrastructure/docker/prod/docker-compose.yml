@@ -5,8 +5,7 @@ include:
   - path: ../../../frontend/compose.yml
   - path: ../../../services/user/compose.yml
   - path: ../../../services/content/compose.yml
-  - path: ../../../services/search/compose.yml
-  # - path: ../../../services/ai/compose.yml
+  - path: ../../../services/ai/compose.yml
   - path: ../shared/kafka.yml
   - path: ../shared/logging.yml
 

@@ -10,8 +10,3 @@ subgraphs:
     routing_url: http://content-service:4002/query
     schema:
       file: ./subgraphs/content.graphql
-
-  search:
-    routing_url: http://search-api:4003/graphql
-    schema:
-      file: ./subgraphs/search.graphql
