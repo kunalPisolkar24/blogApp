@@ -23,16 +23,22 @@ dependencies are running: Mongo, Redis and Kafka (no worker, no AI service).
 
 ### Worker profile (`compose.worker-loadtest.yml`)
 
-A Go producer (`producer/`) publishes events to Kafka and the worker consumes
-them; k6 polls the worker's Prometheus endpoint and asserts on consumer lag.
-No content service, no AI service (the producer writes synthetic events that
-reference non-existent posts, so the worker consumes and skips them, plus one
-tombstone every 20 messages).
+A Go producer (`producer/`) publishes events to Kafka; the content worker and
+the content search worker consume them, and k6 polls both workers' Prometheus
+endpoints and asserts on consumer lag and result counters. Qdrant and the AI
+service (fake LLM/embeddings, deterministic vectors) are part of the rig, so
+the search worker indexes every event end to end. The producer writes synthetic
+events that reference non-existent posts, so the content worker consumes and
+skips them, plus one tombstone every 20 messages; every event is a valid
+indexing request for the search worker.
 
 - `producer/` — standalone kafka-go producer, `main.go` + own `go.mod`.
-- `worker.js` — scrapes `/metrics` and tracks `content_worker_consumer_lag`
-  (reported every ~15s) and `content_worker_messages_total{result=...}`.
-  `worker_skipped max>0` proves messages flowed end to end.
+- `worker.js` — scrapes both workers' `/metrics` and tracks
+  `content_worker_consumer_lag` (reported every ~15s) and
+  `content_worker_messages_total{result=...}`.
+  `worker_skipped max>0` proves messages flowed end to end; `search_indexed
+  max>0` proves the search worker indexed events; `search_dlq max<1` asserts
+  no event was dead-lettered.
 
 ## Usage
 
@@ -55,8 +61,9 @@ Variables (defaults in brackets):
 | `SEED_POST_COUNT` | 1000  | posts created in `setup()`                |
 | `SEED_USERS`    | 20      | JWT identities used for seeding and writes |
 | `PARTITIONS`    | 3       | partitions for the `posts` topic          |
+| `SEARCH_WORKER_CONCURRENCY` | 3 | readers for the content search worker  |
 | `JWT_SECRET`    | local-dev-secret | secret used for minting JWTs      |
-| `MONGO_MEM`/`REDIS_MEM`/`SVC_MEM`/`K6_MEM` | 768M/640M/768M/384M | memory limits |
+| `MONGO_MEM`/`REDIS_MEM`/`SVC_MEM`/`QDRANT_MEM`/`K6_MEM` | 768M/640M/768M/256M/192M | memory limits |
 
 Examples:
 
@@ -74,6 +81,7 @@ Cleanup: `make load-test-clean` (down + remove containers), `make load-test-stop
 Service profile: read `p(95)<300ms` / `p(99)<800ms`, write `p(95)<500ms` /
 `p(99)<1200ms`, error rate `<1%` (grouped via request tags).
 
-Worker profile: lag `p(95)<500`, no failed messages, `worker_skipped max>0`,
-scrape error rate `<1%`. Tune `worker_lag` if the worker is expected to lag
-behind a high producer rate.
+Worker profile: lag `p(95)<500` for both workers, no failed messages,
+`worker_skipped max>0`, `search_indexed max>0`, `search_dlq max<1`, scrape
+error rate `<1%`. Tune `worker_lag` if the worker is expected to lag behind a
+high producer rate.

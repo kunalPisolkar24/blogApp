@@ -27,6 +27,10 @@ type SearchWorker struct {
 	producer  domain.DLQPublisher
 	dlqTopic  string
 
+	// retry config; overridable by tests to keep them fast
+	maxRetries int
+	retryBase  time.Duration
+
 	running atomic.Bool
 	done    chan struct{}
 }
@@ -48,10 +52,12 @@ func NewSearchWorker(brokers []string, groupID string, topics []string, dlqTopic
 	}
 
 	w := &SearchWorker{
-		aiService: aiService,
-		producer:  producer,
-		dlqTopic:  dlqTopic,
-		done:      make(chan struct{}),
+		aiService:  aiService,
+		producer:   producer,
+		dlqTopic:   dlqTopic,
+		maxRetries: maxRetries,
+		retryBase:  retryBase,
+		done:       make(chan struct{}),
 	}
 
 	for range concurrency {
@@ -129,7 +135,7 @@ func (w *SearchWorker) consume(ctx context.Context, reader *kafka.Reader) {
 
 func (w *SearchWorker) processWithRetries(ctx context.Context, m kafka.Message) error {
 	var processErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
+	for attempt := 1; attempt <= w.maxRetries; attempt++ {
 		processErr = w.processMessage(ctx, m)
 		if processErr == nil {
 			return nil
@@ -138,7 +144,7 @@ func (w *SearchWorker) processWithRetries(ctx context.Context, m kafka.Message) 
 		slog.Warn("message processing failed, retrying",
 			"error", processErr,
 			"attempt", attempt,
-			"maxRetries", maxRetries,
+			"maxRetries", w.maxRetries,
 			"offset", m.Offset,
 			"partition", m.Partition,
 		)
@@ -147,7 +153,7 @@ func (w *SearchWorker) processWithRetries(ctx context.Context, m kafka.Message) 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(attempt) * retryBase):
+		case <-time.After(time.Duration(attempt) * w.retryBase):
 		}
 	}
 	return processErr

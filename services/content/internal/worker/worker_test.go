@@ -16,7 +16,15 @@ import (
 
 func newTestWorker(t *testing.T, processor domain.SummaryProcessor, ai domain.AIService, producer domain.DLQPublisher) *Worker {
 	t.Helper()
-	return &Worker{processor: processor, aiService: ai, producer: producer, dlqTopic: "dlq", done: make(chan struct{})}
+	return &Worker{
+		processor:  processor,
+		aiService:  ai,
+		producer:   producer,
+		dlqTopic:   "dlq",
+		maxRetries: maxRetries,
+		retryBase:  retryBase,
+		done:       make(chan struct{}),
+	}
 }
 
 func eventMessage(t *testing.T, postID string) kafka.Message {
@@ -163,6 +171,30 @@ func TestProcessMessageSetSummaryError(t *testing.T) {
 func TestProcessWithRetriesSucceedsFirstAttempt(t *testing.T) {
 	w := newTestWorker(t, &testutil.MockSummaryProcessor{}, &testutil.MockAIService{}, nil)
 	require.NoError(t, w.processWithRetries(context.Background(), &kafka.Reader{}, eventMessage(t, "p_1")))
+}
+
+func TestProcessWithRetriesExhaustsAttempts(t *testing.T) {
+	attempts := 0
+	processor := &testutil.MockSummaryProcessor{GetPostFn: func(ctx context.Context, id string) (*domain.Post, error) {
+		attempts++
+		return nil, errors.New("boom")
+	}}
+	w := newTestWorker(t, processor, nil, nil)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), &kafka.Reader{}, eventMessage(t, "p_1"))
+
+	require.Error(t, err)
+	assert.Equal(t, maxRetries, attempts, "every retry budget slot must be used before giving up")
+}
+
+func TestNewWorkerRetryDefaults(t *testing.T) {
+	w, err := NewWorker([]string{"localhost:9092"}, "g", []string{"posts"}, "dlq", 1, nil, nil, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = w.Close() })
+
+	assert.Equal(t, maxRetries, w.maxRetries)
+	assert.Equal(t, retryBase, w.retryBase)
 }
 
 func TestSendToDLQ(t *testing.T) {

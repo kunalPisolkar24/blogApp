@@ -16,7 +16,13 @@ import (
 
 func newTestSearchWorker(t *testing.T, ai domain.AIService) *SearchWorker {
 	t.Helper()
-	return &SearchWorker{aiService: ai, dlqTopic: "dlq", done: make(chan struct{})}
+	return &SearchWorker{
+		aiService:  ai,
+		dlqTopic:   "dlq",
+		maxRetries: maxRetries,
+		retryBase:  retryBase,
+		done:       make(chan struct{}),
+	}
 }
 
 func searchEventMessage(t *testing.T, payload domain.PostEventPayload) kafka.Message {
@@ -103,6 +109,48 @@ func TestSearchProcessMessageMissingPostID(t *testing.T) {
 	err := w.processMessage(context.Background(), searchEventMessage(t, domain.PostEventPayload{}))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing postId")
+}
+
+func TestSearchProcessWithRetriesExhaustsAttempts(t *testing.T) {
+	attempts := 0
+	ai := &testutil.MockAIService{IndexPostFn: func(ctx context.Context, postID, title, body, summary string, tags []string, ts time.Time) error {
+		attempts++
+		return errors.New("boom")
+	}}
+	w := newTestSearchWorker(t, ai)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), searchEventMessage(t, domain.PostEventPayload{PostID: "p_1"}))
+
+	require.Error(t, err)
+	assert.Equal(t, maxRetries, attempts, "every retry budget slot must be used before giving up")
+}
+
+func TestSearchProcessWithRetriesRecovers(t *testing.T) {
+	attempts := 0
+	ai := &testutil.MockAIService{IndexPostFn: func(ctx context.Context, postID, title, body, summary string, tags []string, ts time.Time) error {
+		attempts++
+		if attempts < 3 {
+			return errors.New("boom")
+		}
+		return nil
+	}}
+	w := newTestSearchWorker(t, ai)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), searchEventMessage(t, domain.PostEventPayload{PostID: "p_1"}))
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, attempts)
+}
+
+func TestNewSearchWorkerRetryDefaults(t *testing.T) {
+	w, err := NewSearchWorker([]string{"localhost:9092"}, "g", []string{"posts"}, "dlq", 1, nil, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = w.Close() })
+
+	assert.Equal(t, maxRetries, w.maxRetries)
+	assert.Equal(t, retryBase, w.retryBase)
 }
 
 func TestSearchSendToDLQ(t *testing.T) {

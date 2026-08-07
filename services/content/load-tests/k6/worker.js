@@ -3,6 +3,7 @@ import { check } from 'k6';
 import { Trend } from 'k6/metrics';
 
 const METRICS_URL = __ENV.TARGET || 'http://content-worker:4003/metrics';
+const SEARCH_METRICS_URL = __ENV.TARGET_SEARCH || 'http://content-search-worker:4004/metrics';
 
 const vus = parseInt(__ENV.VUS) || 5;
 const duration = __ENV.DURATION || '30s';
@@ -10,6 +11,9 @@ const duration = __ENV.DURATION || '30s';
 const workerLag = new Trend('worker_lag', true);
 const workerSkipped = new Trend('worker_skipped', true);
 const workerFailed = new Trend('worker_failed', true);
+const searchWorkerLag = new Trend('search_worker_lag', true);
+const searchIndexed = new Trend('search_indexed', true);
+const searchDlq = new Trend('search_dlq', true);
 
 export const options = {
     scenarios: {
@@ -24,6 +28,9 @@ export const options = {
         'worker_lag': ['p(95)<500'],
         'worker_skipped': ['max>0'],
         'worker_failed': ['max<1'],
+        'search_worker_lag': ['p(95)<500'],
+        'search_indexed': ['max>0'],
+        'search_dlq': ['max<1'],
     },
     summaryTrendStats: ['avg', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
@@ -34,10 +41,18 @@ export default function () {
     const skipped = matchCounter(res.body, 'content_worker_messages_total', 'skipped');
     const failed = matchCounter(res.body, 'content_worker_messages_total', 'failed');
 
+    const searchRes = http.get(SEARCH_METRICS_URL);
+    const searchLag = matchGauge(searchRes.body, 'content_worker_consumer_lag');
+    const indexed = matchCounter(searchRes.body, 'content_worker_messages_total', 'completed');
+    const dlq = matchCounter(searchRes.body, 'content_worker_messages_total', 'dlq');
+
     check(res, {
         'metrics status 200': (r) => r.status === 200,
     });
-    if (res.status !== 200) {
+    check(searchRes, {
+        'search worker metrics status 200': (r) => r.status === 200,
+    });
+    if (res.status !== 200 || searchRes.status !== 200) {
         return;
     }
 
@@ -46,8 +61,13 @@ export default function () {
     if (lag !== null) {
         workerLag.add(lag);
     }
+    if (searchLag !== null) {
+        searchWorkerLag.add(searchLag);
+    }
     workerSkipped.add(skipped);
     workerFailed.add(failed);
+    searchIndexed.add(indexed);
+    searchDlq.add(dlq);
 }
 
 // Returns the gauge value, or null when the metric line is missing.
