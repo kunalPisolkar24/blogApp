@@ -32,3 +32,14 @@ LLM_RETRIES = Counter(
     "llm_retries_total",
     "Total number of retries of LLM provider calls",
 )
+
+EMBEDDING_REQUESTS = Counter(
+    "embedding_requests_total",
+    "Total number of embedding provider calls",
+    ["status"],
+)
+
+EMBEDDING_REQUEST_DURATION = Histogram(
+    "embedding_request_duration_seconds",
+    "Time spent waiting for the embedding provider",
+)

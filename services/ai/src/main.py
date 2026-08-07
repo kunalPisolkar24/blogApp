@@ -9,9 +9,11 @@ from prometheus_client import start_http_server
 from src.api.server import create_server
 from src.api.service import AIService
 from src.config import settings
+from src.embeddings import FakeEmbeddingClient, OllamaEmbeddingClient
 from src.llm import FakeLLMClient, LLMClient
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
+from src.vector import SearchIndex
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +44,23 @@ async def serve() -> None:
     logger.info("prometheus metrics exposed on port %s", settings.METRICS_PORT)
 
     llm = FakeLLMClient() if settings.LLM_MODE == "fake" else LLMClient()
-    server, health_servicer = await create_server(AIService(llm))
+    embeddings = (
+        FakeEmbeddingClient()
+        if settings.EMBEDDING_MODE == "fake"
+        else OllamaEmbeddingClient()
+    )
+    search = SearchIndex(embeddings)
+    await search.ensure_collection()
+
+    server, health_servicer = await create_server(AIService(llm, search))
     handle_graceful_shutdown(server, health_servicer)
     try:
         await server.start()
         await server.wait_for_termination()
     finally:
         await llm.close()
+        await search.close()
+        await embeddings.close()
         await server.stop(grace=None)
 
 

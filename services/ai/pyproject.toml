@@ -19,7 +19,9 @@ dependencies = [
     "opentelemetry-sdk (>=1.30,<2.0)",
     "opentelemetry-exporter-otlp (>=1.30,<2.0)",
     "opentelemetry-instrumentation-grpc (>=0.51,<1.0)",
-    "opentelemetry-instrumentation-httpx (>=0.51,<1.0)"
+    "opentelemetry-instrumentation-httpx (>=0.51,<1.0)",
+    "qdrant-client (>=1.15.0,<2.0.0)",
+    "snowballstemmer (>=2.2.0,<3.0.0)"
 ]
 
 

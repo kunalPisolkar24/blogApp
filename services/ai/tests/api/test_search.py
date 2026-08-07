@@ -1,0 +1,171 @@
+from uuid import uuid4
+
+import grpc
+import pytest
+
+from src.generated import ai_service_pb2
+
+
+def _index_request(post_id: str | None = None) -> ai_service_pb2.IndexRequest:
+    return ai_service_pb2.IndexRequest(
+        post_id=post_id if post_id is not None else str(uuid4()),
+        title="gRPC client setup guide",
+        body="<p>How to configure a gRPC client with keepalive options.</p>",
+        summary="A short summary",
+        tags=["grpc", "tutorial"],
+        created_at="2026-01-01T00:00:00Z",
+    )
+
+
+async def test_index_and_search_roundtrip(stub) -> None:
+    post_id = str(uuid4())
+
+    await stub.IndexPost(_index_request(post_id))
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="grpc client", offset=0, limit=10)
+    )
+    assert response.post_ids == [post_id]
+    assert response.total == 1
+
+
+async def test_index_and_search_roundtrip_objectid_hex(stub) -> None:
+    post_id = "6a75a41221a9752ec47bc6df"
+
+    await stub.IndexPost(_index_request(post_id))
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="grpc client", offset=0, limit=10)
+    )
+    assert response.post_ids == [post_id]
+    assert response.total == 1
+
+
+async def test_search_does_not_return_deleted_post(stub) -> None:
+    post_id = str(uuid4())
+    await stub.IndexPost(_index_request(post_id))
+
+    await stub.DeletePost(ai_service_pb2.DeleteRequest(post_id=post_id))
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="grpc client", offset=0, limit=10)
+    )
+    assert response.post_ids == []
+    assert response.total == 0
+
+
+async def test_search_ranks_sparse_lexical_match(stub) -> None:
+    target = str(uuid4())
+    other = str(uuid4())
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(
+            post_id=target, title="Kubernetes deployment guide", body="<p>k8s</p>"
+        )
+    )
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(
+            post_id=other, title="Recipe for sourdough bread", body="<p>baking</p>"
+        )
+    )
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="kubernetes", offset=0, limit=10)
+    )
+
+    assert response.post_ids[0] == target
+
+
+async def test_search_ranks_dense_semantic_match(stub) -> None:
+    target = str(uuid4())
+    other = str(uuid4())
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(
+            post_id=target, title="Distributed tracing", body="<p>otel</p>"
+        )
+    )
+    await stub.IndexPost(
+        ai_service_pb2.IndexRequest(
+            post_id=other, title="Italian pasta recipes", body="<p>food</p>"
+        )
+    )
+
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="distributed tracing", offset=0, limit=10)
+    )
+
+    assert response.post_ids[0] == target
+
+
+async def test_search_pagination(stub) -> None:
+    ids = [str(uuid4()) for _ in range(3)]
+    for post_id in ids:
+        await stub.IndexPost(_index_request(post_id))
+
+    page_one = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="grpc client", offset=0, limit=2)
+    )
+    page_two = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="grpc client", offset=2, limit=2)
+    )
+
+    assert len(page_one.post_ids) == 2
+    assert len(page_two.post_ids) == 1
+    assert set(page_one.post_ids) | set(page_two.post_ids) == set(ids)
+
+
+async def test_index_rejects_empty_post_id(stub) -> None:
+    with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+        await stub.IndexPost(_index_request(post_id=""))
+
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_delete_rejects_empty_post_id(stub) -> None:
+    with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+        await stub.DeletePost(ai_service_pb2.DeleteRequest(post_id=""))
+
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_search_rejects_empty_query(stub) -> None:
+    with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+        await stub.SearchPosts(
+            ai_service_pb2.SearchRequest(query="   ", offset=0, limit=10)
+        )
+
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_search_rejects_long_query(stub) -> None:
+    with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+        await stub.SearchPosts(
+            ai_service_pb2.SearchRequest(query="x" * 513, offset=0, limit=10)
+        )
+
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_search_rejects_excessive_limit(stub) -> None:
+    with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+        await stub.SearchPosts(
+            ai_service_pb2.SearchRequest(query="hello", offset=0, limit=101)
+        )
+
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_search_rejects_window_beyond_cap(stub) -> None:
+    with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+        await stub.SearchPosts(
+            ai_service_pb2.SearchRequest(query="hello", offset=990, limit=100)
+        )
+
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_search_defaults_limit_to_ten(stub) -> None:
+    response = await stub.SearchPosts(
+        ai_service_pb2.SearchRequest(query="hello", offset=0)
+    )
+
+    assert response.total == 0
