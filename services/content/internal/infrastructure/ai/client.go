@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -17,7 +18,15 @@ const (
 	summaryTimeout = 30 * time.Second
 	tagsTimeout    = 15 * time.Second
 	postTimeout    = 60 * time.Second
+	indexTimeout   = 15 * time.Second
+	deleteTimeout  = 10 * time.Second
+	searchTimeout  = 10 * time.Second
 )
+
+// errCircuitOpen is returned by IndexPost/DeletePost while the breaker is
+// open so the search worker retries and eventually dead-letters the event
+// instead of silently dropping it from the index.
+var errCircuitOpen = errors.New("ai circuit breaker open")
 
 // resilientClient talks to the AI service over gRPC and falls back to a
 // local noop client when the service is unreachable or failing.
@@ -74,6 +83,43 @@ func (c *resilientClient) GeneratePost(ctx context.Context, prompt string) (*dom
 		slog.Warn("ai post generation failed, using fallback", "error", err)
 	}
 	return c.fallback.GeneratePost(ctx, prompt)
+}
+
+func (c *resilientClient) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {
+	if !c.breaker.canProceed() {
+		return errCircuitOpen
+	}
+	if err := c.primary.IndexPost(ctx, postID, title, body, summary, tags, createdAt); err != nil {
+		c.breaker.recordFailure()
+		return err
+	}
+	c.breaker.recordSuccess()
+	return nil
+}
+
+func (c *resilientClient) DeletePost(ctx context.Context, postID string) error {
+	if !c.breaker.canProceed() {
+		return errCircuitOpen
+	}
+	if err := c.primary.DeletePost(ctx, postID); err != nil {
+		c.breaker.recordFailure()
+		return err
+	}
+	c.breaker.recordSuccess()
+	return nil
+}
+
+func (c *resilientClient) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+	if c.breaker.canProceed() {
+		result, err := c.primary.SearchPosts(ctx, query, offset, limit)
+		if err == nil {
+			c.breaker.recordSuccess()
+			return result, nil
+		}
+		c.breaker.recordFailure()
+		slog.Warn("ai search failed, using fallback", "error", err)
+	}
+	return c.fallback.SearchPosts(ctx, query, offset, limit)
 }
 
 func (c *resilientClient) Close() error {
@@ -138,6 +184,47 @@ func (c *grpcClient) GeneratePost(ctx context.Context, prompt string) (*domain.G
 		Body:    resp.Body,
 		Summary: resp.Summary,
 		Tags:    resp.Tags,
+	}, nil
+}
+
+func (c *grpcClient) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {
+	ctx, cancel := context.WithTimeout(ctx, indexTimeout)
+	defer cancel()
+
+	_, err := c.client.IndexPost(ctx, &pb.IndexRequest{
+		PostId:    postID,
+		Title:     title,
+		Body:      body,
+		Summary:   summary,
+		Tags:      tags,
+		CreatedAt: createdAt.UTC().Format(time.RFC3339),
+	})
+	return err
+}
+
+func (c *grpcClient) DeletePost(ctx context.Context, postID string) error {
+	ctx, cancel := context.WithTimeout(ctx, deleteTimeout)
+	defer cancel()
+
+	_, err := c.client.DeletePost(ctx, &pb.DeleteRequest{PostId: postID})
+	return err
+}
+
+func (c *grpcClient) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
+	defer cancel()
+
+	resp, err := c.client.SearchPosts(ctx, &pb.SearchRequest{
+		Query:  query,
+		Offset: uint32(offset),
+		Limit:  uint32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &domain.SearchResult{
+		PostIDs: resp.PostIds,
+		Total:   int(resp.Total),
 	}, nil
 }
 

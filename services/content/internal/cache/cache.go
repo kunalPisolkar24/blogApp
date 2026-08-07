@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,12 +12,14 @@ import (
 )
 
 const (
-	PostsTTL = time.Minute
-	PostTTL  = 5 * time.Minute
-	TagsTTL  = 5 * time.Minute
+	PostsTTL  = time.Minute
+	PostTTL   = 5 * time.Minute
+	TagsTTL   = 5 * time.Minute
+	SearchTTL = 2 * time.Minute
 
-	PostsPattern = "posts:*"
-	TagsPattern  = "tags:*"
+	PostsPattern  = "posts:*"
+	TagsPattern   = "tags:*"
+	SearchPattern = "search:*"
 )
 
 // Cache is a thin, best-effort Redis cache. Every call swallows errors and
@@ -162,4 +165,9 @@ func KeyPostsByTag(tag string, page, limit int) string {
 
 func KeyTags(query string, limit int) string {
 	return fmt.Sprintf("tags:q:%s:limit:%d", query, limit)
+}
+
+func KeySearch(query string, page, limit int) string {
+	sum := sha1.Sum([]byte(query))
+	return fmt.Sprintf("search:q:%x:p:%d:l:%d", sum, page, limit)
 }

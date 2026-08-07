@@ -88,3 +88,21 @@ func mapDomainGeneratedPostToModel(gp *domain.GeneratedPost) *model.GeneratedPos
 		Tags:    gp.Tags,
 	}
 }
+
+func mapDomainSearchResultToModel(sr *domain.SearchPostsResult) *model.SearchResult {
+	if sr == nil {
+		return nil
+	}
+
+	hits := make([]*model.Post, 0, len(sr.Hits))
+	for _, dp := range sr.Hits {
+		if mapped := mapDomainPostToModel(dp); mapped != nil {
+			hits = append(hits, mapped)
+		}
+	}
+
+	return &model.SearchResult{
+		Hits:  hits,
+		Total: sr.Total,
+	}
+}

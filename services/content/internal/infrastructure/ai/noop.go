@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 )
@@ -56,6 +57,21 @@ func (a *NoopAI) GeneratePost(_ context.Context, prompt string) (*domain.Generat
 		Summary: truncate(body, 220),
 		Tags:    deriveTags(title, body),
 	}, nil
+}
+
+// IndexPost and DeletePost no-op in fallback mode: search simply has no
+// index while the AI service is down.
+func (a *NoopAI) IndexPost(_ context.Context, _ string, _ string, _ string, _ string, _ []string, _ time.Time) error {
+	return nil
+}
+
+func (a *NoopAI) DeletePost(_ context.Context, _ string) error {
+	return nil
+}
+
+// SearchPosts degrades to an empty result instead of failing the request.
+func (a *NoopAI) SearchPosts(_ context.Context, _ string, _ int, _ int) (*domain.SearchResult, error) {
+	return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
 }
 
 func (a *NoopAI) Close() error {

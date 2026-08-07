@@ -120,6 +120,15 @@ func (r *queryResolver) PostsByTag(ctx context.Context, tag string, page *int, l
 	return mapDomainPaginatedToModel(posts), nil
 }
 
+// SearchPosts is the resolver for the searchPosts field.
+func (r *queryResolver) SearchPosts(ctx context.Context, query string, page *int, limit *int) (*model.SearchResult, error) {
+	posts, err := r.PostService.SearchPosts(ctx, query, deref(page), deref(limit))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainSearchResultToModel(posts), nil
+}
+
 // Posts is the resolver for the posts field.
 func (r *userResolver) Posts(ctx context.Context, obj *model.User, page *int, limit *int) (*model.PaginatedPosts, error) {
 	posts, err := r.PostService.GetPostsByAuthor(ctx, obj.ID, deref(page), deref(limit))
@@ -138,13 +147,13 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 // User returns UserResolver implementation.
 func (r *Resolver) User() UserResolver { return &userResolver{r} }
 
+type mutationResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }
+type userResolver struct{ *Resolver }
+
 func deref(v *int) int {
 	if v == nil {
 		return 0
 	}
 	return *v
 }
-
-type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }
-type userResolver struct{ *Resolver }

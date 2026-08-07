@@ -373,3 +373,159 @@ func TestPostServiceClock(t *testing.T) {
 	now := time.Now()
 	assert.NotZero(t, s.clock().Sub(now))
 }
+
+func newSearchService(t *testing.T, ai *testutil.MockAIService, repo *testutil.MockPostRepository, cacheClient *cache.Cache) *PostService {
+	t.Helper()
+	if ai == nil {
+		ai = &testutil.MockAIService{}
+	}
+	if repo == nil {
+		repo = &testutil.MockPostRepository{}
+	}
+	return NewPostService(repo, nil, ai, nil, cacheClient)
+}
+
+func TestSearchPostsRanksAndDropsMissing(t *testing.T) {
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, "go", query)
+		assert.Equal(t, 0, offset)
+		assert.Equal(t, 10, limit)
+		return &domain.SearchResult{PostIDs: []string{"p_2", "missing", "p_1"}, Total: 3}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		assert.Equal(t, []string{"p_2", "missing", "p_1"}, ids)
+		return []*domain.Post{
+			{ID: "p_1", Title: "First"},
+			{ID: "p_2", Title: "Second"},
+		}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	result, err := s.SearchPosts(context.Background(), "go", 1, 10)
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, result.Total)
+	require.Len(t, result.Hits, 2)
+	assert.Equal(t, "p_2", result.Hits[0].ID, "hits keep the search rank order")
+	assert.Equal(t, "p_1", result.Hits[1].ID)
+}
+
+func TestSearchPostsEmptyResult(t *testing.T) {
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	result, err := s.SearchPosts(context.Background(), "nothing", 1, 10)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Total)
+	assert.Empty(t, result.Hits)
+}
+
+func TestSearchPostsAIError(t *testing.T) {
+	wantErr := errors.New("ai down")
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		return nil, wantErr
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	_, err := s.SearchPosts(context.Background(), "go", 1, 10)
+	assert.ErrorIs(t, err, wantErr)
+}
+
+func TestSearchPostsRepoError(t *testing.T) {
+	wantErr := errors.New("db down")
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 1}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return nil, wantErr
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	_, err := s.SearchPosts(context.Background(), "go", 1, 10)
+	assert.ErrorIs(t, err, wantErr)
+}
+
+func TestSearchPostsPaginationNormalized(t *testing.T) {
+	var gotOffset, gotLimit int
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		gotOffset, gotLimit = offset, limit
+		return &domain.SearchResult{}, nil
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	_, err := s.SearchPosts(context.Background(), "go", 3, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 20, gotOffset)
+	assert.Equal(t, 10, gotLimit)
+
+	_, err = s.SearchPosts(context.Background(), "go", 0, 500)
+	require.NoError(t, err)
+	assert.Equal(t, 0, gotOffset)
+	assert.Equal(t, 100, gotLimit)
+}
+
+func TestSearchPostsCached(t *testing.T) {
+	calls := 0
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		calls++
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 1}, nil
+	}}
+	s := newSearchService(t, ai, nil, newMemCache(t))
+
+	for i := 0; i < 2; i++ {
+		result, err := s.SearchPosts(context.Background(), "go", 1, 10)
+		require.NoError(t, err)
+		assert.Len(t, result.Hits, 1)
+	}
+	assert.Equal(t, 1, calls, "second search should hit the cache")
+}
+
+func TestCreatePostInvalidatesSearchCache(t *testing.T) {
+	calls := 0
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		calls++
+		return &domain.SearchResult{}, nil
+	}}
+	s := newSearchService(t, ai, nil, newMemCache(t))
+
+	_, err := s.SearchPosts(context.Background(), "go", 1, 10)
+	require.NoError(t, err)
+
+	_, err = s.CreatePost(context.Background(), "Title", "Body", "u_1", nil, nil, nil)
+	require.NoError(t, err)
+
+	_, err = s.SearchPosts(context.Background(), "go", 1, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls, "a write must invalidate the search cache")
+}
+
+func TestUpdatePostInvalidatesSearchCache(t *testing.T) {
+	calls := 0
+	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
+		calls++
+		return &domain.SearchResult{}, nil
+	}}
+	repo := &testutil.MockPostRepository{
+		FindByIDFn: func(ctx context.Context, id string) (*domain.Post, error) {
+			return &domain.Post{ID: "p_1", AuthorID: "u_1"}, nil
+		},
+		UpdateFn: func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
+			return post, nil
+		},
+	}
+	s := newSearchService(t, ai, repo, newMemCache(t))
+
+	_, err := s.SearchPosts(context.Background(), "go", 1, 10)
+	require.NoError(t, err)
+
+	title := "Renamed"
+	_, err = s.UpdatePost(context.Background(), "p_1", "u_1", &title, nil, nil, nil)
+	require.NoError(t, err)
+
+	_, err = s.SearchPosts(context.Background(), "go", 1, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls, "a write must invalidate the search cache")
+}

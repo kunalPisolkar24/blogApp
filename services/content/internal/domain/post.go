@@ -35,6 +35,14 @@ type PaginatedPosts struct {
 	Page       int     `json:"page"`
 }
 
+// SearchPostsResult is the outcome of a search query: the posts that
+// matched, ordered by relevance, and the total number of matches the
+// search engine found in its result window.
+type SearchPostsResult struct {
+	Hits  []*Post
+	Total int
+}
+
 type PostRepository interface {
 	Create(ctx context.Context, post *Post) (*Post, error)
 	Update(ctx context.Context, id string, post *Post) (*Post, error)
@@ -42,6 +50,7 @@ type PostRepository interface {
 	Delete(ctx context.Context, id string) error
 	FindAll(ctx context.Context, page, limit int) (*PaginatedPosts, error)
 	FindByID(ctx context.Context, id string) (*Post, error)
+	FindByIDs(ctx context.Context, ids []string) ([]*Post, error)
 	FindByAuthor(ctx context.Context, authorID string, page, limit int) (*PaginatedPosts, error)
 	FindByTag(ctx context.Context, tag string, page, limit int) (*PaginatedPosts, error)
 }

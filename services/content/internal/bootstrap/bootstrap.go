@@ -102,3 +102,39 @@ func (d *Dependencies) Close(ctx context.Context) {
 		_ = d.ShutdownTracing(ctx)
 	}
 }
+
+// SearchDependencies holds the infrastructure the search worker needs:
+// the AI client for index writes and the Kafka producer for the DLQ.
+type SearchDependencies struct {
+	AI              domain.AIService
+	Producer        domain.EventProducer
+	ShutdownTracing func(context.Context) error
+}
+
+// NewSearch wires tracing, the AI client and Kafka only. Unlike New it
+// requires neither mongo nor redis, which the search worker does not use.
+func NewSearch(ctx context.Context, cfg config.Config, serviceName string) (*SearchDependencies, error) {
+	shutdownTracing, err := observability.SetupTracing(ctx, cfg.OtelEndpoint, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("setup tracing: %w", err)
+	}
+
+	return &SearchDependencies{
+		AI:              ai.NewResilientClient(cfg.AIServiceURL),
+		Producer:        messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic),
+		ShutdownTracing: shutdownTracing,
+	}, nil
+}
+
+// Close shuts down every dependency in reverse order of creation.
+func (d *SearchDependencies) Close(ctx context.Context) {
+	if d.Producer != nil {
+		_ = d.Producer.Close()
+	}
+	if d.AI != nil {
+		_ = d.AI.Close()
+	}
+	if d.ShutdownTracing != nil {
+		_ = d.ShutdownTracing(ctx)
+	}
+}
