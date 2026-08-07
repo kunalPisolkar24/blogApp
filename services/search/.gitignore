@@ -1,5 +1,0 @@
-/node_modules
-/dist
-.env
-/coverage
-load-tests/k6/seed_data/
