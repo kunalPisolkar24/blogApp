@@ -188,6 +188,30 @@ func TestProcessWithRetriesExhaustsAttempts(t *testing.T) {
 	assert.Equal(t, maxRetries, attempts, "every retry budget slot must be used before giving up")
 }
 
+func TestProcessWithRetriesFailsFastOnPermanentError(t *testing.T) {
+	attempts := 0
+	processor := &testutil.MockSummaryProcessor{GetPostFn: func(ctx context.Context, id string) (*domain.Post, error) {
+		attempts++
+		return nil, permanentf("unparseable message")
+	}}
+	w := newTestWorker(t, processor, nil, nil)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), &kafka.Reader{}, eventMessage(t, "p_1"))
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attempts, "permanent errors must not be retried")
+}
+
+func TestProcessMessagePermanentUnmarshalError(t *testing.T) {
+	w := newTestWorker(t, nil, nil, nil)
+
+	err := w.processMessage(context.Background(), kafka.Message{Value: []byte("not json")})
+
+	require.Error(t, err)
+	assert.True(t, isPermanent(err), "malformed payloads must be marked permanent")
+}
+
 func TestNewWorkerRetryDefaults(t *testing.T) {
 	w, err := NewWorker([]string{"localhost:9092"}, "g", []string{"posts"}, "dlq", 1, nil, nil, nil)
 	require.NoError(t, err)

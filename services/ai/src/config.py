@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION: str = "posts"
     QDRANT_VECTOR_SIZE: int = 1024
     QDRANT_TIMEOUT_SECONDS: int = 10
+    # Attempts, 5s apart, before failing startup when Qdrant is unreachable.
+    QDRANT_STARTUP_RETRIES: int = 12
     SEARCH_MAX_RESULT_WINDOW: int = 1000
     SEARCH_MAX_QUERY_CHARS: int = 512
     SEARCH_MAX_LIMIT: int = 100

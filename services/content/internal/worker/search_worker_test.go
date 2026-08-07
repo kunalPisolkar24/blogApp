@@ -39,6 +39,7 @@ func TestSearchProcessMessageIndexesPost(t *testing.T) {
 		assert.Equal(t, "Title", title)
 		assert.Equal(t, "Body", body)
 		assert.Equal(t, "Summary", summary)
+		assert.Equal(t, []string{"grpc", "tutorial"}, tags)
 		assert.Equal(t, createdAt, ts)
 		return nil
 	}}
@@ -49,6 +50,7 @@ func TestSearchProcessMessageIndexesPost(t *testing.T) {
 		Title:     "Title",
 		Body:      "Body",
 		Summary:   "Summary",
+		Tags:      []string{"grpc", "tutorial"},
 		CreatedAt: createdAt,
 	})
 
@@ -142,6 +144,21 @@ func TestSearchProcessWithRetriesRecovers(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 3, attempts)
+}
+
+func TestSearchProcessWithRetriesFailsFastOnPermanentError(t *testing.T) {
+	attempts := 0
+	ai := &testutil.MockAIService{IndexPostFn: func(ctx context.Context, postID, title, body, summary string, tags []string, ts time.Time) error {
+		attempts++
+		return permanentf("unparseable message")
+	}}
+	w := newTestSearchWorker(t, ai)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), searchEventMessage(t, domain.PostEventPayload{PostID: "p_1"}))
+
+	require.Error(t, err)
+	assert.Equal(t, 1, attempts, "permanent errors must not be retried")
 }
 
 func TestNewSearchWorkerRetryDefaults(t *testing.T) {

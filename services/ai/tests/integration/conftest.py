@@ -92,7 +92,7 @@ def _wait_ready(url: str, timeout: float = READY_TIMEOUT_SECONDS) -> None:
 @pytest.fixture(scope="module")
 def qdrant(network: Network) -> DockerContainer:
     """Real qdrant for the search tests; reachable as http://qdrant:6333."""
-    container = DockerContainer("qdrant/qdrant:v1.9.7")
+    container = DockerContainer("qdrant/qdrant:v1.19.0")
     container.with_network(network)
     container.with_network_aliases("qdrant")
     container.with_exposed_ports(6333)
@@ -108,7 +108,9 @@ def qdrant(network: Network) -> DockerContainer:
 
 
 @pytest.fixture(scope="module")
-def service(service_image: str, network: Network, qdrant: DockerContainer) -> ServiceUnderTest:
+def service(
+    service_image: str, network: Network, qdrant: DockerContainer
+) -> ServiceUnderTest:
     """Run the service in a container with fake llm and embeddings."""
     container = DockerContainer(service_image)
     container.with_env("LLM_MODE", "fake")

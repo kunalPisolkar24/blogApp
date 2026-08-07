@@ -14,7 +14,7 @@ JSON parsing, pydantic validation, and sanitization.
 | Container | Image | Purpose |
 |---|---|---|
 | `ai-service` | service `Dockerfile` | System under test, fake LLM mode |
-| `qdrant` | `qdrant/qdrant:v1.9.7` | Vector store for `IndexPost`/`SearchPosts` |
+| `qdrant` | `qdrant/qdrant:v1.19.0` | Vector store for `IndexPost`/`SearchPosts` |
 | `k6` | `grafana/k6:latest` | Load driver (gRPC via the checked-in proto) |
 
 ## Quick start

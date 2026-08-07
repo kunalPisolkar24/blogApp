@@ -29,6 +29,7 @@ DEFAULTS = {
     "OTEL_SERVICE_NAME": "ai-service",
     "QDRANT_URL": "http://localhost:6333",
     "QDRANT_VECTOR_SIZE": 1024,
+    "QDRANT_STARTUP_RETRIES": 12,
     "SEARCH_DENSE_SCORE_THRESHOLD": 0.3,
 }
 
@@ -54,6 +55,7 @@ OVERRIDES = {
     "OTEL_SERVICE_NAME": "ai-test",
     "QDRANT_URL": "http://qdrant:6333",
     "QDRANT_VECTOR_SIZE": 768,
+    "QDRANT_STARTUP_RETRIES": 3,
     "SEARCH_DENSE_SCORE_THRESHOLD": 0.55,
 }
 

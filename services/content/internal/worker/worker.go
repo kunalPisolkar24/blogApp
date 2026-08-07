@@ -23,14 +23,31 @@ import (
 )
 
 const (
-	// maxRetries and retryBase give the search worker roughly a minute
-	// of backoff (5s, 10s, ... 25s) to ride out short AI service blips
+	// maxRetries and retryBase give the workers roughly a minute of
+	// backoff (5s, 10s, ... 25s) to ride out short AI service blips
 	// before a message is dead lettered.
 	maxRetries = 5
 	retryBase  = 5 * time.Second
 
 	lagReportInterval = 15 * time.Second
 )
+
+// permanentError marks a message that can never succeed, no matter how
+// many times it is retried (malformed payloads, missing fields).
+type permanentError struct {
+	error
+}
+
+// permanentf wraps err with the permanent marker.
+func permanentf(format string, args ...any) error {
+	return permanentError{fmt.Errorf(format, args...)}
+}
+
+// isPermanent reports whether the error marks a message as unprocessable.
+func isPermanent(err error) bool {
+	var permanent permanentError
+	return errors.As(err, &permanent)
+}
 
 var (
 	htmlTagRegex = regexp.MustCompile(`<[^>]+>`)
@@ -148,7 +165,7 @@ func (w *Worker) consume(ctx context.Context, reader *kafka.Reader) {
 		}
 
 		processErr := w.processWithRetries(ctx, reader, m)
-		if processErr != nil {
+		if processErr != nil && ctx.Err() == nil {
 			w.sendToDLQ(ctx, reader, m, processErr)
 		}
 
@@ -164,6 +181,9 @@ func (w *Worker) processWithRetries(ctx context.Context, reader *kafka.Reader, m
 		processErr = w.processMessage(ctx, m)
 		if processErr == nil {
 			return nil
+		}
+		if isPermanent(processErr) {
+			return processErr
 		}
 
 		slog.Warn("message processing failed, retrying",
@@ -210,10 +230,10 @@ func (w *Worker) processMessage(ctx context.Context, m kafka.Message) error {
 
 	var event domain.PostEventPayload
 	if err := json.Unmarshal(m.Value, &event); err != nil {
-		return fmt.Errorf("unmarshal event: %w", err)
+		return permanentf("unmarshal event: %w", err)
 	}
 	if strings.TrimSpace(event.PostID) == "" {
-		return errors.New("event is missing postId")
+		return permanentf("event is missing postId")
 	}
 
 	ctx, span := workerTracer.Start(ctx, "process message",

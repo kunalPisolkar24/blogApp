@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 DENSE_VECTOR = "dense"
 SPARSE_VECTOR = "sparse"
-RRF_PREFETCH_MULTIPLIER = 5
 
 
 def _point_id(post_id: str) -> uuid.UUID:
@@ -38,7 +37,11 @@ def _point_id(post_id: str) -> uuid.UUID:
 
 def _post_id_from_point(point_id) -> str:
     """Reverse _point_id: map a Qdrant point id back to the post id hex."""
-    hexed = point_id.hex if isinstance(point_id, uuid.UUID) else str(point_id).replace("-", "")
+    hexed = (
+        point_id.hex
+        if isinstance(point_id, uuid.UUID)
+        else str(point_id).replace("-", "")
+    )
     if len(hexed) == 32 and hexed.startswith("00000000"):
         return hexed[8:]
     return str(uuid.UUID(hex=hexed))
@@ -133,29 +136,30 @@ class SearchIndex:
         dense = (await self._embeddings.embed([query]))[0]
         sparse = sparse_embed(query)
 
+        # Fetch the whole fused ranking in one pass, capped at the
+        # searchable window, then slice the requested page out of it.
+        # Qdrant 1.19 does not expose a total count for query points, so
+        # this is the only way to report an exact total, and it keeps
+        # every page of the same query on a single stable ranking.
+        window = settings.SEARCH_MAX_RESULT_WINDOW
         if sparse:
-            prefetch_limit = min(
-                offset + limit * RRF_PREFETCH_MULTIPLIER,
-                settings.SEARCH_MAX_RESULT_WINDOW,
-            )
             response = await self._client.query_points(
                 collection_name=settings.QDRANT_COLLECTION,
                 prefetch=[
                     models.Prefetch(
                         query=dense,
                         using=DENSE_VECTOR,
-                        limit=prefetch_limit,
+                        limit=window,
                         score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
                     ),
                     models.Prefetch(
                         query=_sparse_vector(sparse),
                         using=SPARSE_VECTOR,
-                        limit=prefetch_limit,
+                        limit=window,
                     ),
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
-                offset=offset,
-                limit=limit,
+                limit=window,
             )
         else:
             response = await self._client.query_points(
@@ -163,12 +167,13 @@ class SearchIndex:
                 query=dense,
                 using=DENSE_VECTOR,
                 score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
-                offset=offset,
-                limit=limit,
+                limit=window,
             )
 
         post_ids = [_post_id_from_point(point.id) for point in response.points]
-        return SearchResult(post_ids=post_ids, total=offset + len(post_ids))
+        return SearchResult(
+            post_ids=post_ids[offset : offset + limit], total=len(post_ids)
+        )
 
     def _embedding_text(self, title: str, body: str, summary: str) -> str:
         body_text = clean_html(body)[: settings.EMBEDDING_MAX_CHARS]

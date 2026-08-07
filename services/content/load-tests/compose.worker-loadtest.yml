@@ -108,7 +108,7 @@ services:
       - loadtest-net
 
   qdrant:
-    image: qdrant/qdrant:v1.9.7
+    image: qdrant/qdrant:v1.19.0
     container_name: loadtest-worker-qdrant
     restart: unless-stopped
     healthcheck:

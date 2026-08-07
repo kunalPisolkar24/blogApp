@@ -21,7 +21,6 @@ ENV VITE_CLOUDINARY_UPLOAD_PRESET=${VITE_CLOUDINARY_UPLOAD_PRESET}
 COPY frontend/ ./
 COPY services/user/schema.graphql /app/services/user/schema.graphql
 COPY services/content/graph/schema.graphqls /app/services/content/graph/schema.graphqls
-COPY services/search/schema.graphql /app/services/search/schema.graphql
 
 RUN npm run build
 

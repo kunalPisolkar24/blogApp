@@ -10,7 +10,7 @@ x-ai-service-env: &ai-service-env
 
 services:
   qdrant:
-    image: qdrant/qdrant:v1.9.7
+    image: qdrant/qdrant:v1.19.0
     container_name: loadtest-ai-qdrant
     restart: unless-stopped
     healthcheck:

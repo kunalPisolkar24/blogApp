@@ -73,10 +73,14 @@ async def test_search_keeps_relevant_semantic_matches(running_server_factory) ->
     alpha = str(uuid4())
     beta = str(uuid4())
     await stub.IndexPost(
-        ai_service_pb2.IndexRequest(post_id=alpha, title="Alpha document", body="<p>alpha body</p>")
+        ai_service_pb2.IndexRequest(
+            post_id=alpha, title="Alpha document", body="<p>alpha body</p>"
+        )
     )
     await stub.IndexPost(
-        ai_service_pb2.IndexRequest(post_id=beta, title="Beta document", body="<p>beta body</p>")
+        ai_service_pb2.IndexRequest(
+            post_id=beta, title="Beta document", body="<p>beta body</p>"
+        )
     )
 
     response = await stub.SearchPosts(
@@ -87,7 +91,9 @@ async def test_search_keeps_relevant_semantic_matches(running_server_factory) ->
     assert response.total == 1
 
 
-async def test_search_ignores_irrelevant_semantic_matches(running_server_factory) -> None:
+async def test_search_ignores_irrelevant_semantic_matches(
+    running_server_factory,
+) -> None:
     channel, _, _ = await running_server_factory(ScriptedEmbedding())
     stub = ai_stubs.AIServiceStub(channel)
     await stub.IndexPost(
@@ -174,6 +180,8 @@ async def test_search_pagination(stub) -> None:
     assert len(page_one.post_ids) == 2
     assert len(page_two.post_ids) == 1
     assert set(page_one.post_ids) | set(page_two.post_ids) == set(ids)
+    assert page_one.total == 3, "total counts every match, not just the page"
+    assert page_two.total == 3, "total is the same on every page"
 
 
 async def test_index_rejects_empty_post_id(stub) -> None:

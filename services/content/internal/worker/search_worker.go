@@ -123,7 +123,7 @@ func (w *SearchWorker) consume(ctx context.Context, reader *kafka.Reader) {
 		}
 
 		processErr := w.processWithRetries(ctx, m)
-		if processErr != nil {
+		if processErr != nil && ctx.Err() == nil {
 			w.sendToDLQ(ctx, m, processErr)
 		}
 
@@ -139,6 +139,9 @@ func (w *SearchWorker) processWithRetries(ctx context.Context, m kafka.Message) 
 		processErr = w.processMessage(ctx, m)
 		if processErr == nil {
 			return nil
+		}
+		if isPermanent(processErr) {
+			return processErr
 		}
 
 		slog.Warn("message processing failed, retrying",
@@ -193,14 +196,14 @@ func (w *SearchWorker) processMessage(ctx context.Context, m kafka.Message) erro
 
 	var event domain.PostEventPayload
 	if err := json.Unmarshal(m.Value, &event); err != nil {
-		return fmt.Errorf("unmarshal event: %w", err)
+		return permanentf("unmarshal event: %w", err)
 	}
 	if strings.TrimSpace(event.PostID) == "" {
-		return errors.New("event is missing postId")
+		return permanentf("event is missing postId")
 	}
 
 	if err := w.aiService.IndexPost(
-		ctx, event.PostID, event.Title, event.Body, event.Summary, nil, event.CreatedAt,
+		ctx, event.PostID, event.Title, event.Body, event.Summary, event.Tags, event.CreatedAt,
 	); err != nil {
 		return fmt.Errorf("index post: %w", err)
 	}

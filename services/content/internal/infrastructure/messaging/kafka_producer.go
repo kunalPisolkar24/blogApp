@@ -103,6 +103,7 @@ func (k *kafkaProducer) publish(ctx context.Context, post *domain.Post) error {
 		ImageURL:      post.ImageUrl,
 		Summary:       post.Summary,
 		SummaryStatus: string(post.SummaryStatus),
+		Tags:          post.Tags,
 		CreatedAt:     post.CreatedAt,
 	}
 

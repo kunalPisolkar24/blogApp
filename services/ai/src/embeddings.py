@@ -30,27 +30,23 @@ def _chunked(items: list[str], size: int) -> list[list[str]]:
 
 
 class OllamaEmbeddingClient:
-    """Embeds text via a self-hosted Ollama server (OpenAI-compatible API)."""
+    """Embeds text via a self-hosted Ollama server (native /api/embed)."""
 
-    def __init__(self) -> None:
-        self._client = httpx.AsyncClient(
+    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+        self._client = client or httpx.AsyncClient(
             base_url=settings.EMBEDDING_URL,
             timeout=settings.EMBEDDING_TIMEOUT_SECONDS,
         )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         start = time.perf_counter()
-        vectors: list[list[float]] = []
         try:
-            for batch in _chunked(texts, settings.EMBEDDING_BATCH_SIZE):
-                response = await self._client.post(
-                    "/api/embed",
-                    json={"model": settings.EMBEDDING_MODEL, "input": batch},
-                )
-                response.raise_for_status()
-                data = response.json()
-                vectors.extend(data["embeddings"])
+            vectors = await self._embed(texts)
+            _validate_embeddings(texts, vectors)
             metrics.EMBEDDING_REQUESTS.labels(status="success").inc()
+        except EmbeddingError:
+            metrics.EMBEDDING_REQUESTS.labels(status="error").inc()
+            raise
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
             metrics.EMBEDDING_REQUESTS.labels(status="error").inc()
             raise EmbeddingError(str(exc)) from exc
@@ -58,8 +54,31 @@ class OllamaEmbeddingClient:
             metrics.EMBEDDING_REQUEST_DURATION.observe(time.perf_counter() - start)
         return vectors
 
+    async def _embed(self, texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for batch in _chunked(texts, settings.EMBEDDING_BATCH_SIZE):
+            response = await self._client.post(
+                "/api/embed",
+                json={"model": settings.EMBEDDING_MODEL, "input": batch},
+            )
+            response.raise_for_status()
+            vectors.extend(response.json()["embeddings"])
+        return vectors
+
     async def close(self) -> None:
         await self._client.aclose()
+
+
+def _validate_embeddings(texts: list[str], vectors: list[list[float]]) -> None:
+    """Reject mismatched embedding responses before they can corrupt the
+    index: the count must match the input and the dimension must match
+    the configured dense vector size."""
+    if len(vectors) != len(texts):
+        raise EmbeddingError(f"expected {len(texts)} embeddings, got {len(vectors)}")
+    if any(len(vector) != settings.QDRANT_VECTOR_SIZE for vector in vectors):
+        raise EmbeddingError(
+            f"embedding dimension must be {settings.QDRANT_VECTOR_SIZE}"
+        )
 
 
 class FakeEmbeddingClient:

@@ -12,6 +12,7 @@ type PostEventPayload struct {
 	ImageURL      *string   `json:"imageUrl"`
 	Summary       string    `json:"summary,omitempty"`
 	SummaryStatus string    `json:"summaryStatus,omitempty"`
+	Tags          []string  `json:"tags,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 }
 

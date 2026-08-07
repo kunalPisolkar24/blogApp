@@ -35,6 +35,24 @@ def handle_graceful_shutdown(
         loop.add_signal_handler(sig, shutdown)
 
 
+async def _ensure_search_ready(search: SearchIndex) -> None:
+    """Wait for Qdrant with a short backoff instead of crashing on a
+    transient startup blip (e.g. the store still restarting)."""
+    for attempt in range(1, settings.QDRANT_STARTUP_RETRIES + 1):
+        try:
+            await search.ensure_collection()
+            return
+        except Exception:
+            if attempt == settings.QDRANT_STARTUP_RETRIES:
+                raise
+            logger.warning(
+                "qdrant not ready, retrying (%d/%d)",
+                attempt,
+                settings.QDRANT_STARTUP_RETRIES,
+            )
+            await asyncio.sleep(5)
+
+
 async def serve() -> None:
     setup_logging()
     setup_tracing()
@@ -50,7 +68,7 @@ async def serve() -> None:
         else OllamaEmbeddingClient()
     )
     search = SearchIndex(embeddings)
-    await search.ensure_collection()
+    await _ensure_search_ready(search)
 
     server, health_servicer = await create_server(AIService(llm, search))
     handle_graceful_shutdown(server, health_servicer)
