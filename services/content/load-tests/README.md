@@ -29,8 +29,8 @@ endpoints and asserts on consumer lag and result counters. Qdrant and the AI
 service (fake LLM/embeddings, deterministic vectors) are part of the rig, so
 the search worker indexes every event end to end. The producer writes synthetic
 events that reference non-existent posts, so the content worker consumes and
-skips them, plus one tombstone every 20 messages; every event is a valid
-indexing request for the search worker.
+skips them, plus one tombstone every 20 messages; keys are 24-hex post IDs so
+the search worker can index them (the AI service requires hex point ids).
 
 - `producer/` — standalone kafka-go producer, `main.go` + own `go.mod`.
 - `worker.js` — scrapes both workers' `/metrics` and tracks

@@ -1,8 +1,10 @@
 # AI Service
 
 gRPC service that generates blog summaries, tags, and full posts via an
-OpenAI-compatible LLM API (Lightning AI). Written in Python (3.12) with
-asyncio + grpcio, built for the rest of the Topos platform over gRPC.
+OpenAI-compatible LLM API (Lightning AI), and provides vector search over
+posts backed by Qdrant (dense + sparse hybrid, with a score threshold).
+Written in Python (3.12) with asyncio + grpcio, built for the rest of the
+Topos platform over gRPC.
 
 ## RPCs
 
@@ -11,6 +13,9 @@ asyncio + grpcio, built for the rest of the Topos platform over gRPC.
 | `GenerateSummary` | `ContentRequest` | `ContentResponse` |
 | `GenerateTags` | `ContextRequest` | `TagsResponse` |
 | `GeneratePost` | `PostGenerationRequest` | `PostGenerationResponse` |
+| `IndexPost` | `IndexRequest` | `IndexResponse` |
+| `DeletePost` | `DeleteRequest` | `DeleteResponse` |
+| `SearchPosts` | `SearchRequest` | `SearchResponse` |
 
 ## Layout
 
@@ -19,6 +24,9 @@ src/
 ├── main.py              # entrypoint: serve + graceful shutdown
 ├── config.py            # pydantic settings (env-driven)
 ├── llm.py               # LLM provider client (real + fake)
+├── embeddings.py        # embedding clients (ollama + fake)
+├── vector.py            # Qdrant index: upsert, delete, hybrid search
+├── sparse.py            # sparse (lexical) tokenizer for hybrid search
 ├── api/                 # gRPC server construction + RPC handlers
 ├── domain/              # models, prompts, sanitization, text cleaning
 ├── observability/       # logging, metrics, tracing
@@ -39,6 +47,12 @@ make run             # starts on :50051, metrics on :12666
 Requires `LLM_API_KEY` for real LLM calls; set `LLM_MODE=fake` to run
 with canned responses and no network access.
 
+Search requires a running Qdrant (`QDRANT_URL`, default
+`http://localhost:6333`). Set `EMBEDDING_MODE=ollama` for real embeddings;
+the default `fake` mode produces deterministic vectors (exact text matches
+score ~1.0, unrelated text ~0.0). Unrelated results are filtered by
+`SEARCH_DENSE_SCORE_THRESHOLD` (default `0.3`).
+
 ## Docker
 
 ```bash
@@ -54,8 +68,10 @@ own env names.
 
 ```bash
 make test            # unit + in-process tests (fast, no docker)
-make integration     # container tests via testcontainers (builds the image)
+make integration     # container tests via testcontainers (builds the image;
+                     # spins up Qdrant and covers search + threshold behavior)
 make load-test       # k6 load tests against a fake-LLM container
+make load-test-search   # k6 search load test (seeds posts, checks gibberish is filtered)
 ```
 
 ## Observability
