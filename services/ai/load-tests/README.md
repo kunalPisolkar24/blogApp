@@ -14,6 +14,7 @@ JSON parsing, pydantic validation, and sanitization.
 | Container | Image | Purpose |
 |---|---|---|
 | `ai-service` | service `Dockerfile` | System under test, fake LLM mode |
+| `qdrant` | `qdrant/qdrant:v1.9.7` | Vector store for `IndexPost`/`SearchPosts` |
 | `k6` | `grafana/k6:latest` | Load driver (gRPC via the checked-in proto) |
 
 ## Quick start
@@ -36,6 +37,7 @@ threshold failures cause the Make target to fail.
 | `generate-summary` | `GenerateSummary` | ~1.3KB text per call |
 | `generate-tags` | `GenerateTags` | title + ~1.2KB body (truncated at 3000) |
 | `generate-post` | `GeneratePost` | ~400-char prompt, full JSON parse + sanitize |
+| `generate-search` | `IndexPost` (seed) + `SearchPosts` | seeds 7 posts in `setup()`, then searches; every 10th iteration is a gibberish query that must return 0 results (score threshold) |
 | `mixed` (default) | all three | weighted mix, `WEIGHTS` env tunable |
 
 ## Tunables (Make env)
@@ -49,7 +51,7 @@ threshold failures cause the Make target to fail.
 | `WEIGHTS` | `summary:40,tags:30,post:30` | Only used by `mixed` |
 | `LLM_MODE` | `fake` | Keep `fake` for local runs |
 | `LOG_LEVEL` | `WARNING` | Quiet access logs during the run |
-| `SVC_MEM` `K6_MEM` | `512M` `384M` | Container memory caps |
+| `SVC_MEM` `QDRANT_MEM` `K6_MEM` | `512M` `256M` `384M` | Container memory caps |
 
 ## Common invocations
 
@@ -73,7 +75,8 @@ make -C services/ai load-test WEIGHTS=post:70,summary:20,tags:10 DURATION=1m
 
 - `grpc_req_duration` — built-in latency trend, thresholds p(95)<100ms, p(99)<250ms
 - `summary_duration` / `tags_duration` / `post_duration` — per-RPC custom trends
-- `checks` — every RPC must return gRPC status OK (0)
+- `checks` — every RPC must return gRPC status OK (0); `generate-search` also
+  asserts relevant queries return results and gibberish returns none
 
 ## Inspecting state
 
@@ -97,7 +100,8 @@ All containers and volumes are removed.
 
 ## Lifecycle
 
-1. `compose up` builds and starts `ai-service`; health check polls the gRPC
+1. `compose up` builds and starts `qdrant` (health check on `:6333`), then
+   `ai-service` once qdrant is healthy; the service health check polls the gRPC
    health service for `ai.AIService` (SERVING)
 2. `k6` starts once the service is healthy, loads the proto from
    `services/ai/proto/ai/ai_service.proto`, connects, and runs the scenario

@@ -27,6 +27,9 @@ DEFAULTS = {
     "MAX_TITLE_CHARS": 200,
     "OTEL_EXPORTER_OTLP_ENDPOINT": "",
     "OTEL_SERVICE_NAME": "ai-service",
+    "QDRANT_URL": "http://localhost:6333",
+    "QDRANT_VECTOR_SIZE": 1024,
+    "SEARCH_DENSE_SCORE_THRESHOLD": 0.3,
 }
 
 
@@ -49,6 +52,9 @@ OVERRIDES = {
     "MAX_TITLE_CHARS": 100,
     "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317",
     "OTEL_SERVICE_NAME": "ai-test",
+    "QDRANT_URL": "http://qdrant:6333",
+    "QDRANT_VECTOR_SIZE": 768,
+    "SEARCH_DENSE_SCORE_THRESHOLD": 0.55,
 }
 
 

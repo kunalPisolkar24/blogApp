@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import math
 import random
 import time
 from typing import Protocol
@@ -62,7 +63,13 @@ class OllamaEmbeddingClient:
 
 
 class FakeEmbeddingClient:
-    """Deterministic hash-based vectors for tests and load testing."""
+    """Deterministic unit-norm vectors for tests and load testing.
+
+    Vectors are zero-mean gaussians normalised to unit length, seeded
+    per text. Cosine similarity is therefore ~0 for unrelated texts and
+    exactly 1 for identical texts, mirroring how a real embedding model
+    behaves well enough for the search score threshold to matter.
+    """
 
     def __init__(self) -> None:
         self._size = settings.QDRANT_VECTOR_SIZE
@@ -72,7 +79,9 @@ class FakeEmbeddingClient:
         for text in texts:
             seed = int(hashlib.sha256(text.encode()).hexdigest(), 16) % (2**32)
             rng = random.Random(seed)
-            vectors.append([rng.random() for _ in range(self._size)])
+            vector = [rng.gauss(0, 1) for _ in range(self._size)]
+            norm = math.sqrt(sum(component**2 for component in vector))
+            vectors.append([component / norm for component in vector])
         return vectors
 
     async def close(self) -> None:

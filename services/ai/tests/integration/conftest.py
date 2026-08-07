@@ -2,9 +2,11 @@ import time
 
 import docker
 import grpc
+import httpx
 import pytest
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from testcontainers.core.container import DockerContainer
+from testcontainers.core.network import Network
 
 from src.generated import ai_service_pb2_grpc as ai_stubs
 
@@ -66,10 +68,53 @@ class ServiceUnderTest:
 
 
 @pytest.fixture(scope="module")
-def service(service_image: str) -> ServiceUnderTest:
-    """Run the service in a container with LLM_MODE=fake for the module."""
+def network() -> Network:
+    """Shared network so the service and qdrant can talk by name."""
+    network = Network()
+    network.create()
+    yield network
+    network.remove()
+
+
+def _wait_ready(url: str, timeout: float = READY_TIMEOUT_SECONDS) -> None:
+    """Block until the endpoint answers, or the timeout elapses."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if httpx.get(url, timeout=2).status_code == 200:
+                return
+        except (httpx.HTTPError, ConnectionError):
+            pass
+        time.sleep(0.5)
+    raise RuntimeError(f"container did not become ready at {url} in time")
+
+
+@pytest.fixture(scope="module")
+def qdrant(network: Network) -> DockerContainer:
+    """Real qdrant for the search tests; reachable as http://qdrant:6333."""
+    container = DockerContainer("qdrant/qdrant:v1.9.7")
+    container.with_network(network)
+    container.with_network_aliases("qdrant")
+    container.with_exposed_ports(6333)
+    container.start()
+
+    host = container.get_container_host_ip()
+    port = container.get_exposed_port(6333)
+    try:
+        _wait_ready(f"http://{host}:{port}/readyz")
+        yield container
+    finally:
+        container.stop()
+
+
+@pytest.fixture(scope="module")
+def service(service_image: str, network: Network, qdrant: DockerContainer) -> ServiceUnderTest:
+    """Run the service in a container with fake llm and embeddings."""
     container = DockerContainer(service_image)
     container.with_env("LLM_MODE", "fake")
+    container.with_env("EMBEDDING_MODE", "fake")
+    container.with_env("QDRANT_URL", "http://qdrant:6333")
+    container.with_network(network)
     container.with_exposed_ports(GRPC_PORT, METRICS_PORT)
     container.start()
 
