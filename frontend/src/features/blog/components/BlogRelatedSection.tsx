@@ -6,13 +6,13 @@ import type { PostCardFieldsFragment } from "@/shared/graphql/generated/graphql"
 const RELATED_HEADING = "MORE LIKE THIS";
 
 interface BlogRelatedSectionProps {
-  posts: PostCardFieldsFragment[];
+  posts?: PostCardFieldsFragment[];
 }
 
 export const BlogRelatedSection: React.FC<BlogRelatedSectionProps> = ({
   posts,
 }) => {
-  if (posts.length === 0) {
+  if (!posts?.length) {
     return null;
   }
 

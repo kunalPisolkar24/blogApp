@@ -256,6 +256,10 @@ class MemoryIndex:
     token overlap via RRF. Exact text matches score ~1.0 and unrelated
     text ~0.0 under fake embeddings, so load tests can exercise the full
     search/related RPC path without a containerised store.
+
+    Semantics are approximate, not bit-for-bit: ties are broken by
+    insertion order, and sparse weights are the raw token frequencies
+    rather than Qdrant's IDF-modified vectors.
     """
 
     def __init__(self, embeddings: EmbeddingProvider) -> None:
