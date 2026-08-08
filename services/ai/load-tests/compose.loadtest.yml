@@ -4,6 +4,9 @@ x-ai-service-env: &ai-service-env
   PORT: 50051
   LLM_MODE: ${LLM_MODE:-fake}
   EMBEDDING_MODE: ${EMBEDDING_MODE:-fake}
+  EMBEDDING_URL: http://ollama:11434
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}
+  VECTOR_MODE: ${VECTOR_MODE:-qdrant}
   QDRANT_URL: http://qdrant:6333
   LOG_LEVEL: ${LOG_LEVEL:-WARNING}
   METRICS_PORT: 12666
@@ -26,6 +29,36 @@ services:
           memory: ${QDRANT_MEM:-256M}
         reservations:
           memory: 64M
+
+  # Only started for embedding-real runs (EMBEDDING_MODE=ollama); fake
+  # runs never pull the model. The entrypoint serves the API and pulls
+  # the configured model before the healthcheck can pass. Startup order
+  # is handled by the Makefile (ai-service waits for ollama via health).
+  ollama:
+    image: ollama/ollama:${OLLAMA_TAG:-0.9.6}
+    container_name: loadtest-ai-ollama
+    restart: unless-stopped
+    profiles:
+      - embedding-real
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 3; ollama pull $$OLLAMA_MODEL; wait"]
+    environment:
+      OLLAMA_MODEL: ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}
+    healthcheck:
+      test: ["CMD", "ollama", "show", "${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${OLLAMA_MEM:-2G}
+        reservations:
+          memory: 512M
 
   ai-service:
     build:
@@ -65,6 +98,9 @@ services:
       DURATION: ${DURATION:-30s}
       RPS: ${RPS:-100}
       WEIGHTS: ${WEIGHTS:-summary:40,tags:30,post:30}
+      EMBEDDING_MODE: ${EMBEDDING_MODE:-fake}
+      SEARCH_P95: ${SEARCH_P95:-250}
+      SEARCH_P99: ${SEARCH_P99:-600}
     depends_on:
       ai-service:
         condition: service_healthy
@@ -84,3 +120,6 @@ networks:
   loadtest-net:
     name: ai-loadtest-net
     driver: bridge
+
+volumes:
+  ollama-models:

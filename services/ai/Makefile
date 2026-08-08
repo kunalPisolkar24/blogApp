@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -73,12 +73,24 @@ LLM_MODE  ?= fake
 LOG_LEVEL ?= WARNING
 SVC_MEM   ?= 512M
 K6_MEM    ?= 384M
+EMBEDDING_MODE ?= fake
+EMBEDDING_MODEL ?= snowflake-arctic-embed2:568m
+OLLAMA_MEM ?= 2G
+# Search/related RPCs hit the store per call; real embeddings (ollama)
+# add their own latency, so the default latency budget widens for
+# embedding-real runs. Both stay overridable from the command line.
+SEARCH_P95 ?= $(if $(filter ollama,$(EMBEDDING_MODE)),2000,250)
+SEARCH_P99 ?= $(if $(filter ollama,$(EMBEDDING_MODE)),4000,600)
 
+# The ollama container is profile-gated so fake runs never pull the
+# model; embedding-real runs start it first (see the load-test target).
 LT_VARS = SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
 	WEIGHTS=$(WEIGHTS) LLM_MODE=$(LLM_MODE) LOG_LEVEL=$(LOG_LEVEL) \
-	SVC_MEM=$(SVC_MEM) K6_MEM=$(K6_MEM)
+	SVC_MEM=$(SVC_MEM) K6_MEM=$(K6_MEM) EMBEDDING_MODE=$(EMBEDDING_MODE) \
+	EMBEDDING_MODEL=$(EMBEDDING_MODEL) OLLAMA_MEM=$(OLLAMA_MEM) \
+	SEARCH_P95=$(SEARCH_P95) SEARCH_P99=$(SEARCH_P99)
 
-VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search
+VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search generate-related
 
 load-test-build:
 	$(LT_VARS) $(COMPOSE_LT) build
@@ -86,6 +98,12 @@ load-test-build:
 load-test: load-test-build
 	@if echo " $(VALID_SCRIPTS) " | grep -q " $(SCRIPT) "; then :; else \
 		echo "unknown SCRIPT=$(SCRIPT). valid: $(VALID_SCRIPTS)"; exit 2; \
+	fi
+	@if echo " fake ollama " | grep -q " $(EMBEDDING_MODE) "; then :; else \
+		echo "unknown EMBEDDING_MODE=$(EMBEDDING_MODE). valid: fake ollama"; exit 2; \
+	fi
+	@if [ "$(EMBEDDING_MODE)" = "ollama" ]; then \
+		$(LT_VARS) $(COMPOSE_LT) --profile embedding-real up -d --wait ollama; \
 	fi
 	$(LT_VARS) $(COMPOSE_LT) up -d --wait ai-service
 	$(LT_VARS) $(COMPOSE_LT) run --rm k6
@@ -104,6 +122,9 @@ load-test-post: load-test
 
 load-test-search: SCRIPT = generate-search
 load-test-search: load-test
+
+load-test-related: SCRIPT = generate-related
+load-test-related: load-test
 
 load-test-stop:
 	$(LT_VARS) $(COMPOSE_LT) down -v --remove-orphans
