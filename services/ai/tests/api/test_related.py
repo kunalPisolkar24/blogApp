@@ -20,7 +20,9 @@ def _index_request(post_id: str, text: str) -> ai_service_pb2.IndexRequest:
     )
 
 
-def _related_request(post_id: str, limit: int | None = None) -> ai_service_pb2.RelatedRequest:
+def _related_request(
+    post_id: str, limit: int | None = None
+) -> ai_service_pb2.RelatedRequest:
     return ai_service_pb2.RelatedRequest(
         post_id=post_id, limit=limit if limit is not None else 10
     )

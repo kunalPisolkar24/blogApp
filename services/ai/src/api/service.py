@@ -24,7 +24,7 @@ from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMError, LLMProvider
 from src.observability import metrics
 from src.observability.tracing import get_span_ids
-from src.vector import SearchIndex
+from src.vector import SearchStore
 
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("access")
@@ -120,7 +120,7 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
 
 
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
-    def __init__(self, llm: LLMProvider, search: SearchIndex) -> None:
+    def __init__(self, llm: LLMProvider, search: SearchStore) -> None:
         self._llm = llm
         self._search = search
 

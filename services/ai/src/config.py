@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     EMBEDDING_MAX_CHARS: int = 8000
     EMBEDDING_TIMEOUT_SECONDS: int = 30
 
+    # Which vector store backs search and related posts. "qdrant" is the
+    # real store; "fake" runs a deterministic in-memory index with the
+    # same semantics, for docker-free local dev and cheap load tests.
+    VECTOR_MODE: Literal["fake", "qdrant"] = "qdrant"
+
     SPARSE_MIN_TOKEN_LENGTH: int = 2
     SPARSE_PREFIX_MIN_LENGTH: int = 3
     SPARSE_MAX_TOKENS: int = 512

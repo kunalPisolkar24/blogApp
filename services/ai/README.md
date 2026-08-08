@@ -54,9 +54,15 @@ the default `fake` mode produces deterministic vectors (exact text matches
 score ~1.0, unrelated text ~0.0). Unrelated results are filtered by
 `SEARCH_DENSE_SCORE_THRESHOLD` (default `0.3`).
 
+Set `VECTOR_MODE=fake` to swap Qdrant for a deterministic in-memory index
+with the same semantics (dense cosine + sparse overlap, fused with RRF).
+It needs no Qdrant at all — ideal for local dev and cheap load tests —
+while `qdrant` (the default) is the real store. Both stores work with
+either embedding mode.
+
 `RelatedPosts` returns the nearest neighbours of an already-indexed post
-by querying Qdrant with the post's stored dense vector — no embedding call
-at read time. Unknown post ids yield an empty result.
+by querying the store with the post's stored dense vector — no embedding
+call at read time. Unknown post ids yield an empty result.
 
 ## Docker
 
