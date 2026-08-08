@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v3.21.12
-// source: proto/ai/ai_service.proto
+// source: ai_service.proto
 
 package ai
 
@@ -26,6 +26,8 @@ const (
 	AIService_DeletePost_FullMethodName      = "/ai.AIService/DeletePost"
 	AIService_SearchPosts_FullMethodName     = "/ai.AIService/SearchPosts"
 	AIService_RelatedPosts_FullMethodName    = "/ai.AIService/RelatedPosts"
+	AIService_Embed_FullMethodName           = "/ai.AIService/Embed"
+	AIService_ChatAnswer_FullMethodName      = "/ai.AIService/ChatAnswer"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -39,6 +41,8 @@ type AIServiceClient interface {
 	DeletePost(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 	SearchPosts(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	RelatedPosts(ctx context.Context, in *RelatedRequest, opts ...grpc.CallOption) (*RelatedResponse, error)
+	Embed(ctx context.Context, in *EmbedRequest, opts ...grpc.CallOption) (*EmbedResponse, error)
+	ChatAnswer(ctx context.Context, in *ChatAnswerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
 }
 
 type aIServiceClient struct {
@@ -119,6 +123,35 @@ func (c *aIServiceClient) RelatedPosts(ctx context.Context, in *RelatedRequest, 
 	return out, nil
 }
 
+func (c *aIServiceClient) Embed(ctx context.Context, in *EmbedRequest, opts ...grpc.CallOption) (*EmbedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmbedResponse)
+	err := c.cc.Invoke(ctx, AIService_Embed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) ChatAnswer(ctx context.Context, in *ChatAnswerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AIService_ServiceDesc.Streams[0], AIService_ChatAnswer_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ChatAnswerRequest, ChatChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_ChatAnswerClient = grpc.ServerStreamingClient[ChatChunk]
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -130,6 +163,8 @@ type AIServiceServer interface {
 	DeletePost(context.Context, *DeleteRequest) (*DeleteResponse, error)
 	SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error)
 	RelatedPosts(context.Context, *RelatedRequest) (*RelatedResponse, error)
+	Embed(context.Context, *EmbedRequest) (*EmbedResponse, error)
+	ChatAnswer(*ChatAnswerRequest, grpc.ServerStreamingServer[ChatChunk]) error
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -160,6 +195,12 @@ func (UnimplementedAIServiceServer) SearchPosts(context.Context, *SearchRequest)
 }
 func (UnimplementedAIServiceServer) RelatedPosts(context.Context, *RelatedRequest) (*RelatedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RelatedPosts not implemented")
+}
+func (UnimplementedAIServiceServer) Embed(context.Context, *EmbedRequest) (*EmbedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Embed not implemented")
+}
+func (UnimplementedAIServiceServer) ChatAnswer(*ChatAnswerRequest, grpc.ServerStreamingServer[ChatChunk]) error {
+	return status.Error(codes.Unimplemented, "method ChatAnswer not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -308,6 +349,35 @@ func _AIService_RelatedPosts_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_Embed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmbedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).Embed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_Embed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).Embed(ctx, req.(*EmbedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_ChatAnswer_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ChatAnswerRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AIServiceServer).ChatAnswer(m, &grpc.GenericServerStream[ChatAnswerRequest, ChatChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_ChatAnswerServer = grpc.ServerStreamingServer[ChatChunk]
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -343,7 +413,17 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RelatedPosts",
 			Handler:    _AIService_RelatedPosts_Handler,
 		},
+		{
+			MethodName: "Embed",
+			Handler:    _AIService_Embed_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/ai/ai_service.proto",
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ChatAnswer",
+			Handler:       _AIService_ChatAnswer_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "ai_service.proto",
 }

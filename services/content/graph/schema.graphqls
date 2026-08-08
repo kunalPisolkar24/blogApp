@@ -46,6 +46,34 @@ type SearchResult {
   total: Int!
 }
 
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+type Chat {
+  id: ID!
+  title: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type ChatMessage {
+  id: ID!
+  chatId: ID!
+  role: MessageRole!
+  content: String!
+  citedPostIds: [ID!]!
+  createdAt: String!
+}
+
+type PaginatedMessages {
+  messages: [ChatMessage!]!
+  totalPages: Int!
+  currentPage: Int!
+  totalMessages: Int!
+}
+
 extend type User @key(fields: "id") {
   id: ID! @external
   posts(page: Int, limit: Int): PaginatedPosts!
@@ -57,6 +85,9 @@ type Query {
   tags(query: String, limit: Int): [Tag!]!
   postsByTag(tag: String!, page: Int, limit: Int): PaginatedPosts!
   searchPosts(query: String!, page: Int, limit: Int): SearchResult!
+  chats: [Chat!]!
+  chat(id: ID!): Chat
+  chatMessages(chatId: ID!, page: Int, limit: Int): PaginatedMessages!
 }
 
 type Mutation {
@@ -65,6 +96,10 @@ type Mutation {
   deletePost(id: ID!): Boolean!
   generateTags(title: String!, body: String!): [String!]!
   generatePostContent(prompt: String!): GeneratedPost!
+  createChat(title: String): Chat!
+  renameChat(id: ID!, title: String!): Chat!
+  deleteChat(id: ID!): Boolean!
+  askChat(chatId: ID!, query: String!): ChatMessage!
 }
 
 input CreatePostInput {

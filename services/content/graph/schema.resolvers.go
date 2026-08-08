@@ -84,6 +84,61 @@ func (r *mutationResolver) GeneratePostContent(ctx context.Context, prompt strin
 	return mapDomainGeneratedPostToModel(post), nil
 }
 
+// CreateChat is the resolver for the createChat field.
+func (r *mutationResolver) CreateChat(ctx context.Context, title *string) (*model.Chat, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	chat, err := r.ChatService.CreateChat(ctx, userID, derefStr(title))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainChatToModel(chat), nil
+}
+
+// RenameChat is the resolver for the renameChat field.
+func (r *mutationResolver) RenameChat(ctx context.Context, id string, title string) (*model.Chat, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	chat, err := r.ChatService.RenameChat(ctx, id, userID, title)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainChatToModel(chat), nil
+}
+
+// DeleteChat is the resolver for the deleteChat field.
+func (r *mutationResolver) DeleteChat(ctx context.Context, id string) (bool, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return false, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	if err := r.ChatService.DeleteChat(ctx, id, userID); err != nil {
+		return false, mapDomainError(err)
+	}
+	return true, nil
+}
+
+// AskChat is the resolver for the askChat field.
+func (r *mutationResolver) AskChat(ctx context.Context, chatID string, query string) (*model.ChatMessage, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	msg, err := r.ChatService.AskChat(ctx, chatID, userID, query)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainChatMessageToModel(msg), nil
+}
+
 // Related is the resolver for the related field.
 func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error) {
 	posts, err := r.PostService.RelatedPosts(ctx, obj.ID, deref(limit))
@@ -136,6 +191,48 @@ func (r *queryResolver) SearchPosts(ctx context.Context, query string, page *int
 		return nil, mapDomainError(err)
 	}
 	return mapDomainSearchResultToModel(posts), nil
+}
+
+// Chats is the resolver for the chats field.
+func (r *queryResolver) Chats(ctx context.Context) ([]*model.Chat, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	chats, err := r.ChatService.ListChats(ctx, userID)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainChatsToModel(chats), nil
+}
+
+// Chat is the resolver for the chat field.
+func (r *queryResolver) Chat(ctx context.Context, id string) (*model.Chat, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	chat, err := r.ChatService.GetChat(ctx, id, userID)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainChatToModel(chat), nil
+}
+
+// ChatMessages is the resolver for the chatMessages field.
+func (r *queryResolver) ChatMessages(ctx context.Context, chatID string, page *int, limit *int) (*model.PaginatedMessages, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	msgs, err := r.ChatService.GetMessages(ctx, chatID, userID, deref(page), deref(limit))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPaginatedMessagesToModel(msgs), nil
 }
 
 // Posts is the resolver for the posts field.

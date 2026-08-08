@@ -73,10 +73,12 @@ func newResolver(cfg config.Config, deps *bootstrap.Dependencies) *graph.Resolve
 	database := deps.Mongo.Database(cfg.DbName)
 	postRepo := repository.NewMongoPostRepository(database)
 	tagRepo := repository.NewMongoTagRepository(database)
+	chatRepo := repository.NewMongoChatRepository(database)
 
 	return graph.NewResolver(
 		service.NewPostService(postRepo, tagRepo, deps.AI, deps.Producer, deps.Cache),
 		service.NewTagService(tagRepo, deps.Cache),
+		service.NewChatService(chatRepo, deps.AI),
 	)
 }
 

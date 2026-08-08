@@ -12,6 +12,8 @@ service AIService {
   rpc DeletePost (DeleteRequest) returns (DeleteResponse);
   rpc SearchPosts (SearchRequest) returns (SearchResponse);
   rpc RelatedPosts (RelatedRequest) returns (RelatedResponse);
+  rpc Embed (EmbedRequest) returns (EmbedResponse);
+  rpc ChatAnswer (ChatAnswerRequest) returns (stream ChatChunk);
 }
 
 message ContentRequest {
@@ -77,4 +79,30 @@ message RelatedRequest {
 
 message RelatedResponse {
   repeated string post_ids = 1;
+}
+
+message EmbedRequest {
+  string text = 1;
+}
+
+message EmbedResponse {
+  repeated float vector = 1;
+}
+
+message ChatMessage {
+  string role = 1;
+  string content = 2;
+}
+
+message ChatAnswerRequest {
+  string query = 1;
+  repeated ChatMessage history = 2;
+  uint32 top_k = 3;
+}
+
+message ChatChunk {
+  string delta = 1;
+  bool done = 2;
+  repeated string cited_post_ids = 3;
+  string error = 4;
 }

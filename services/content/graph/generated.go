@@ -51,6 +51,22 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	Chat struct {
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Title     func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+	}
+
+	ChatMessage struct {
+		ChatID       func(childComplexity int) int
+		CitedPostIds func(childComplexity int) int
+		Content      func(childComplexity int) int
+		CreatedAt    func(childComplexity int) int
+		ID           func(childComplexity int) int
+		Role         func(childComplexity int) int
+	}
+
 	Entity struct {
 		FindPostByID func(childComplexity int, id string) int
 		FindUserByID func(childComplexity int, id string) int
@@ -64,11 +80,22 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		AskChat             func(childComplexity int, chatID string, query string) int
+		CreateChat          func(childComplexity int, title *string) int
 		CreatePost          func(childComplexity int, input model.CreatePostInput) int
+		DeleteChat          func(childComplexity int, id string) int
 		DeletePost          func(childComplexity int, id string) int
 		GeneratePostContent func(childComplexity int, prompt string) int
 		GenerateTags        func(childComplexity int, title string, body string) int
+		RenameChat          func(childComplexity int, id string, title string) int
 		UpdatePost          func(childComplexity int, id string, input model.UpdatePostInput) int
+	}
+
+	PaginatedMessages struct {
+		CurrentPage   func(childComplexity int) int
+		Messages      func(childComplexity int) int
+		TotalMessages func(childComplexity int) int
+		TotalPages    func(childComplexity int) int
 	}
 
 	PaginatedPosts struct {
@@ -94,6 +121,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		Chat               func(childComplexity int, id string) int
+		ChatMessages       func(childComplexity int, chatID string, page *int, limit *int) int
+		Chats              func(childComplexity int) int
 		Post               func(childComplexity int, id string) int
 		Posts              func(childComplexity int, page *int, limit *int) int
 		PostsByTag         func(childComplexity int, tag string, page *int, limit *int) int
@@ -133,6 +163,10 @@ type MutationResolver interface {
 	DeletePost(ctx context.Context, id string) (bool, error)
 	GenerateTags(ctx context.Context, title string, body string) ([]string, error)
 	GeneratePostContent(ctx context.Context, prompt string) (*model.GeneratedPost, error)
+	CreateChat(ctx context.Context, title *string) (*model.Chat, error)
+	RenameChat(ctx context.Context, id string, title string) (*model.Chat, error)
+	DeleteChat(ctx context.Context, id string) (bool, error)
+	AskChat(ctx context.Context, chatID string, query string) (*model.ChatMessage, error)
 }
 type PostResolver interface {
 	Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error)
@@ -143,6 +177,9 @@ type QueryResolver interface {
 	Tags(ctx context.Context, query *string, limit *int) ([]*model.Tag, error)
 	PostsByTag(ctx context.Context, tag string, page *int, limit *int) (*model.PaginatedPosts, error)
 	SearchPosts(ctx context.Context, query string, page *int, limit *int) (*model.SearchResult, error)
+	Chats(ctx context.Context) ([]*model.Chat, error)
+	Chat(ctx context.Context, id string) (*model.Chat, error)
+	ChatMessages(ctx context.Context, chatID string, page *int, limit *int) (*model.PaginatedMessages, error)
 }
 type UserResolver interface {
 	Posts(ctx context.Context, obj *model.User, page *int, limit *int) (*model.PaginatedPosts, error)
@@ -166,6 +203,68 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "Chat.createdAt":
+		if e.complexity.Chat.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.Chat.CreatedAt(childComplexity), true
+	case "Chat.id":
+		if e.complexity.Chat.ID == nil {
+			break
+		}
+
+		return e.complexity.Chat.ID(childComplexity), true
+	case "Chat.title":
+		if e.complexity.Chat.Title == nil {
+			break
+		}
+
+		return e.complexity.Chat.Title(childComplexity), true
+	case "Chat.updatedAt":
+		if e.complexity.Chat.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.Chat.UpdatedAt(childComplexity), true
+
+	case "ChatMessage.chatId":
+		if e.complexity.ChatMessage.ChatID == nil {
+			break
+		}
+
+		return e.complexity.ChatMessage.ChatID(childComplexity), true
+	case "ChatMessage.citedPostIds":
+		if e.complexity.ChatMessage.CitedPostIds == nil {
+			break
+		}
+
+		return e.complexity.ChatMessage.CitedPostIds(childComplexity), true
+	case "ChatMessage.content":
+		if e.complexity.ChatMessage.Content == nil {
+			break
+		}
+
+		return e.complexity.ChatMessage.Content(childComplexity), true
+	case "ChatMessage.createdAt":
+		if e.complexity.ChatMessage.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.ChatMessage.CreatedAt(childComplexity), true
+	case "ChatMessage.id":
+		if e.complexity.ChatMessage.ID == nil {
+			break
+		}
+
+		return e.complexity.ChatMessage.ID(childComplexity), true
+	case "ChatMessage.role":
+		if e.complexity.ChatMessage.Role == nil {
+			break
+		}
+
+		return e.complexity.ChatMessage.Role(childComplexity), true
 
 	case "Entity.findPostByID":
 		if e.complexity.Entity.FindPostByID == nil {
@@ -215,6 +314,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.GeneratedPost.Title(childComplexity), true
 
+	case "Mutation.askChat":
+		if e.complexity.Mutation.AskChat == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_askChat_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AskChat(childComplexity, args["chatId"].(string), args["query"].(string)), true
+	case "Mutation.createChat":
+		if e.complexity.Mutation.CreateChat == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createChat_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreateChat(childComplexity, args["title"].(*string)), true
 	case "Mutation.createPost":
 		if e.complexity.Mutation.CreatePost == nil {
 			break
@@ -226,6 +347,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.CreatePost(childComplexity, args["input"].(model.CreatePostInput)), true
+	case "Mutation.deleteChat":
+		if e.complexity.Mutation.DeleteChat == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteChat_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteChat(childComplexity, args["id"].(string)), true
 	case "Mutation.deletePost":
 		if e.complexity.Mutation.DeletePost == nil {
 			break
@@ -259,6 +391,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.GenerateTags(childComplexity, args["title"].(string), args["body"].(string)), true
+	case "Mutation.renameChat":
+		if e.complexity.Mutation.RenameChat == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_renameChat_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RenameChat(childComplexity, args["id"].(string), args["title"].(string)), true
 	case "Mutation.updatePost":
 		if e.complexity.Mutation.UpdatePost == nil {
 			break
@@ -270,6 +413,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.UpdatePost(childComplexity, args["id"].(string), args["input"].(model.UpdatePostInput)), true
+
+	case "PaginatedMessages.currentPage":
+		if e.complexity.PaginatedMessages.CurrentPage == nil {
+			break
+		}
+
+		return e.complexity.PaginatedMessages.CurrentPage(childComplexity), true
+	case "PaginatedMessages.messages":
+		if e.complexity.PaginatedMessages.Messages == nil {
+			break
+		}
+
+		return e.complexity.PaginatedMessages.Messages(childComplexity), true
+	case "PaginatedMessages.totalMessages":
+		if e.complexity.PaginatedMessages.TotalMessages == nil {
+			break
+		}
+
+		return e.complexity.PaginatedMessages.TotalMessages(childComplexity), true
+	case "PaginatedMessages.totalPages":
+		if e.complexity.PaginatedMessages.TotalPages == nil {
+			break
+		}
+
+		return e.complexity.PaginatedMessages.TotalPages(childComplexity), true
 
 	case "PaginatedPosts.currentPage":
 		if e.complexity.PaginatedPosts.CurrentPage == nil {
@@ -374,6 +542,34 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Post.UpdatedAt(childComplexity), true
 
+	case "Query.chat":
+		if e.complexity.Query.Chat == nil {
+			break
+		}
+
+		args, err := ec.field_Query_chat_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Chat(childComplexity, args["id"].(string)), true
+	case "Query.chatMessages":
+		if e.complexity.Query.ChatMessages == nil {
+			break
+		}
+
+		args, err := ec.field_Query_chatMessages_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ChatMessages(childComplexity, args["chatId"].(string), args["page"].(*int), args["limit"].(*int)), true
+	case "Query.chats":
+		if e.complexity.Query.Chats == nil {
+			break
+		}
+
+		return e.complexity.Query.Chats(childComplexity), true
 	case "Query.post":
 		if e.complexity.Query.Post == nil {
 			break
@@ -716,6 +912,33 @@ func (ec *executionContext) field_Entity_findUserByID_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_askChat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "chatId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["chatId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "query", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["query"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createChat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "title", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["title"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createPost_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -724,6 +947,17 @@ func (ec *executionContext) field_Mutation_createPost_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteChat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -762,6 +996,22 @@ func (ec *executionContext) field_Mutation_generateTags_args(ctx context.Context
 		return nil, err
 	}
 	args["body"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_renameChat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "title", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["title"] = arg1
 	return args, nil
 }
 
@@ -811,6 +1061,38 @@ func (ec *executionContext) field_Query__entities_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["representations"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_chatMessages_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "chatId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["chatId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_chat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -966,6 +1248,296 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ************************** directives.gotpl **************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _Chat_id(ctx context.Context, field graphql.CollectedField, obj *model.Chat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Chat_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Chat_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Chat",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Chat_title(ctx context.Context, field graphql.CollectedField, obj *model.Chat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Chat_title,
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Chat_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Chat",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Chat_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Chat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Chat_createdAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Chat_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Chat",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Chat_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.Chat) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Chat_updatedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Chat_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Chat",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_id(ctx context.Context, field graphql.CollectedField, obj *model.ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChatMessage_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChatMessage_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_chatId(ctx context.Context, field graphql.CollectedField, obj *model.ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChatMessage_chatId,
+		func(ctx context.Context) (any, error) {
+			return obj.ChatID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChatMessage_chatId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_role(ctx context.Context, field graphql.CollectedField, obj *model.ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChatMessage_role,
+		func(ctx context.Context) (any, error) {
+			return obj.Role, nil
+		},
+		nil,
+		ec.marshalNMessageRole2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐMessageRole,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChatMessage_role(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type MessageRole does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_content(ctx context.Context, field graphql.CollectedField, obj *model.ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChatMessage_content,
+		func(ctx context.Context) (any, error) {
+			return obj.Content, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChatMessage_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_citedPostIds(ctx context.Context, field graphql.CollectedField, obj *model.ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChatMessage_citedPostIds,
+		func(ctx context.Context) (any, error) {
+			return obj.CitedPostIds, nil
+		},
+		nil,
+		ec.marshalNID2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChatMessage_citedPostIds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChatMessage_createdAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChatMessage_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChatMessage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
 
 func (ec *executionContext) _Entity_findPostByID(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -1460,6 +2032,334 @@ func (ec *executionContext) fieldContext_Mutation_generatePostContent(ctx contex
 	if fc.Args, err = ec.field_Mutation_generatePostContent_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createChat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createChat,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().CreateChat(ctx, fc.Args["title"].(*string))
+		},
+		nil,
+		ec.marshalNChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createChat(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Chat_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Chat_title(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Chat_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Chat_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Chat", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createChat_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_renameChat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_renameChat,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().RenameChat(ctx, fc.Args["id"].(string), fc.Args["title"].(string))
+		},
+		nil,
+		ec.marshalNChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_renameChat(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Chat_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Chat_title(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Chat_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Chat_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Chat", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_renameChat_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteChat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteChat,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().DeleteChat(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteChat(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteChat_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_askChat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_askChat,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().AskChat(ctx, fc.Args["chatId"].(string), fc.Args["query"].(string))
+		},
+		nil,
+		ec.marshalNChatMessage2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatMessage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_askChat(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ChatMessage_id(ctx, field)
+			case "chatId":
+				return ec.fieldContext_ChatMessage_chatId(ctx, field)
+			case "role":
+				return ec.fieldContext_ChatMessage_role(ctx, field)
+			case "content":
+				return ec.fieldContext_ChatMessage_content(ctx, field)
+			case "citedPostIds":
+				return ec.fieldContext_ChatMessage_citedPostIds(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ChatMessage_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChatMessage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_askChat_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedMessages_messages(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedMessages) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedMessages_messages,
+		func(ctx context.Context) (any, error) {
+			return obj.Messages, nil
+		},
+		nil,
+		ec.marshalNChatMessage2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatMessageᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedMessages_messages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedMessages",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ChatMessage_id(ctx, field)
+			case "chatId":
+				return ec.fieldContext_ChatMessage_chatId(ctx, field)
+			case "role":
+				return ec.fieldContext_ChatMessage_role(ctx, field)
+			case "content":
+				return ec.fieldContext_ChatMessage_content(ctx, field)
+			case "citedPostIds":
+				return ec.fieldContext_ChatMessage_citedPostIds(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ChatMessage_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChatMessage", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedMessages_totalPages(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedMessages) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedMessages_totalPages,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalPages, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedMessages_totalPages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedMessages",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedMessages_currentPage(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedMessages) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedMessages_currentPage,
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentPage, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedMessages_currentPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedMessages",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedMessages_totalMessages(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedMessages) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedMessages_totalMessages,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalMessages, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedMessages_totalMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedMessages",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
 	}
 	return fc, nil
 }
@@ -2261,6 +3161,147 @@ func (ec *executionContext) fieldContext_Query_searchPosts(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_searchPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_chats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_chats,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Query().Chats(ctx)
+		},
+		nil,
+		ec.marshalNChat2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_chats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Chat_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Chat_title(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Chat_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Chat_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Chat", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_chat(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_chat,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().Chat(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		ec.marshalOChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_chat(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Chat_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Chat_title(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Chat_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Chat_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Chat", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_chat_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_chatMessages(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_chatMessages,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().ChatMessages(ctx, fc.Args["chatId"].(string), fc.Args["page"].(*int), fc.Args["limit"].(*int))
+		},
+		nil,
+		ec.marshalNPaginatedMessages2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedMessages,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_chatMessages(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "messages":
+				return ec.fieldContext_PaginatedMessages_messages(ctx, field)
+			case "totalPages":
+				return ec.fieldContext_PaginatedMessages_totalPages(ctx, field)
+			case "currentPage":
+				return ec.fieldContext_PaginatedMessages_currentPage(ctx, field)
+			case "totalMessages":
+				return ec.fieldContext_PaginatedMessages_totalMessages(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PaginatedMessages", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_chatMessages_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4284,6 +5325,124 @@ func (ec *executionContext) __Entity(ctx context.Context, sel ast.SelectionSet, 
 
 // region    **************************** object.gotpl ****************************
 
+var chatImplementors = []string{"Chat"}
+
+func (ec *executionContext) _Chat(ctx context.Context, sel ast.SelectionSet, obj *model.Chat) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, chatImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Chat")
+		case "id":
+			out.Values[i] = ec._Chat_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._Chat_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Chat_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Chat_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var chatMessageImplementors = []string{"ChatMessage"}
+
+func (ec *executionContext) _ChatMessage(ctx context.Context, sel ast.SelectionSet, obj *model.ChatMessage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, chatMessageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ChatMessage")
+		case "id":
+			out.Values[i] = ec._ChatMessage_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "chatId":
+			out.Values[i] = ec._ChatMessage_chatId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "role":
+			out.Values[i] = ec._ChatMessage_role(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "content":
+			out.Values[i] = ec._ChatMessage_content(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "citedPostIds":
+			out.Values[i] = ec._ChatMessage_citedPostIds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ChatMessage_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var entityImplementors = []string{"Entity"}
 
 func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -4475,6 +5634,88 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_generatePostContent(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createChat":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createChat(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "renameChat":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_renameChat(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteChat":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteChat(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "askChat":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_askChat(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var paginatedMessagesImplementors = []string{"PaginatedMessages"}
+
+func (ec *executionContext) _PaginatedMessages(ctx context.Context, sel ast.SelectionSet, obj *model.PaginatedMessages) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, paginatedMessagesImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PaginatedMessages")
+		case "messages":
+			out.Values[i] = ec._PaginatedMessages_messages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalPages":
+			out.Values[i] = ec._PaginatedMessages_totalPages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentPage":
+			out.Values[i] = ec._PaginatedMessages_currentPage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalMessages":
+			out.Values[i] = ec._PaginatedMessages_totalMessages(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -4785,6 +6026,69 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_searchPosts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "chats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_chats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "chat":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_chat(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "chatMessages":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_chatMessages(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -5422,6 +6726,122 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) marshalNChat2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat(ctx context.Context, sel ast.SelectionSet, v model.Chat) graphql.Marshaler {
+	return ec._Chat(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNChat2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Chat) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat(ctx context.Context, sel ast.SelectionSet, v *model.Chat) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Chat(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNChatMessage2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatMessage(ctx context.Context, sel ast.SelectionSet, v model.ChatMessage) graphql.Marshaler {
+	return ec._ChatMessage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNChatMessage2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatMessageᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ChatMessage) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNChatMessage2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatMessage(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNChatMessage2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatMessage(ctx context.Context, sel ast.SelectionSet, v *model.ChatMessage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ChatMessage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCreatePostInput2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐCreatePostInput(ctx context.Context, v any) (model.CreatePostInput, error) {
 	res, err := ec.unmarshalInputCreatePostInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5473,6 +6893,36 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 	return res
 }
 
+func (ec *executionContext) unmarshalNID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5487,6 +6937,30 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNMessageRole2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐMessageRole(ctx context.Context, v any) (model.MessageRole, error) {
+	var res model.MessageRole
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNMessageRole2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐMessageRole(ctx context.Context, sel ast.SelectionSet, v model.MessageRole) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNPaginatedMessages2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedMessages(ctx context.Context, sel ast.SelectionSet, v model.PaginatedMessages) graphql.Marshaler {
+	return ec._PaginatedMessages(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPaginatedMessages2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedMessages(ctx context.Context, sel ast.SelectionSet, v *model.PaginatedMessages) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PaginatedMessages(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPaginatedPosts2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPosts(ctx context.Context, sel ast.SelectionSet, v model.PaginatedPosts) graphql.Marshaler {
@@ -6221,6 +7695,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChat(ctx context.Context, sel ast.SelectionSet, v *model.Chat) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Chat(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
