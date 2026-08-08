@@ -7,11 +7,27 @@ from prometheus_client.registry import REGISTRY
 from src.generated import ai_service_pb2
 from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.llm import LLMError
-from tests.fakes import FakeHTTPClient, FakeResponse, make_client, no_sleep, ok_response
+from tests.fakes import (
+    FakeHTTPClient,
+    FakeResponse,
+    make_client,
+    no_sleep,
+    ok_response,
+    stream_response,
+)
 
 
 def _llm_counter(status: str) -> float:
     return REGISTRY.get_sample_value("llm_requests_total", {"status": status}) or 0.0
+
+
+def _tokens(method: str, token_type: str) -> float:
+    return (
+        REGISTRY.get_sample_value(
+            "llm_tokens_total", {"method": method, "token_type": token_type}
+        )
+        or 0.0
+    )
 
 
 def _grpc_counter(method: str, status: str) -> float:
@@ -113,3 +129,89 @@ async def test_metrics_llm_duration_observed(monkeypatch) -> None:
     assert count_after is not None and sum_after is not None
     assert count_after == count_before + 1
     assert sum_after > sum_before
+
+
+async def test_metrics_llm_tokens_record_reported_usage(monkeypatch) -> None:
+    response = FakeResponse(
+        200,
+        {
+            "choices": [{"message": {"content": "hello"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        },
+    )
+    prompt_before = _tokens("completion", "prompt")
+    completion_before = _tokens("completion", "completion")
+    total_before = _tokens("completion", "total")
+
+    client = make_client(monkeypatch, FakeHTTPClient(responses=[response]))
+    await client.generate_completion("s", "u")
+
+    assert _tokens("completion", "prompt") == prompt_before + 10
+    assert _tokens("completion", "completion") == completion_before + 5
+    assert _tokens("completion", "total") == total_before + 15
+
+
+async def test_metrics_llm_tokens_estimated_when_usage_missing(monkeypatch) -> None:
+    prompt_before = _tokens("completion", "prompt")
+    completion_before = _tokens("completion", "completion")
+    total_before = _tokens("completion", "total")
+
+    client = make_client(monkeypatch, FakeHTTPClient(responses=[ok_response("hello")]))
+    await client.generate_completion("system prompt", "user prompt")
+
+    # 26 prompt chars // 4 = 6, 5 completion chars ("hello") // 4 = 1.
+    assert _tokens("completion", "prompt") == prompt_before + 6
+    assert _tokens("completion", "completion") == completion_before + 1
+    assert _tokens("completion", "total") == total_before + 7
+
+
+async def test_metrics_llm_tokens_not_recorded_on_error(monkeypatch) -> None:
+    prompt_before = _tokens("completion", "prompt")
+
+    bad = make_client(monkeypatch, FakeHTTPClient(responses=[FakeResponse(400, {})]))
+    with pytest.raises(LLMError):
+        await bad.generate_completion("s", "u")
+
+    assert _tokens("completion", "prompt") == prompt_before
+
+
+async def test_metrics_stream_tokens_record_reported_usage(monkeypatch) -> None:
+    prompt_before = _tokens("stream", "prompt")
+    completion_before = _tokens("stream", "completion")
+    total_before = _tokens("stream", "total")
+
+    client = make_client(
+        monkeypatch,
+        FakeHTTPClient(
+            responses=[
+                stream_response(
+                    ["Hello", " world"],
+                    usage={"prompt_tokens": 7, "completion_tokens": 2},
+                )
+            ]
+        ),
+    )
+
+    deltas = [delta async for delta in client.generate_stream("s", "u")]
+    assert deltas == ["Hello", " world"]
+
+    assert _tokens("stream", "prompt") == prompt_before + 7
+    assert _tokens("stream", "completion") == completion_before + 2
+    assert _tokens("stream", "total") == total_before + 9
+
+
+async def test_metrics_stream_tokens_estimated_when_usage_missing(monkeypatch) -> None:
+    prompt_before = _tokens("stream", "prompt")
+    completion_before = _tokens("stream", "completion")
+
+    client = make_client(
+        monkeypatch,
+        FakeHTTPClient(responses=[stream_response(["Hello world"])]),
+    )
+
+    deltas = [delta async for delta in client.generate_stream("system prompt", "u")]
+    assert deltas == ["Hello world"]
+
+    # 13 prompt chars // 4 = 3, 11 completion chars // 4 = 2.
+    assert _tokens("stream", "prompt") == prompt_before + 3
+    assert _tokens("stream", "completion") == completion_before + 2

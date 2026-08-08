@@ -33,6 +33,12 @@ LLM_RETRIES = Counter(
     "Total number of retries of LLM provider calls",
 )
 
+LLM_TOKENS = Counter(
+    "llm_tokens_total",
+    "Token usage reported by the LLM provider, estimated from char counts when omitted",
+    ["method", "token_type"],
+)
+
 EMBEDDING_REQUESTS = Counter(
     "embedding_requests_total",
     "Total number of embedding provider calls",

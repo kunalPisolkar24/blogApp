@@ -6,7 +6,14 @@ import pytest
 from src.domain.models import GeneratedPost
 from src.domain.prompts import POST_PROMPT, SUMMARY_PROMPT, TAGS_PROMPT
 from src.llm import FakeLLMClient, LLMError
-from tests.fakes import FakeHTTPClient, FakeResponse, make_client, no_sleep, ok_response
+from tests.fakes import (
+    FakeHTTPClient,
+    FakeResponse,
+    make_client,
+    no_sleep,
+    ok_response,
+    stream_response,
+)
 
 
 async def test_generate_completion_returns_content(
@@ -33,6 +40,7 @@ async def test_generate_completion_sends_chat_payload(
         ],
         "temperature": 0.7,
         "max_tokens": 2048,
+        "stream": False,
     }
 
 
@@ -46,6 +54,22 @@ async def test_unexpected_response_shape_raises_llm_error(
         await client.generate_completion("sys", "usr")
 
     assert len(fake_http.posted_payloads) == 1
+
+
+async def test_generate_stream_yields_deltas_and_requests_usage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_http = FakeHTTPClient(
+        responses=[stream_response(["Hello", " world"], usage={"prompt_tokens": 7})]
+    )
+    client = make_client(monkeypatch, fake_http)
+
+    deltas = [delta async for delta in client.generate_stream("sys", "usr")]
+
+    assert deltas == ["Hello", " world"]
+    payload = fake_http.sent_payloads[0]
+    assert payload["stream"] is True
+    assert payload["stream_options"] == {"include_usage": True}
 
 
 async def test_invalid_json_response_raises_llm_error(

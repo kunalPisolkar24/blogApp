@@ -74,7 +74,7 @@ async def serve() -> None:
     )
     await _ensure_search_ready(search)
 
-    server, health_servicer = await create_server(AIService(llm, search))
+    server, health_servicer = await create_server(AIService(llm, search, embeddings))
     handle_graceful_shutdown(server, health_servicer)
     try:
         await server.start()

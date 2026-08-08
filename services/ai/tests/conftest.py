@@ -28,7 +28,7 @@ async def running_server(
     unused_tcp_port: int, fake_llm: FakeLLM, search_index: SearchIndex
 ):
     server, health_servicer = await create_server(
-        AIService(fake_llm, search_index), str(unused_tcp_port)
+        AIService(fake_llm, search_index, FakeEmbeddingClient()), str(unused_tcp_port)
     )
     await server.start()
     channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
@@ -60,7 +60,7 @@ async def running_server_factory(fake_llm: FakeLLM, unused_tcp_port: int):
         index = SearchIndex(embeddings, AsyncQdrantClient(location=":memory:"))
         await index.ensure_collection()
         server, _ = await create_server(
-            AIService(fake_llm, index), str(unused_tcp_port)
+            AIService(fake_llm, index, embeddings), str(unused_tcp_port)
         )
         await server.start()
         channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
