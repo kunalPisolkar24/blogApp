@@ -8,6 +8,7 @@ plus semantic recall.
 
 import hashlib
 import logging
+import math
 import struct
 import uuid
 from dataclasses import dataclass
@@ -68,6 +69,13 @@ class SearchResult:
     total: int
 
 
+def _embedding_text(title: str, body: str, summary: str) -> str:
+    """Join the searchable parts of a post into a single embedding text."""
+    body_text = clean_html(body)[: settings.EMBEDDING_MAX_CHARS]
+    text = " ".join(part for part in (title, body_text, summary) if part)
+    return text[: settings.EMBEDDING_MAX_CHARS]
+
+
 class SearchIndex:
     def __init__(
         self, embeddings: EmbeddingProvider, client: AsyncQdrantClient | None = None
@@ -105,7 +113,7 @@ class SearchIndex:
         tags: list[str],
         created_at: str,
     ) -> None:
-        text = self._embedding_text(title, body, summary)
+        text = _embedding_text(title, body, summary)
         dense = (await self._embeddings.embed([text]))[0]
         await self._client.upsert(
             collection_name=settings.QDRANT_COLLECTION,
@@ -131,6 +139,32 @@ class SearchIndex:
             collection_name=settings.QDRANT_COLLECTION,
             points_selector=[_point_id(post_id)],
         )
+
+    async def related(self, post_id: str, limit: int) -> list[str]:
+        """Return the post_ids of the nearest neighbours of a stored post.
+
+        Queries Qdrant with the post's own dense vector (no re-embedding)
+        and excludes the post itself. An unindexed post yields an empty
+        result rather than an error, so new posts degrade gracefully while
+        the index worker catches up.
+        """
+        point_id = _point_id(post_id)
+        if not await self._client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION,
+            ids=[point_id],
+        ):
+            return []
+        response = await self._client.query_points(
+            collection_name=settings.QDRANT_COLLECTION,
+            query=point_id,
+            using=DENSE_VECTOR,
+            limit=limit,
+            score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+            query_filter=models.Filter(
+                must_not=[models.HasIdCondition(has_id=[point_id])]
+            ),
+        )
+        return [_post_id_from_point(point.id) for point in response.points]
 
     async def search(self, query: str, offset: int, limit: int) -> SearchResult:
         dense = (await self._embeddings.embed([query]))[0]
@@ -175,10 +209,144 @@ class SearchIndex:
             post_ids=post_ids[offset : offset + limit], total=len(post_ids)
         )
 
-    def _embedding_text(self, title: str, body: str, summary: str) -> str:
-        body_text = clean_html(body)[: settings.EMBEDDING_MAX_CHARS]
-        text = " ".join(part for part in (title, body_text, summary) if part)
-        return text[: settings.EMBEDDING_MAX_CHARS]
-
     async def close(self) -> None:
         await self._client.close()
+
+
+def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    """Cosine similarity, robust to non-normalised embedding providers."""
+    dot = sum(a * b for a, b in zip(left, right))
+    left_norm = math.sqrt(sum(a * a for a in left))
+    right_norm = math.sqrt(sum(b * b for b in right))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+    return dot / (left_norm * right_norm)
+
+
+def _sparse_overlap(query: dict[str, float], stored: dict[str, float]) -> float:
+    """Lexical similarity: the dot product of the two term-frequency maps."""
+    return sum(
+        weight * stored[token] for token, weight in query.items() if token in stored
+    )
+
+
+def _rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[str]:
+    """Reciprocal rank fusion over ranked post id lists, stable per post."""
+    scores: dict[str, float] = {}
+    for ranking in rankings:
+        for rank, post_id in enumerate(ranking, start=1):
+            scores[post_id] = scores.get(post_id, 0.0) + 1.0 / (k + rank)
+    return sorted(scores, key=lambda post_id: scores[post_id], reverse=True)
+
+
+@dataclass
+class _StoredPost:
+    """The per-post state MemoryIndex keeps instead of Qdrant points."""
+
+    post_id: str
+    dense: list[float]
+    tokens: dict[str, float]
+
+
+class MemoryIndex:
+    """Deterministic in-memory twin of SearchIndex, no Qdrant required.
+
+    Scores posts locally with the same recipe Qdrant uses: dense cosine
+    similarity gated by SEARCH_DENSE_SCORE_THRESHOLD, fused with sparse
+    token overlap via RRF. Exact text matches score ~1.0 and unrelated
+    text ~0.0 under fake embeddings, so load tests can exercise the full
+    search/related RPC path without a containerised store.
+
+    Semantics are approximate, not bit-for-bit: ties are broken by
+    insertion order, and sparse weights are the raw token frequencies
+    rather than Qdrant's IDF-modified vectors.
+    """
+
+    def __init__(self, embeddings: EmbeddingProvider) -> None:
+        self._embeddings = embeddings
+        self._posts: dict[str, _StoredPost] = {}
+
+    async def ensure_collection(self) -> None:
+        return None
+
+    async def upsert(
+        self,
+        post_id: str,
+        title: str,
+        body: str,
+        summary: str,
+        tags: list[str],
+        created_at: str,
+    ) -> None:
+        text = _embedding_text(title, body, summary)
+        dense = (await self._embeddings.embed([text]))[0]
+        self._posts[post_id] = _StoredPost(
+            post_id=post_id,
+            dense=dense,
+            tokens=sparse_embed(text),
+        )
+
+    async def delete(self, post_id: str) -> None:
+        self._posts.pop(post_id, None)
+
+    async def related(self, post_id: str, limit: int) -> list[str]:
+        """Nearest neighbours of a stored post, excluding itself.
+
+        Mirrors SearchIndex.related: the post's own dense vector is
+        queried (no re-embedding) and an unknown post yields an empty
+        result.
+        """
+        post = self._posts.get(post_id)
+        if post is None:
+            return []
+
+        scored = [
+            (candidate.post_id, _cosine_similarity(post.dense, candidate.dense))
+            for candidate in self._posts.values()
+            if candidate.post_id != post_id
+        ]
+        scored.sort(key=lambda item: item[1], reverse=True)
+        above_threshold = [
+            candidate_id
+            for candidate_id, score in scored
+            if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
+        ]
+        return above_threshold[:limit]
+
+    async def search(self, query: str, offset: int, limit: int) -> SearchResult:
+        dense = (await self._embeddings.embed([query]))[0]
+        sparse = sparse_embed(query)
+
+        dense_scored = [
+            (post.post_id, _cosine_similarity(dense, post.dense))
+            for post in self._posts.values()
+        ]
+        dense_scored.sort(key=lambda item: item[1], reverse=True)
+        dense_ranking = [
+            post_id
+            for post_id, score in dense_scored
+            if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
+        ]
+
+        window = settings.SEARCH_MAX_RESULT_WINDOW
+        rankings = [dense_ranking[:window]]
+        if sparse:
+            # Only posts sharing at least one token can be sparse hits;
+            # Qdrant's sparse search likewise returns no zero-score points.
+            scored = [
+                (post.post_id, _sparse_overlap(sparse, post.tokens))
+                for post in self._posts.values()
+            ]
+            scored.sort(key=lambda item: item[1], reverse=True)
+            sparse_ranking = [post_id for post_id, score in scored if score > 0]
+            rankings.append(sparse_ranking[:window])
+
+        fused = _rrf_fuse(rankings)[:window]
+        return SearchResult(post_ids=fused[offset : offset + limit], total=len(fused))
+
+    async def close(self) -> None:
+        return None
+
+
+# The concrete store variants AIService accepts.
+SearchStore = SearchIndex | MemoryIndex

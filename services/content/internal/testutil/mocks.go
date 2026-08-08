@@ -126,6 +126,7 @@ type MockAIService struct {
 	IndexPostFn       func(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
 	DeletePostFn      func(ctx context.Context, postID string) error
 	SearchPostsFn     func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
+	RelatedPostsFn    func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
 }
 
 func (m *MockAIService) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -166,6 +167,13 @@ func (m *MockAIService) DeletePost(ctx context.Context, postID string) error {
 func (m *MockAIService) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
 	if m.SearchPostsFn != nil {
 		return m.SearchPostsFn(ctx, query, offset, limit)
+	}
+	return &domain.SearchResult{}, nil
+}
+
+func (m *MockAIService) RelatedPosts(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+	if m.RelatedPostsFn != nil {
+		return m.RelatedPostsFn(ctx, postID, limit)
 	}
 	return &domain.SearchResult{}, nil
 }

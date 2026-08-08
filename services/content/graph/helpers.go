@@ -106,3 +106,23 @@ func mapDomainSearchResultToModel(sr *domain.SearchPostsResult) *model.SearchRes
 		Total: sr.Total,
 	}
 }
+
+func mapDomainPostsToModel(posts []*domain.Post) []*model.Post {
+	related := make([]*model.Post, 0, len(posts))
+	for _, dp := range posts {
+		if mapped := mapDomainPostToModel(dp); mapped != nil {
+			related = append(related, mapped)
+		}
+	}
+	return related
+}
+
+// deref returns the value behind v, or 0 when v is nil. Optional GraphQL
+// arguments arrive as pointers, and the resolvers default them to 0 and
+// let the services apply their own defaults.
+func deref(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}

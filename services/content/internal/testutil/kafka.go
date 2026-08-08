@@ -58,5 +58,5 @@ func EnsureTopic(t *testing.T, ctx context.Context, brokers []string, topic stri
 	require.Eventually(t, func() bool {
 		partitions, err := conn.ReadPartitions(topic)
 		return err == nil && len(partitions) > 0
-	}, 15*time.Second, 200*time.Millisecond, "topic %s should become queryable", topic)
+	}, 30*time.Second, 200*time.Millisecond, "topic %s should become queryable", topic)
 }

@@ -13,7 +13,7 @@ from src.embeddings import FakeEmbeddingClient, OllamaEmbeddingClient
 from src.llm import FakeLLMClient, LLMClient
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
-from src.vector import SearchIndex
+from src.vector import MemoryIndex, SearchIndex, SearchStore
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def handle_graceful_shutdown(
         loop.add_signal_handler(sig, shutdown)
 
 
-async def _ensure_search_ready(search: SearchIndex) -> None:
+async def _ensure_search_ready(search: SearchStore) -> None:
     """Wait for Qdrant with a short backoff instead of crashing on a
     transient startup blip (e.g. the store still restarting)."""
     for attempt in range(1, settings.QDRANT_STARTUP_RETRIES + 1):
@@ -67,7 +67,11 @@ async def serve() -> None:
         if settings.EMBEDDING_MODE == "fake"
         else OllamaEmbeddingClient()
     )
-    search = SearchIndex(embeddings)
+    search: SearchStore = (
+        MemoryIndex(embeddings)
+        if settings.VECTOR_MODE == "fake"
+        else SearchIndex(embeddings)
+    )
     await _ensure_search_ready(search)
 
     server, health_servicer = await create_server(AIService(llm, search))

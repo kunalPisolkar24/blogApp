@@ -1,5 +1,6 @@
 export * from "./components/BlogCard";
 export * from "./components/BlogList";
+export * from "./components/BlogRelatedSection";
 export * from "./components/AISummaryDialog";
 export * from "./components/BlogBody";
 export * from "./components/BlogHeader";

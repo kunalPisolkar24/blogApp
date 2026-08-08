@@ -40,6 +40,7 @@ const loadedPost = {
     avatarUrl: null,
   },
   tags: [],
+  related: [],
 };
 
 const staleListPost = {

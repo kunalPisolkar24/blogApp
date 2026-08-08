@@ -30,3 +30,7 @@ models:
     fields:
       posts:
         resolver: true
+  Post:
+    fields:
+      related:
+        resolver: true

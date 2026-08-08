@@ -74,6 +74,7 @@ const buildPostDetail = (id: string): ContentPostDetail => {
       email: "alice@example.com",
       bio: null,
     },
+    related: [],
   };
 };
 

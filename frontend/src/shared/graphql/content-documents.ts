@@ -39,6 +39,7 @@ export interface ContentPostDetail extends ContentPostCard {
   summaryStatus?: SummaryStatus | null;
   updatedAt: string;
   author: ContentPostAuthorDetail;
+  related: ContentPostCard[];
 }
 
 export interface PaginatedContentPosts {
@@ -235,7 +236,11 @@ const POST_DETAIL_FIELDS = gql`
       id
       name
     }
+    related {
+      ...PostCardFields
+    }
   }
+  ${POST_CARD_FIELDS}
 `;
 
 const PAGINATED_POST_FIELDS = gql`

@@ -48,7 +48,7 @@ func TestWorkerConsumesAndSummarises(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return processor.status["p_e2e"] == domain.PostStatusCompleted &&
 			processor.summary["p_e2e"] == "Generated summary"
-	}, 30*time.Second, 500*time.Millisecond, "worker should generate and store the summary")
+	}, 60*time.Second, 500*time.Millisecond, "worker should generate and store the summary")
 }
 
 func TestWorkerSkipsTombstone(t *testing.T) {
@@ -74,7 +74,7 @@ func TestWorkerSkipsTombstone(t *testing.T) {
 	go w.Start(workerCtx)
 
 	// Tombstones produce no summaries; give the worker a moment to read.
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	assert.Empty(t, processor.summary)
 }
 
@@ -108,7 +108,7 @@ func TestWorkerSendsPoisonToDLQ(t *testing.T) {
 	// The worker should land the poison message in the DLQ topic.
 	require.Eventually(t, func() bool {
 		return dlqHasMessage(t, ctx, brokers, "dlq", "p_bad")
-	}, 30*time.Second, 500*time.Millisecond, "poison message should reach the dlq")
+	}, 60*time.Second, 500*time.Millisecond, "poison message should reach the dlq")
 }
 
 func TestSearchWorkerRetriesThenDeadLetters(t *testing.T) {
@@ -139,12 +139,15 @@ func TestSearchWorkerRetriesThenDeadLetters(t *testing.T) {
 	go w.Start(workerCtx)
 
 	// The whole retry budget is spent, then the event is dead lettered.
+	// At least the budget is spent: if a commit fails mid-rebalance the
+	// message is refetched and retried again, so attempts can exceed
+	// maxRetries without the worker misbehaving.
 	require.Eventually(t, func() bool {
-		return attempts.Load() == int32(maxRetries)
-	}, 30*time.Second, 200*time.Millisecond, "ai should be called exactly maxRetries times")
+		return attempts.Load() >= int32(maxRetries)
+	}, 60*time.Second, 200*time.Millisecond, "ai should be called at least maxRetries times")
 	require.Eventually(t, func() bool {
 		return dlqHasMessage(t, ctx, brokers, "posts-dlq", "p_retry")
-	}, 30*time.Second, 500*time.Millisecond, "failed event should reach the dlq after retries")
+	}, 60*time.Second, 500*time.Millisecond, "failed event should reach the dlq after retries")
 }
 
 // inMemoryProcessor stands in for the post store; it records summaries

@@ -21,6 +21,7 @@ const (
 	indexTimeout   = 15 * time.Second
 	deleteTimeout  = 10 * time.Second
 	searchTimeout  = 10 * time.Second
+	relatedTimeout = 5 * time.Second
 )
 
 // errCircuitOpen is returned by IndexPost/DeletePost while the breaker is
@@ -120,6 +121,19 @@ func (c *resilientClient) SearchPosts(ctx context.Context, query string, offset,
 		slog.Warn("ai search failed, using fallback", "error", err)
 	}
 	return c.fallback.SearchPosts(ctx, query, offset, limit)
+}
+
+func (c *resilientClient) RelatedPosts(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+	if c.breaker.canProceed() {
+		result, err := c.primary.RelatedPosts(ctx, postID, limit)
+		if err == nil {
+			c.breaker.recordSuccess()
+			return result, nil
+		}
+		c.breaker.recordFailure()
+		slog.Warn("ai related posts failed, using fallback", "error", err)
+	}
+	return c.fallback.RelatedPosts(ctx, postID, limit)
 }
 
 func (c *resilientClient) Close() error {
@@ -225,6 +239,23 @@ func (c *grpcClient) SearchPosts(ctx context.Context, query string, offset, limi
 	return &domain.SearchResult{
 		PostIDs: resp.PostIds,
 		Total:   int(resp.Total),
+	}, nil
+}
+
+func (c *grpcClient) RelatedPosts(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, relatedTimeout)
+	defer cancel()
+
+	resp, err := c.client.RelatedPosts(ctx, &pb.RelatedRequest{
+		PostId: postID,
+		Limit:  uint32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &domain.SearchResult{
+		PostIDs: resp.PostIds,
+		Total:   len(resp.PostIds),
 	}, nil
 }
 

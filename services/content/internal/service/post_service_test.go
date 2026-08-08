@@ -448,6 +448,84 @@ func TestSearchPostsRepoError(t *testing.T) {
 	assert.ErrorIs(t, err, wantErr)
 }
 
+func TestRelatedPostsRanksAndDropsMissing(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, "p_1", postID)
+		assert.Equal(t, 5, limit)
+		return &domain.SearchResult{PostIDs: []string{"p_3", "missing", "p_2"}, Total: 3}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		assert.Equal(t, []string{"p_3", "missing", "p_2"}, ids)
+		return []*domain.Post{
+			{ID: "p_2", Title: "Second"},
+			{ID: "p_3", Title: "Third"},
+		}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	posts, err := s.RelatedPosts(context.Background(), "p_1", 5)
+
+	require.NoError(t, err)
+	require.Len(t, posts, 2)
+	assert.Equal(t, "p_3", posts[0].ID, "related posts keep the AI rank order")
+	assert.Equal(t, "p_2", posts[1].ID)
+}
+
+func TestRelatedPostsEmptyResult(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	posts, err := s.RelatedPosts(context.Background(), "p_1", 5)
+
+	require.NoError(t, err)
+	assert.Empty(t, posts)
+}
+
+func TestRelatedPostsNormalizesLimit(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, 5, limit, "zero limit defaults to 5")
+		return &domain.SearchResult{}, nil
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	_, err := s.RelatedPosts(context.Background(), "p_1", 0)
+	require.NoError(t, err)
+
+	ai.RelatedPostsFn = func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, 20, limit, "limit is capped at 20")
+		return &domain.SearchResult{}, nil
+	}
+	_, err = s.RelatedPosts(context.Background(), "p_1", 100)
+	require.NoError(t, err)
+}
+
+func TestRelatedPostsAIError(t *testing.T) {
+	wantErr := errors.New("ai down")
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		return nil, wantErr
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	_, err := s.RelatedPosts(context.Background(), "p_1", 5)
+	assert.ErrorIs(t, err, wantErr)
+}
+
+func TestRelatedPostsRepoError(t *testing.T) {
+	wantErr := errors.New("db down")
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		return &domain.SearchResult{PostIDs: []string{"p_2"}, Total: 1}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return nil, wantErr
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	_, err := s.RelatedPosts(context.Background(), "p_1", 5)
+	assert.ErrorIs(t, err, wantErr)
+}
+
 func TestSearchPostsPaginationNormalized(t *testing.T) {
 	var gotOffset, gotLimit int
 	ai := &testutil.MockAIService{SearchPostsFn: func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {

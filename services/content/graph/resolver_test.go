@@ -227,6 +227,39 @@ func TestUserResolverPosts(t *testing.T) {
 	assert.Equal(t, "p_1", posts.Posts[0].ID)
 }
 
+func TestPostResolverRelated(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, "p_1", postID)
+		assert.Equal(t, 5, limit)
+		return &domain.SearchResult{PostIDs: []string{"p_2"}, Total: 1}, nil
+	}}
+	postRepo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_2", Title: "Similar"}}, nil
+	}}
+	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil))
+
+	posts, err := resolver.Post().Related(context.Background(), &model.Post{ID: "p_1"}, intPtr(5))
+
+	require.NoError(t, err)
+	require.Len(t, posts, 1)
+	assert.Equal(t, "p_2", posts[0].ID)
+	assert.Equal(t, "Similar", posts[0].Title)
+}
+
+func TestPostResolverRelatedDefaultsLimit(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
+		assert.Equal(t, 5, limit, "nil limit is defaulted to 5 by the service layer")
+		return &domain.SearchResult{}, nil
+	}}
+	postSvc := service.NewPostService(&testutil.MockPostRepository{}, &testutil.MockTagRepository{}, ai, nil, nil)
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil))
+
+	posts, err := resolver.Post().Related(context.Background(), &model.Post{ID: "p_1"}, nil)
+	require.NoError(t, err)
+	assert.Empty(t, posts)
+}
+
 func TestMapDomainError(t *testing.T) {
 	require.Error(t, mapDomainError(domain.ErrUnauthorized))
 	assert.Equal(t, "unauthorized", mapDomainError(domain.ErrUnauthorized).Message)

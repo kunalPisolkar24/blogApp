@@ -69,7 +69,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		var err error
 		created, err = s.postRepo.Create(ctx, post)
 		if err == nil {
-			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern)
+			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
 			metrics.PostsCreated.Inc()
 			if s.eventPublisher != nil {
 				s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
@@ -203,7 +203,7 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tag string, page, limit
 // invalidatePost drops the single-post entry and every list derived from it.
 func (s *PostService) invalidatePost(ctx context.Context, id string) {
 	cache.Del(s.cache, ctx, cache.KeyPost(id))
-	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern)
+	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
 }
 
 // normalizePagination mirrors the repository's defaulting so cache keys
@@ -254,6 +254,52 @@ func (s *PostService) SearchPosts(ctx context.Context, query string, page, limit
 		}
 		return result, nil
 	})
+}
+
+// RelatedPosts returns the semantic neighbours of a post, ranked by the
+// AI service and hydrated from the repository in that order. Like search,
+// results are cached briefly and writes invalidate the whole cache. The
+// AI client degrades to an empty result when the AI service is down, so
+// this never fails a post page for a non-critical section.
+func (s *PostService) RelatedPosts(ctx context.Context, postID string, limit int) ([]*domain.Post, error) {
+	limit = normalizeRelatedLimit(limit)
+	return withCache(s.cache, ctx, cache.KeyRelated(postID, limit), cache.RelatedTTL, func() ([]*domain.Post, error) {
+		search, err := s.aiService.RelatedPosts(ctx, postID, limit)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(search.PostIDs) == 0 {
+			return []*domain.Post{}, nil
+		}
+
+		posts, err := s.postRepo.FindByIDs(ctx, search.PostIDs)
+		if err != nil {
+			return nil, err
+		}
+
+		byID := make(map[string]*domain.Post, len(posts))
+		for _, post := range posts {
+			byID[post.ID] = post
+		}
+		related := make([]*domain.Post, 0, len(search.PostIDs))
+		for _, id := range search.PostIDs {
+			if post, ok := byID[id]; ok {
+				related = append(related, post)
+			}
+		}
+		return related, nil
+	})
+}
+
+func normalizeRelatedLimit(limit int) int {
+	if limit < 1 {
+		return 5
+	}
+	if limit > 20 {
+		return 20
+	}
+	return limit
 }
 
 func (s *PostService) GenerateTags(ctx context.Context, title, body string) ([]string, error) {

@@ -12,14 +12,16 @@ import (
 )
 
 const (
-	PostsTTL  = time.Minute
-	PostTTL   = 5 * time.Minute
-	TagsTTL   = 5 * time.Minute
-	SearchTTL = 2 * time.Minute
+	PostsTTL   = time.Minute
+	PostTTL    = 5 * time.Minute
+	TagsTTL    = 5 * time.Minute
+	SearchTTL  = 2 * time.Minute
+	RelatedTTL = 2 * time.Minute
 
-	PostsPattern  = "posts:*"
-	TagsPattern   = "tags:*"
-	SearchPattern = "search:*"
+	PostsPattern   = "posts:*"
+	TagsPattern    = "tags:*"
+	SearchPattern  = "search:*"
+	RelatedPattern = "related:*"
 )
 
 // Cache is a thin, best-effort Redis cache. Every call swallows errors and
@@ -170,4 +172,8 @@ func KeyTags(query string, limit int) string {
 func KeySearch(query string, page, limit int) string {
 	sum := sha1.Sum([]byte(query))
 	return fmt.Sprintf("search:q:%x:p:%d:l:%d", sum, page, limit)
+}
+
+func KeyRelated(postID string, limit int) string {
+	return fmt.Sprintf("related:%s:l:%d", postID, limit)
 }

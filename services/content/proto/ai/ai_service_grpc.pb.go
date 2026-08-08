@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v3.21.12
-// source: ai_service.proto
+// source: proto/ai/ai_service.proto
 
 package ai
 
@@ -25,6 +25,7 @@ const (
 	AIService_IndexPost_FullMethodName       = "/ai.AIService/IndexPost"
 	AIService_DeletePost_FullMethodName      = "/ai.AIService/DeletePost"
 	AIService_SearchPosts_FullMethodName     = "/ai.AIService/SearchPosts"
+	AIService_RelatedPosts_FullMethodName    = "/ai.AIService/RelatedPosts"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -37,6 +38,7 @@ type AIServiceClient interface {
 	IndexPost(ctx context.Context, in *IndexRequest, opts ...grpc.CallOption) (*IndexResponse, error)
 	DeletePost(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 	SearchPosts(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	RelatedPosts(ctx context.Context, in *RelatedRequest, opts ...grpc.CallOption) (*RelatedResponse, error)
 }
 
 type aIServiceClient struct {
@@ -107,6 +109,16 @@ func (c *aIServiceClient) SearchPosts(ctx context.Context, in *SearchRequest, op
 	return out, nil
 }
 
+func (c *aIServiceClient) RelatedPosts(ctx context.Context, in *RelatedRequest, opts ...grpc.CallOption) (*RelatedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RelatedResponse)
+	err := c.cc.Invoke(ctx, AIService_RelatedPosts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -117,6 +129,7 @@ type AIServiceServer interface {
 	IndexPost(context.Context, *IndexRequest) (*IndexResponse, error)
 	DeletePost(context.Context, *DeleteRequest) (*DeleteResponse, error)
 	SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error)
+	RelatedPosts(context.Context, *RelatedRequest) (*RelatedResponse, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -144,6 +157,9 @@ func (UnimplementedAIServiceServer) DeletePost(context.Context, *DeleteRequest) 
 }
 func (UnimplementedAIServiceServer) SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SearchPosts not implemented")
+}
+func (UnimplementedAIServiceServer) RelatedPosts(context.Context, *RelatedRequest) (*RelatedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RelatedPosts not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -274,6 +290,24 @@ func _AIService_SearchPosts_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_RelatedPosts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RelatedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).RelatedPosts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_RelatedPosts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).RelatedPosts(ctx, req.(*RelatedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -305,7 +339,11 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "SearchPosts",
 			Handler:    _AIService_SearchPosts_Handler,
 		},
+		{
+			MethodName: "RelatedPosts",
+			Handler:    _AIService_RelatedPosts_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "ai_service.proto",
+	Metadata: "proto/ai/ai_service.proto",
 }

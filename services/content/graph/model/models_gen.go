@@ -46,6 +46,7 @@ type Post struct {
 	Tags          []*Tag         `json:"tags"`
 	CreatedAt     string         `json:"createdAt"`
 	UpdatedAt     string         `json:"updatedAt"`
+	Related       []*Post        `json:"related"`
 }
 
 func (Post) IsEntity() {}

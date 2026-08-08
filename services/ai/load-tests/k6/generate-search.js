@@ -11,12 +11,17 @@ const vus = parseInt(__ENV.VUS) || 20;
 const duration = __ENV.DURATION || '30s';
 const rps = parseInt(__ENV.RPS) || 100;
 
+// Real embedding providers add their own latency, so the thresholds are
+// tunable; the Makefile picks generous defaults for embedding-real runs.
+const searchP95 = parseInt(__ENV.SEARCH_P95) || 250;
+const searchP99 = parseInt(__ENV.SEARCH_P99) || 600;
+
 export const options = {
     ...getDefaultOptions({ vus, duration, rps }),
     // Search does a real Qdrant roundtrip per call, so its latency budget is
     // wider than the fake-LLM RPCs; the thresholds still catch regressions.
     thresholds: {
-        grpc_req_duration: ['p(95)<250', 'p(99)<600'],
+        grpc_req_duration: [`p(95)<${searchP95}`, `p(99)<${searchP99}`],
     },
 };
 
@@ -83,10 +88,16 @@ export default function () {
     });
     checkOk(res, 'search');
 
+    // Fake embeddings score unrelated text ~0.0, so gibberish is always
+    // filtered by the threshold and the check is exact. A real model may
+    // find weak semantic similarity, so the check only binds in fake mode.
+    const embeddingMode = __ENV.EMBEDDING_MODE || 'fake';
     if (iter % 10 === 9) {
-        check(res, {
-            'gibberish query returns no results': (r) => r.status === grpc.StatusOK && r.message.total === 0,
-        });
+        if (embeddingMode === 'fake') {
+            check(res, {
+                'gibberish query returns no results': (r) => r.status === grpc.StatusOK && r.message.total === 0,
+            });
+        }
     } else {
         check(res, {
             'relevant query returns results': (r) => r.status === grpc.StatusOK && r.message.total > 0,
