@@ -80,6 +80,13 @@ docker run --network topos_local_network --env-file ../../infrastructure/docker/
   content-content-worker ./content-dlq-replay
 ```
 
+### Mongo startup retry
+
+`db.Connect` fails fast on a malformed URI, but a transient ping failure
+is retried with exponential backoff (1s, 2s, 4s, 8s, 16s, ~31s budget,
+respecting shutdown cancellation), so a single boot-time blip does not
+kill the process outside compose gating.
+
 ### Redis cache
 
 The Redis cache is read-through and degrades gracefully: on any Redis
