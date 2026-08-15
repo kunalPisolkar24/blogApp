@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,12 @@ const indexTimeout = 30 * time.Second
 
 // EnsureIndexes creates the indexes required by the posts, tags, chats
 // and messages collections.
+//
+// The unique slug index is created only on unsharded collections: a
+// unique index must start with the shard key on a sharded collection,
+// and posts is sharded on a hashed _id key (see infra/scripts/shard-init.sh),
+// so a {slug: 1} unique index is not allowed there. Slug uniqueness in
+// the sharded setup is enforced in-app (PostService.ensureSlugAvailable).
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	ctx, cancel := context.WithTimeout(ctx, indexTimeout)
 	defer cancel()
@@ -31,10 +38,17 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys:    bson.D{{Key: "createdAt", Value: -1}},
 			Options: options.Index().SetName("createdAt_desc"),
 		},
-		{
+	}
+
+	sharded, err := isCollectionSharded(ctx, db, "posts")
+	if err != nil {
+		return fmt.Errorf("check posts shard status: %w", err)
+	}
+	if !sharded {
+		postIndexes = append(postIndexes, mongo.IndexModel{
 			Keys:    bson.D{{Key: "slug", Value: 1}},
 			Options: options.Index().SetUnique(true).SetName("slug_unique"),
-		},
+		})
 	}
 
 	if _, err := db.Collection("posts").Indexes().CreateMany(ctx, postIndexes); err != nil {
@@ -75,4 +89,23 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	}
 
 	return nil
+}
+
+// isCollectionSharded reports whether the collection is sharded, by
+// looking up its metadata in config.collections. Standalone mongod and
+// unsharded collections have no entry (or no shardKey), so they report
+// false and keep their unique slug index.
+func isCollectionSharded(ctx context.Context, db *mongo.Database, collection string) (bool, error) {
+	var entry struct {
+		ShardKey bson.M `bson:"shardKey"`
+	}
+	err := db.Client().Database("config").Collection("collections").
+		FindOne(ctx, bson.M{"_id": db.Name() + "." + collection}).Decode(&entry)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return entry.ShardKey != nil, nil
 }

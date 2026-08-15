@@ -37,12 +37,34 @@ docker compose -f compose.yml up -d
 Runs redis with sentinel (1 master, 1 replica, 3 sentinels, quorum 2),
 MongoDB sharded (2 shards, 3 config servers, 2 mongos), and a 3-node Kafka
 cluster (replication factor 3, min ISR 2). The service connects to redis
-through sentinels and to both mongos; `posts` is sharded on a hashed slug.
+through sentinels and to both mongos; `posts` is sharded on a hashed `_id`
+key.
 
 `init-kafka` and `mongo-shard-init` run once on first start and create the
-topics and the sharded collection.
+topics and the sharded collection. `mongo-shard-init` must finish before
+the service boots, so the index setup matches the collection state (see
+below). Verify the setup any time with `make verify-sharding`
+(`MONGO_ROOT_PASSWORD` must be set).
 
 Tear down with `docker compose -f compose.yml down -v`.
+
+## MongoDB sharding & index design
+
+- `posts` is sharded on `{_id: "hashed"}` — even write distribution and
+  fast targeted `post(id)` lookups; `tags`, `chats` and `messages` stay
+  unsharded on the primary shard.
+- A unique index must start with the shard key on a sharded collection,
+  so the `slug_unique` index cannot exist there. `EnsureIndexes` checks
+  `config.collections` and creates it only when `posts` is unsharded
+  (local dev); in the HA stack, slug uniqueness is enforced in-app by
+  `PostService.ensureSlugAvailable` (see the slug retry design).
+- `mongo-shard-init.sh` idempotently shards `blog_content.posts` and
+  exits non-zero if sharding fails; `verify-sharding.sh` checks shard
+  status, chunk distribution across both shards, and the absence of the
+  unique slug index.
+- Local vs HA matrix: local uses a single mongod (unique `slug` index
+  enforced by the database); HA uses mongos (unique `slug` index absent,
+  enforced in-app).
 
 ## Resilience
 

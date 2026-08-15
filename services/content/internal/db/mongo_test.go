@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -70,6 +71,32 @@ func TestEnsureIndexes(t *testing.T) {
 
 	tagNames := listIndexes(t, ctx, database.Collection("tags").Indexes())
 	assert.Contains(t, tagNames, "name_unique")
+}
+
+func TestIsCollectionShardedFalseOnStandalone(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	_, database := testMongoClient(t, ctx)
+
+	sharded, err := isCollectionSharded(ctx, database, "posts")
+	require.NoError(t, err)
+	assert.False(t, sharded, "a standalone mongod must be treated as unsharded so the unique slug index is created")
+}
+
+func TestUniqueSlugIndexRejectsDuplicates(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	_, database := testMongoClient(t, ctx)
+	require.NoError(t, EnsureIndexes(ctx, database))
+
+	posts := database.Collection("posts")
+	_, err := posts.InsertOne(ctx, bson.M{"slug": "same-slug", "title": "one"})
+	require.NoError(t, err)
+
+	_, err = posts.InsertOne(ctx, bson.M{"slug": "same-slug", "title": "two"})
+	require.Error(t, err, "the unique slug index must reject a second post with the same slug")
 }
 
 func listIndexes(t *testing.T, ctx context.Context, view mongo.IndexView) []string {

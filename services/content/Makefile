@@ -1,4 +1,5 @@
 .PHONY: test test-integration coverage vet lint fmt
+.PHONY: verify-sharding
 .PHONY: load-test load-test-worker load-test-reads load-test-writes load-test-chat load-test-build load-test-stop load-test-clean load-test-tail
 
 # Excluded from the coverage report:
@@ -28,6 +29,14 @@ coverage:
 	go test ./... -coverprofile=/tmp/content-coverage.out
 	grep -vE $(GENERATED_RE) /tmp/content-coverage.out > /tmp/content-coverage.filtered.out
 	@go tool cover -func=/tmp/content-coverage.filtered.out | tail -1
+
+# Runs the sharding verification inside the compose network against mongos.
+# Requires MONGO_ROOT_PASSWORD and the HA stack to be up (make up in ../..).
+verify-sharding:
+	docker run --rm --network topos_prod_network \
+		-e MONGO_ROOT_PASSWORD=$(MONGO_ROOT_PASSWORD) \
+		-v $(CURDIR)/infra/scripts/verify-sharding.sh:/scripts/verify-sharding.sh:ro \
+		mongo:7 /bin/sh /scripts/verify-sharding.sh
 
 # --- Load tests --------------------------------------------------------------
 # Service profile: k6 -> content-service API (mongo + redis + kafka + ai).
