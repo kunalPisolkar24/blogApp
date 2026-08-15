@@ -7,16 +7,18 @@ import (
 	"math"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/pagination"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const (
-	defaultLimit = 10
-	maxLimit     = 100
-)
+// maxIDsPerQuery bounds a single $in query so a misbehaving caller can
+// never build an oversized query document or hydrate an unbounded result
+// set. Legitimate callers stay far below this cap (search and related
+// limits are bounded by pagination).
+const maxIDsPerQuery = 100
 
 type MongoPostRepository struct {
 	collection *mongo.Collection
@@ -131,6 +133,9 @@ func (r *MongoPostRepository) FindByID(ctx context.Context, id string) (*domain.
 // missing ids are dropped so a stale search index entry can never fail
 // the whole query.
 func (r *MongoPostRepository) FindByIDs(ctx context.Context, ids []string) ([]*domain.Post, error) {
+	if len(ids) > maxIDsPerQuery {
+		return nil, fmt.Errorf("too many ids (%d), max %d", len(ids), maxIDsPerQuery)
+	}
 	oids := make([]primitive.ObjectID, 0, len(ids))
 	for _, id := range ids {
 		oid, err := primitive.ObjectIDFromHex(id)
@@ -165,7 +170,7 @@ func (r *MongoPostRepository) FindByTag(ctx context.Context, tag string, page, l
 }
 
 func (r *MongoPostRepository) findWithPagination(ctx context.Context, filter bson.M, page, limit int) (*domain.PaginatedPosts, error) {
-	page, limit = normalizePagination(page, limit)
+	page, limit = pagination.Normalize(page, limit)
 
 	total, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {
@@ -194,19 +199,6 @@ func (r *MongoPostRepository) findWithPagination(ctx context.Context, filter bso
 		TotalPosts: total,
 		Page:       page,
 	}, nil
-}
-
-func normalizePagination(page, limit int) (int, int) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
-	return page, limit
 }
 
 func wrapNotFound(err error) error {

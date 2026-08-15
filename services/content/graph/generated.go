@@ -91,6 +91,13 @@ type ComplexityRoot struct {
 		UpdatePost          func(childComplexity int, id string, input model.UpdatePostInput) int
 	}
 
+	PaginatedChats struct {
+		Chats       func(childComplexity int) int
+		CurrentPage func(childComplexity int) int
+		TotalChats  func(childComplexity int) int
+		TotalPages  func(childComplexity int) int
+	}
+
 	PaginatedMessages struct {
 		CurrentPage   func(childComplexity int) int
 		Messages      func(childComplexity int) int
@@ -123,7 +130,7 @@ type ComplexityRoot struct {
 	Query struct {
 		Chat               func(childComplexity int, id string) int
 		ChatMessages       func(childComplexity int, chatID string, page *int, limit *int) int
-		Chats              func(childComplexity int) int
+		Chats              func(childComplexity int, page *int, limit *int) int
 		Post               func(childComplexity int, id string) int
 		Posts              func(childComplexity int, page *int, limit *int) int
 		PostsByTag         func(childComplexity int, tag string, page *int, limit *int) int
@@ -177,7 +184,7 @@ type QueryResolver interface {
 	Tags(ctx context.Context, query *string, limit *int) ([]*model.Tag, error)
 	PostsByTag(ctx context.Context, tag string, page *int, limit *int) (*model.PaginatedPosts, error)
 	SearchPosts(ctx context.Context, query string, page *int, limit *int) (*model.SearchResult, error)
-	Chats(ctx context.Context) ([]*model.Chat, error)
+	Chats(ctx context.Context, page *int, limit *int) (*model.PaginatedChats, error)
 	Chat(ctx context.Context, id string) (*model.Chat, error)
 	ChatMessages(ctx context.Context, chatID string, page *int, limit *int) (*model.PaginatedMessages, error)
 }
@@ -414,6 +421,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.UpdatePost(childComplexity, args["id"].(string), args["input"].(model.UpdatePostInput)), true
 
+	case "PaginatedChats.chats":
+		if e.complexity.PaginatedChats.Chats == nil {
+			break
+		}
+
+		return e.complexity.PaginatedChats.Chats(childComplexity), true
+	case "PaginatedChats.currentPage":
+		if e.complexity.PaginatedChats.CurrentPage == nil {
+			break
+		}
+
+		return e.complexity.PaginatedChats.CurrentPage(childComplexity), true
+	case "PaginatedChats.totalChats":
+		if e.complexity.PaginatedChats.TotalChats == nil {
+			break
+		}
+
+		return e.complexity.PaginatedChats.TotalChats(childComplexity), true
+	case "PaginatedChats.totalPages":
+		if e.complexity.PaginatedChats.TotalPages == nil {
+			break
+		}
+
+		return e.complexity.PaginatedChats.TotalPages(childComplexity), true
+
 	case "PaginatedMessages.currentPage":
 		if e.complexity.PaginatedMessages.CurrentPage == nil {
 			break
@@ -569,7 +601,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.complexity.Query.Chats(childComplexity), true
+		args, err := ec.field_Query_chats_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Chats(childComplexity, args["page"].(*int), args["limit"].(*int)), true
 	case "Query.post":
 		if e.complexity.Query.Post == nil {
 			break
@@ -1093,6 +1130,22 @@ func (ec *executionContext) field_Query_chat_args(ctx context.Context, rawArgs m
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_chats_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
 	return args, nil
 }
 
@@ -2234,6 +2287,132 @@ func (ec *executionContext) fieldContext_Mutation_askChat(ctx context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _PaginatedChats_chats(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedChats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedChats_chats,
+		func(ctx context.Context) (any, error) {
+			return obj.Chats, nil
+		},
+		nil,
+		ec.marshalNChat2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedChats_chats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedChats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Chat_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Chat_title(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Chat_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Chat_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Chat", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedChats_totalPages(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedChats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedChats_totalPages,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalPages, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedChats_totalPages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedChats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedChats_currentPage(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedChats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedChats_currentPage,
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentPage, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedChats_currentPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedChats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedChats_totalChats(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedChats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedChats_totalChats,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalChats, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedChats_totalChats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedChats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PaginatedMessages_messages(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedMessages) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3174,16 +3353,17 @@ func (ec *executionContext) _Query_chats(ctx context.Context, field graphql.Coll
 		field,
 		ec.fieldContext_Query_chats,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Query().Chats(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().Chats(ctx, fc.Args["page"].(*int), fc.Args["limit"].(*int))
 		},
 		nil,
-		ec.marshalNChat2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐChatᚄ,
+		ec.marshalNPaginatedChats2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedChats,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_chats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_chats(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -3191,17 +3371,28 @@ func (ec *executionContext) fieldContext_Query_chats(_ context.Context, field gr
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "id":
-				return ec.fieldContext_Chat_id(ctx, field)
-			case "title":
-				return ec.fieldContext_Chat_title(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Chat_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Chat_updatedAt(ctx, field)
+			case "chats":
+				return ec.fieldContext_PaginatedChats_chats(ctx, field)
+			case "totalPages":
+				return ec.fieldContext_PaginatedChats_totalPages(ctx, field)
+			case "currentPage":
+				return ec.fieldContext_PaginatedChats_currentPage(ctx, field)
+			case "totalChats":
+				return ec.fieldContext_PaginatedChats_totalChats(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Chat", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type PaginatedChats", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_chats_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -5688,6 +5879,60 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 	return out
 }
 
+var paginatedChatsImplementors = []string{"PaginatedChats"}
+
+func (ec *executionContext) _PaginatedChats(ctx context.Context, sel ast.SelectionSet, obj *model.PaginatedChats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, paginatedChatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PaginatedChats")
+		case "chats":
+			out.Values[i] = ec._PaginatedChats_chats(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalPages":
+			out.Values[i] = ec._PaginatedChats_totalPages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentPage":
+			out.Values[i] = ec._PaginatedChats_currentPage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalChats":
+			out.Values[i] = ec._PaginatedChats_totalChats(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var paginatedMessagesImplementors = []string{"PaginatedMessages"}
 
 func (ec *executionContext) _PaginatedMessages(ctx context.Context, sel ast.SelectionSet, obj *model.PaginatedMessages) graphql.Marshaler {
@@ -6947,6 +7192,20 @@ func (ec *executionContext) unmarshalNMessageRole2githubᚗcomᚋkunalPisolkar24
 
 func (ec *executionContext) marshalNMessageRole2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐMessageRole(ctx context.Context, sel ast.SelectionSet, v model.MessageRole) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNPaginatedChats2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedChats(ctx context.Context, sel ast.SelectionSet, v model.PaginatedChats) graphql.Marshaler {
+	return ec._PaginatedChats(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPaginatedChats2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedChats(ctx context.Context, sel ast.SelectionSet, v *model.PaginatedChats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PaginatedChats(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPaginatedMessages2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedMessages(ctx context.Context, sel ast.SelectionSet, v model.PaginatedMessages) graphql.Marshaler {

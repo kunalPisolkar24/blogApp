@@ -53,10 +53,17 @@ type PaginatedMessages struct {
 	Page          int
 }
 
+type PaginatedChats struct {
+	Chats      []*Chat
+	TotalChats int64
+	TotalPages int
+	Page       int
+}
+
 type ChatRepository interface {
 	Create(ctx context.Context, chat *Chat) (*Chat, error)
 	FindByID(ctx context.Context, id string) (*Chat, error)
-	ListByUser(ctx context.Context, userID string) ([]*Chat, error)
+	ListByUser(ctx context.Context, userID string, page, limit int) (*PaginatedChats, error)
 	Rename(ctx context.Context, id string, title string) (*Chat, error)
 	Delete(ctx context.Context, id string) error
 	AddMessage(ctx context.Context, msg *ChatMessage) (*ChatMessage, error)

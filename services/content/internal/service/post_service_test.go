@@ -354,20 +354,6 @@ func TestGeneratePostContent(t *testing.T) {
 	assert.Equal(t, "t", post.Title)
 }
 
-func TestNormalizePagination(t *testing.T) {
-	page, limit := normalizePagination(0, 0)
-	assert.Equal(t, 1, page)
-	assert.Equal(t, 10, limit)
-
-	page, limit = normalizePagination(3, 20)
-	assert.Equal(t, 3, page)
-	assert.Equal(t, 20, limit)
-
-	page, limit = normalizePagination(-1, 500)
-	assert.Equal(t, 1, page)
-	assert.Equal(t, 100, limit)
-}
-
 func TestPostServiceClock(t *testing.T) {
 	s := NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil)
 	now := time.Now()

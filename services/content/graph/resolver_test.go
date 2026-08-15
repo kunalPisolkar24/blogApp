@@ -331,27 +331,55 @@ func TestMutationResolverAskChat(t *testing.T) {
 func TestQueryResolverChats(t *testing.T) {
 	repo := &testutil.MockChatRepository{
 		UserID: "u_1",
-		ListByUserFn: func(ctx context.Context, userID string) ([]*domain.Chat, error) {
+		ListByUserFn: func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error) {
 			assert.Equal(t, "u_1", userID)
-			return []*domain.Chat{{ID: "c_1", UserID: "u_1", Title: "My Chat"}}, nil
+			assert.Equal(t, 1, page)
+			assert.Equal(t, 10, limit)
+			return &domain.PaginatedChats{
+				Chats:      []*domain.Chat{{ID: "c_1", UserID: "u_1", Title: "My Chat"}},
+				TotalChats: 1,
+				TotalPages: 1,
+				Page:       page,
+			}, nil
 		},
 	}
 	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
 	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
 
-	chats, err := resolver.Query().Chats(authenticatedContext("u_1"))
+	chats, err := resolver.Query().Chats(authenticatedContext("u_1"), nil, nil)
 
 	require.NoError(t, err)
-	require.Len(t, chats, 1)
-	assert.Equal(t, "c_1", chats[0].ID)
-	assert.Equal(t, "My Chat", chats[0].Title)
+	require.Len(t, chats.Chats, 1)
+	assert.Equal(t, "c_1", chats.Chats[0].ID)
+	assert.Equal(t, "My Chat", chats.Chats[0].Title)
+	assert.Equal(t, 1, chats.TotalPages)
+}
+
+func TestQueryResolverChatsPaginated(t *testing.T) {
+	repo := &testutil.MockChatRepository{
+		UserID: "u_1",
+		ListByUserFn: func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error) {
+			assert.Equal(t, 2, page)
+			assert.Equal(t, 5, limit)
+			return &domain.PaginatedChats{Chats: nil, TotalChats: 12, TotalPages: 3, Page: page}, nil
+		},
+	}
+	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+
+	page, limit := 2, 5
+	chats, err := resolver.Query().Chats(authenticatedContext("u_1"), &page, &limit)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, chats.CurrentPage)
+	assert.Equal(t, 12, chats.TotalChats)
 }
 
 func TestQueryResolverChatsUnauthorized(t *testing.T) {
 	chatSvc := service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{})
 	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
 
-	_, err := resolver.Query().Chats(context.Background())
+	_, err := resolver.Query().Chats(context.Background(), nil, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unauthorized")

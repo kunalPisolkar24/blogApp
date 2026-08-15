@@ -129,6 +129,18 @@ func TestPostRepositoryFindByIDs(t *testing.T) {
 	assert.True(t, ids[second.ID], "existing posts are returned")
 }
 
+func TestPostRepositoryFindByIDsRejectsOversizedList(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	repo := NewMongoPostRepository(startMongo(t, ctx))
+
+	ids := make([]string, maxIDsPerQuery+1)
+	_, err := repo.FindByIDs(ctx, ids)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too many ids")
+}
+
 func TestPostRepositoryDuplicateSlug(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

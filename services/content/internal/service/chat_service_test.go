@@ -60,6 +60,30 @@ func TestGetChatOwnership(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrForbidden)
 }
 
+func TestListChatsPassesPaginationThrough(t *testing.T) {
+	repo := &testutil.MockChatRepository{
+		ListByUserFn: func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error) {
+			assert.Equal(t, "u_1", userID)
+			assert.Equal(t, 3, page)
+			assert.Equal(t, 5, limit)
+			return &domain.PaginatedChats{
+				Chats:      []*domain.Chat{{ID: "c_1", UserID: "u_1"}},
+				TotalChats: 11,
+				TotalPages: 3,
+				Page:       page,
+			}, nil
+		},
+	}
+	s := newChatService(t, repo, nil)
+
+	result, err := s.ListChats(context.Background(), "u_1", 3, 5)
+
+	require.NoError(t, err)
+	assert.Len(t, result.Chats, 1)
+	assert.Equal(t, int64(11), result.TotalChats)
+	assert.Equal(t, 3, result.TotalPages)
+}
+
 func TestRenameChatEmptyTitle(t *testing.T) {
 	s := newChatService(t, nil, nil)
 

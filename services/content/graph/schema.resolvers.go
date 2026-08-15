@@ -11,6 +11,7 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
+	"github.com/kunalPisolkar24/topos/services/content/internal/pagination"
 )
 
 // CreatePost is the resolver for the createPost field.
@@ -194,13 +195,21 @@ func (r *queryResolver) SearchPosts(ctx context.Context, query string, page *int
 }
 
 // Chats is the resolver for the chats field.
-func (r *queryResolver) Chats(ctx context.Context) ([]*model.Chat, error) {
+func (r *queryResolver) Chats(ctx context.Context, page *int, limit *int) (*model.PaginatedChats, error) {
 	userID, ok := middleware.UserIDFromContext(ctx)
 	if !ok {
 		return nil, mapDomainError(domain.ErrUnauthorized)
 	}
 
-	chats, err := r.ChatService.ListChats(ctx, userID)
+	pageValue, limitValue := 1, pagination.DefaultLimit
+	if page != nil {
+		pageValue = *page
+	}
+	if limit != nil {
+		limitValue = *limit
+	}
+
+	chats, err := r.ChatService.ListChats(ctx, userID, pageValue, limitValue)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}

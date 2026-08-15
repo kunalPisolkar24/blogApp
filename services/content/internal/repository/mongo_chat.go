@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/pagination"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -48,9 +49,23 @@ func (r *MongoChatRepository) FindByID(ctx context.Context, id string) (*domain.
 	return &chat, nil
 }
 
-func (r *MongoChatRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Chat, error) {
-	opts := options.Find().SetSort(bson.M{"createdAt": -1})
-	cursor, err := r.chats.Find(ctx, bson.M{"userId": userID}, opts)
+// ListByUser returns the chats of a user, newest first, with the given
+// page/limit applied to the total count.
+func (r *MongoChatRepository) ListByUser(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error) {
+	page, limit = pagination.Normalize(page, limit)
+	filter := bson.M{"userId": userID}
+
+	total, err := r.chats.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := options.Find().
+		SetSkip(int64((page - 1) * limit)).
+		SetLimit(int64(limit)).
+		SetSort(bson.M{"createdAt": -1})
+
+	cursor, err := r.chats.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +75,13 @@ func (r *MongoChatRepository) ListByUser(ctx context.Context, userID string) ([]
 	if err := cursor.All(ctx, &chats); err != nil {
 		return nil, err
 	}
-	return chats, nil
+
+	return &domain.PaginatedChats{
+		Chats:      chats,
+		TotalChats: total,
+		TotalPages: pages(total, limit),
+		Page:       page,
+	}, nil
 }
 
 func (r *MongoChatRepository) Rename(ctx context.Context, id string, title string) (*domain.Chat, error) {
@@ -102,7 +123,7 @@ func (r *MongoChatRepository) AddMessage(ctx context.Context, msg *domain.ChatMe
 // Messages returns the messages of a chat in chronological order, newest
 // first, with the given page/limit applied to the total count.
 func (r *MongoChatRepository) Messages(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error) {
-	page, limit = normalizePagination(page, limit)
+	page, limit = pagination.Normalize(page, limit)
 	filter := bson.M{"chatId": chatID}
 
 	total, err := r.messages.CountDocuments(ctx, filter)
