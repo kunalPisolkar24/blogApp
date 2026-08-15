@@ -75,11 +75,31 @@ describe('Query.users', () => {
 
   it('floors fractional limits and forwards the cursor', async () => {
     const ctx = makeContext();
+    const cursor = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
     vi.mocked(ctx.userService.findAll).mockResolvedValue([]);
 
-    await resolvers.Query.users(null, { limit: 10.7, cursor: 'u5' }, ctx);
+    await resolvers.Query.users(null, { limit: 10.7, cursor }, ctx);
 
-    expect(ctx.userService.findAll).toHaveBeenCalledWith({ limit: 10, cursor: 'u5' });
+    expect(ctx.userService.findAll).toHaveBeenCalledWith({ limit: 10, cursor });
+  });
+
+  it('accepts a valid uuid cursor', async () => {
+    const ctx = makeContext();
+    const cursor = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+    vi.mocked(ctx.userService.findAll).mockResolvedValue([]);
+
+    await resolvers.Query.users(null, { limit: 20, cursor }, ctx);
+
+    expect(ctx.userService.findAll).toHaveBeenCalledWith({ limit: 20, cursor });
+  });
+
+  it('rejects a malformed cursor with a validation error', () => {
+    const ctx = makeContext();
+
+    expect(() =>
+      resolvers.Query.users(null, { limit: 20, cursor: 'not-a-uuid' }, ctx),
+    ).toThrow(ValidationError);
+    expect(ctx.userService.findAll).not.toHaveBeenCalled();
   });
 });
 
@@ -146,5 +166,23 @@ describe('User.__resolveReference', () => {
       id: 'u1',
     });
     expect(ctx.userService.findById).toHaveBeenCalledWith('u1');
+  });
+});
+
+describe('User.email', () => {
+  const user = { id: 'u1', email: 'alice@example.com' };
+
+  it('returns the email to the owning user', () => {
+    expect(resolvers.User.email(user, makeContext({ user: { id: 'u1' } }))).toBe(
+      'alice@example.com',
+    );
+  });
+
+  it('returns null to unauthenticated callers', () => {
+    expect(resolvers.User.email(user, makeContext())).toBeNull();
+  });
+
+  it('returns null to other users', () => {
+    expect(resolvers.User.email(user, makeContext({ user: { id: 'u2' } }))).toBeNull();
   });
 });

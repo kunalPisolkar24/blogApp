@@ -1,6 +1,14 @@
 import type { GraphQLContext } from '../context.js';
-import { UnauthorizedError, UserNotFoundError } from '../errors.js';
+import { UnauthorizedError, UserNotFoundError, ValidationError } from '../errors.js';
 import { signinSchema, signupSchema, updateProfileSchema, validate } from '../schemas.js';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertValidCursor(cursor: string | null | undefined): void {
+  if (cursor !== undefined && cursor !== null && !UUID_PATTERN.test(cursor)) {
+    throw new ValidationError('cursor must be a valid user id');
+  }
+}
 
 export const resolvers = {
   Query: {
@@ -17,11 +25,13 @@ export const resolvers = {
       _: unknown,
       { limit = 20, cursor }: { limit?: number; cursor?: string | null },
       ctx: GraphQLContext,
-    ) =>
-      ctx.userService.findAll({
+    ) => {
+      assertValidCursor(cursor);
+      return ctx.userService.findAll({
         limit: Math.min(Math.max(Math.floor(limit), 1), 50),
         cursor: cursor ?? undefined,
-      }),
+      });
+    },
   },
   Mutation: {
     signup: (_: unknown, args: unknown, ctx: GraphQLContext) =>
@@ -38,5 +48,7 @@ export const resolvers = {
   User: {
     __resolveReference: (ref: { id: string }, ctx: GraphQLContext) =>
       ctx.userService.findById(ref.id),
+    email: (obj: { id: string; email: string | null }, ctx: GraphQLContext) =>
+      ctx.user?.id === obj.id ? obj.email : null,
   },
 };
