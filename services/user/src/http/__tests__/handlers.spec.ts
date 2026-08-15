@@ -115,12 +115,12 @@ describe('graphqlHandler', () => {
 
     await app.request('/graphql', {
       method: 'POST',
-      body: JSON.stringify({ query: '{ me { id } }', operationName: 'Me' }),
+      body: JSON.stringify({ query: '{ me { id } }', operationName: 'me' }),
       headers: { 'content-type': 'application/json' },
     });
 
     const output = await metrics.getMetrics();
-    expect(output).toContain('graphql_operations_total{operation="Me",status="success"} 1');
+    expect(output).toContain('graphql_operations_total{operation="me",status="success"} 1');
   });
 
   it('records an error metric when the response contains errors', async () => {
@@ -134,12 +134,12 @@ describe('graphqlHandler', () => {
 
     await app.request('/graphql', {
       method: 'POST',
-      body: JSON.stringify({ query: '{ me { id } }', operationName: 'Me' }),
+      body: JSON.stringify({ query: '{ me { id } }', operationName: 'me' }),
       headers: { 'content-type': 'application/json' },
     });
 
     const output = await metrics.getMetrics();
-    expect(output).toContain('graphql_operations_total{operation="Me",status="error"} 1');
+    expect(output).toContain('graphql_operations_total{operation="me",status="error"} 1');
   });
 
   it('records graphql error codes from the response body', async () => {
@@ -157,14 +157,41 @@ describe('graphqlHandler', () => {
 
     await app.request('/graphql', {
       method: 'POST',
-      body: JSON.stringify({ query: '{ me { id } }', operationName: 'Signin' }),
+      body: JSON.stringify({ query: '{ me { id } }', operationName: 'signin' }),
       headers: { 'content-type': 'application/json' },
     });
 
     const output = await metrics.getMetrics();
     expect(output).toContain(
-      'graphql_errors_total{operation="Signin",code="INVALID_CREDENTIALS"} 1',
+      'graphql_errors_total{operation="signin",code="INVALID_CREDENTIALS"} 1',
     );
+  });
+
+  it('buckets unknown operation names into the unknown label', async () => {
+    const metrics = new Metrics();
+    const app = buildApp(
+      fakeApollo({
+        body: {
+          kind: 'complete',
+          string:
+            '{"data":null,"errors":[{"message":"bad creds","extensions":{"code":"INVALID_CREDENTIALS"}}]}',
+        },
+      }),
+      metrics,
+    );
+
+    await app.request('/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: '{ me { id } }', operationName: 'randomName-12345' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const output = await metrics.getMetrics();
+    expect(output).toContain(
+      'graphql_errors_total{operation="unknown",code="INVALID_CREDENTIALS"} 1',
+    );
+    expect(output).toContain('graphql_operations_total{operation="unknown",status="error"} 1');
+    expect(output).not.toContain('randomName-12345');
   });
 });
 

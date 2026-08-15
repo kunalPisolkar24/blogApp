@@ -2,7 +2,7 @@ import { ApolloServer, HeaderMap } from '@apollo/server';
 import type { MiddlewareHandler } from 'hono';
 import { createContext } from '../context.js';
 import { PayloadTooLargeError, ValidationError } from '../errors.js';
-import { hasErrors, operationName } from '../graphql/formatError.js';
+import { hasErrors, operationName, sanitizeOperationName } from '../graphql/formatError.js';
 import { extractErrorCodes, type Metrics } from '../observability/metrics.js';
 import type { UserService } from '../user.service.js';
 
@@ -65,7 +65,7 @@ export function graphqlHandler({ apollo, userService, metrics }: GraphqlHandlerD
       },
       context: () => createContext(c, userService),
     });
-    const operation = operationName(body);
+    const operation = sanitizeOperationName(operationName(body));
     const hasBodyErrors =
       response.body.kind === 'complete' && hasErrors(response.body.string);
     metrics.recordGraphqlOperation(

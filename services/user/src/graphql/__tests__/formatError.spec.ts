@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GraphQLError, type GraphQLFormattedError } from 'graphql';
-import { formatError, hasErrors, operationName } from '../formatError.js';
+import { formatError, hasErrors, operationName, sanitizeOperationName } from '../formatError.js';
 import { ValidationError } from '../../errors.js';
 
 const mocks = vi.hoisted(() => ({
@@ -67,5 +67,20 @@ describe('operationName', () => {
     expect(operationName({ query: '{ me }', operationName: '' })).toBe('anonymous');
     expect(operationName('garbage')).toBe('anonymous');
     expect(operationName(null)).toBe('anonymous');
+  });
+});
+
+describe('sanitizeOperationName', () => {
+  it('passes through known operations and anonymous', () => {
+    for (const name of ['me', 'user', 'users', 'signup', 'signin', 'updateProfile']) {
+      expect(sanitizeOperationName(name)).toBe(name);
+    }
+    expect(sanitizeOperationName('anonymous')).toBe('anonymous');
+  });
+
+  it('buckets arbitrary client-supplied names into unknown', () => {
+    expect(sanitizeOperationName('randomName-12345')).toBe('unknown');
+    expect(sanitizeOperationName('Me')).toBe('unknown');
+    expect(sanitizeOperationName('')).toBe('unknown');
   });
 });

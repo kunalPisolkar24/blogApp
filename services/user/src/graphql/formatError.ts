@@ -23,6 +23,12 @@ export function operationName(body: unknown): string {
   return 'anonymous';
 }
 
+const KNOWN_OPERATIONS = new Set(['me', 'user', 'users', 'signup', 'signin', 'updateProfile']);
+
+export function sanitizeOperationName(name: string): string {
+  return name === 'anonymous' || KNOWN_OPERATIONS.has(name) ? name : 'unknown';
+}
+
 export function unwrapDomain(error: unknown): DomainError | null {
   const inner =
     error instanceof Error && 'originalError' in error
