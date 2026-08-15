@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	pb "github.com/kunalPisolkar24/topos/services/content/proto/ai"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -113,6 +115,31 @@ func noFallback[T any](b *circuitBreaker, operation string, primary func() (T, e
 
 func zero[T any]() (zero T) {
 	return
+}
+
+// Health reports whether the resilient client can do real work: no
+// breaker is open and the primary connection is ready. It makes no
+// RPCs, so health checks never perturb the AI service.
+func (c *resilientClient) Health(ctx context.Context) error {
+	open := c.openDomain()
+	if open != "" {
+		return fmt.Errorf("ai breaker open: %s", open)
+	}
+	return c.primary.Health(ctx)
+}
+
+// openDomain returns the first breaker in the open state, if any.
+func (c *resilientClient) openDomain() breakerDomain {
+	for _, d := range []breakerDomain{domainGeneration, domainSearch, domainChat, domainIndex} {
+		b := c.breaker(d)
+		b.mu.Lock()
+		state := b.state
+		b.mu.Unlock()
+		if state == stateOpen {
+			return d
+		}
+	}
+	return ""
 }
 
 func (c *resilientClient) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -359,6 +386,14 @@ func mapTurnsToProto(turns []domain.ChatTurn) []*pb.ChatMessage {
 
 func (c *grpcClient) Close() error {
 	return c.conn.Close()
+}
+
+// Health reports whether the gRPC connection is ready to serve RPCs.
+func (c *grpcClient) Health(ctx context.Context) error {
+	if c.conn.GetState() != connectivity.Ready {
+		return fmt.Errorf("ai grpc connection is %s", c.conn.GetState())
+	}
+	return nil
 }
 
 type circuitState int

@@ -229,3 +229,30 @@ func TestSearchWorkerLifecycle(t *testing.T) {
 	<-w.Done()
 	require.Error(t, w.Running())
 }
+
+func TestSearchWorkerHealthyWhenRunningAndAIUp(t *testing.T) {
+	ai := &testutil.MockAIService{}
+	w := newTestSearchWorker(t, ai)
+	w.running.Store(true)
+
+	require.NoError(t, w.Healthy(context.Background()))
+}
+
+func TestSearchWorkerUnhealthyWhenAIUnavailable(t *testing.T) {
+	aiErr := errors.New("ai breaker open: index")
+	ai := &testutil.MockAIService{
+		HealthyFn: func(ctx context.Context) error { return aiErr },
+	}
+	w := newTestSearchWorker(t, ai)
+	w.running.Store(true)
+
+	assert.ErrorIs(t, w.Healthy(context.Background()), aiErr)
+}
+
+func TestSearchWorkerUnhealthyWhenNotRunning(t *testing.T) {
+	w := newTestSearchWorker(t, &testutil.MockAIService{})
+
+	err := w.Healthy(context.Background())
+
+	assert.ErrorContains(t, err, "not running")
+}

@@ -14,11 +14,12 @@ import (
 var errUnavailable = errors.New("unavailable")
 
 type stubAI struct {
-	summary string
-	search  []string
-	related []string
-	err     error
-	closed  bool
+	summary   string
+	search    []string
+	related   []string
+	err       error
+	healthErr error
+	closed    bool
 }
 
 func (s *stubAI) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -60,6 +61,10 @@ func (s *stubAI) ChatAnswer(ctx context.Context, query string, history []domain.
 		return nil, s.err
 	}
 	return &domain.ChatAnswer{Content: "answer"}, nil
+}
+
+func (s *stubAI) Health(_ context.Context) error {
+	return s.healthErr
 }
 
 func (s *stubAI) Close() error {
@@ -289,4 +294,43 @@ func TestResilientClientChatFallsBackOnOpenBreaker(t *testing.T) {
 	answer, err := client.ChatAnswer(context.Background(), "q", nil, 5)
 	require.NoError(t, err)
 	assert.Equal(t, "answer", answer.Content)
+}
+
+func TestResilientClientHealthOkWhenBreakersClosed(t *testing.T) {
+	primary := &stubAI{}
+	client := newTestResilientClient(primary, &stubAI{})
+
+	require.NoError(t, client.Health(context.Background()))
+}
+
+func TestResilientClientHealthFailsWhenBreakerOpen(t *testing.T) {
+	client := newTestResilientClient(&stubAI{}, &stubAI{})
+	for i := 0; i < failureThreshold; i++ {
+		client.breaker(domainIndex).recordFailure()
+	}
+
+	err := client.Health(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "index")
+}
+
+func TestResilientClientHealthSurfacesPrimaryUnavailability(t *testing.T) {
+	primary := &stubAI{healthErr: errors.New("ai grpc connection is TransientFailure")}
+	client := newTestResilientClient(primary, &stubAI{})
+
+	err := client.Health(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TransientFailure")
+}
+
+func TestGRPCClientHealthFailsWithoutConnection(t *testing.T) {
+	client := newGRPCClient("localhost:1")
+
+	err := client.Health(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "connection is")
+	require.NoError(t, client.Close())
 }

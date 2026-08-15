@@ -26,5 +26,9 @@ type AIService interface {
 	SearchPosts(ctx context.Context, query string, offset, limit int) (*SearchResult, error)
 	RelatedPosts(ctx context.Context, postID string, limit int) (*SearchResult, error)
 	ChatAnswer(ctx context.Context, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
+	// Health reports whether the AI service can do real work: the
+	// connection is ready and no circuit breaker is open. It must not
+	// make RPCs.
+	Health(ctx context.Context) error
 	Close() error
 }

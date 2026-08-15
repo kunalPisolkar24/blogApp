@@ -15,12 +15,17 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // SearchWorker keeps the Qdrant search index in sync with the posts
 // topic: post events are upserted into the index and tombstones remove
 // the corresponding points. It runs in its own consumer group so it
 // never competes with the summary worker.
+var searchWorkerTracer = otel.Tracer("content-search-worker")
+
 type SearchWorker struct {
 	readers   []*kafka.Reader
 	aiService domain.AIService
@@ -203,6 +208,16 @@ func (w *SearchWorker) processMessage(ctx context.Context, m kafka.Message) erro
 			metrics.WorkerMessagesTotal.WithLabelValues("skipped").Inc()
 			return nil
 		}
+
+		ctx, span := searchWorkerTracer.Start(ctx, "delete from index",
+			trace.WithAttributes(
+				attribute.String("post.id", postID),
+				attribute.Int("kafka.partition", m.Partition),
+				attribute.Int64("kafka.offset", m.Offset),
+			),
+		)
+		defer span.End()
+
 		if err := w.aiService.DeletePost(ctx, postID); err != nil {
 			return fmt.Errorf("delete post from index: %w", err)
 		}
@@ -218,6 +233,15 @@ func (w *SearchWorker) processMessage(ctx context.Context, m kafka.Message) erro
 	if strings.TrimSpace(event.PostID) == "" {
 		return permanentf("event is missing postId")
 	}
+
+	ctx, span := searchWorkerTracer.Start(ctx, "index post",
+		trace.WithAttributes(
+			attribute.String("post.id", event.PostID),
+			attribute.Int("kafka.partition", m.Partition),
+			attribute.Int64("kafka.offset", m.Offset),
+		),
+	)
+	defer span.End()
 
 	if err := w.aiService.IndexPost(
 		ctx, event.PostID, event.Title, event.Body, event.Summary, event.Tags, event.CreatedAt,
@@ -251,4 +275,15 @@ func (w *SearchWorker) Running() error {
 		return nil
 	}
 	return errors.New("search worker is not running")
+}
+
+// Healthy reports whether the worker can do real work: the consume
+// loops are running and the AI service is available (no open breaker,
+// ready connection). A worker whose messages are being dead-lettered
+// because the AI service is down must not report ready.
+func (w *SearchWorker) Healthy(ctx context.Context) error {
+	if err := w.Running(); err != nil {
+		return err
+	}
+	return w.aiService.Health(ctx)
 }

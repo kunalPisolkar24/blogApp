@@ -136,6 +136,7 @@ type MockAIService struct {
 	SearchPostsFn     func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
 	RelatedPostsFn    func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
 	ChatAnswerFn      func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
+	HealthyFn         func(ctx context.Context) error
 }
 
 func (m *MockAIService) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -192,6 +193,13 @@ func (m *MockAIService) ChatAnswer(ctx context.Context, query string, history []
 		return m.ChatAnswerFn(ctx, query, history, topK)
 	}
 	return &domain.ChatAnswer{Content: "answer"}, nil
+}
+
+func (m *MockAIService) Health(ctx context.Context) error {
+	if m.HealthyFn != nil {
+		return m.HealthyFn(ctx)
+	}
+	return nil
 }
 
 func (m *MockAIService) Close() error { return nil }

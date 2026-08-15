@@ -60,6 +60,12 @@ func (a *NoopAI) ChatAnswer(_ context.Context, _ string, _ []domain.ChatTurn, _ 
 	}, nil
 }
 
+// Health reports the fallback as always available: NoopAI itself never
+// fails, it is only selected when the primary is unavailable.
+func (a *NoopAI) Health(_ context.Context) error {
+	return nil
+}
+
 func (a *NoopAI) Close() error {
 	return nil
 }

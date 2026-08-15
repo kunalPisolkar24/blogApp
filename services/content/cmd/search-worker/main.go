@@ -89,8 +89,8 @@ func run() error {
 	return server.Shutdown(shutdownCtx)
 }
 
-// newHealthHandler reports 200 when kafka and the worker are healthy, and
-// serves Prometheus metrics on /metrics.
+// newHealthHandler reports 200 when kafka, the worker loop and the AI
+// service are healthy, and serves Prometheus metrics on /metrics.
 func newHealthHandler(producer domain.EventProducer, w *worker.SearchWorker) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -104,6 +104,7 @@ func newHealthHandler(producer domain.EventProducer, w *worker.SearchWorker) htt
 		}{
 			{"kafka", producer.Ping(ctx)},
 			{"worker", w.Running()},
+			{"ai", w.Healthy(ctx)},
 		}
 
 		status := http.StatusOK
