@@ -28,6 +28,14 @@ type Post struct {
 	ResetSummary  bool       `bson:"-" json:"-"`
 }
 
+// MarkSummaryStale clears the stored summary and flags the post for
+// regeneration by the summary worker.
+func (p *Post) MarkSummaryStale() {
+	p.Summary = ""
+	p.SummaryStatus = PostStatusPending
+	p.ResetSummary = true
+}
+
 type PaginatedPosts struct {
 	Posts      []*Post `json:"posts"`
 	TotalPages int     `json:"totalPages"`

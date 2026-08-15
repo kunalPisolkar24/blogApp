@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,6 +172,182 @@ func TestUpdatePostResetsSummaryOnTitleChange(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, post.ResetSummary)
+}
+
+func TestCreatePostValidation(t *testing.T) {
+	longTitle := strings.Repeat("a", maxTitleLen+1)
+	longBody := strings.Repeat("b", maxBodyLen+1)
+	longTag := strings.Repeat("t", maxTagLen+1)
+	tooManyTags := make([]string, maxTagCount+1)
+
+	tests := []struct {
+		name    string
+		title   string
+		body    string
+		tags    []string
+		wantErr string
+	}{
+		{name: "empty title", wantErr: "title is required"},
+		{name: "whitespace title", title: "   ", body: "Body", wantErr: "title is required"},
+		{name: "empty body", title: "Title", wantErr: "body is required"},
+		{name: "title too long", title: longTitle, body: "Body", wantErr: "title is too long"},
+		{name: "body too long", title: "Title", body: longBody, wantErr: "body is too long"},
+		{name: "too many tags", title: "Title", body: "Body", tags: tooManyTags, wantErr: "too many tags"},
+		{name: "tag too long", title: "Title", body: "Body", tags: []string{longTag}, wantErr: "tag is too long"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &testutil.MockPostRepository{}
+			s := newService(t, repo, nil, nil)
+
+			_, err := s.CreatePost(context.Background(), tt.title, tt.body, "u_1", tt.tags, nil, nil)
+
+			require.ErrorIs(t, err, domain.ErrValidation)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Zero(t, repo.CreateCalls, "invalid input must not reach the repository")
+		})
+	}
+}
+
+func TestCreatePostTrimsInput(t *testing.T) {
+	s := newService(t, nil, nil, nil)
+
+	post, err := s.CreatePost(context.Background(), "  Title  ", "  Body  ", "u_1", []string{"  go ", "", "rust "}, nil, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Title", post.Title)
+	assert.Equal(t, "Body", post.Body)
+	assert.Equal(t, []string{"go", "rust"}, post.Tags)
+}
+
+func TestCreatePostTagErrorIsTolerated(t *testing.T) {
+	s := NewPostService(
+		&testutil.MockPostRepository{},
+		&testutil.MockTagRepository{CreateOrFindFn: func(ctx context.Context, name string) (*domain.Tag, error) {
+			return nil, errors.New("tag db down")
+		}},
+		&testutil.MockAIService{},
+		nil,
+		nil,
+	)
+
+	post, err := s.CreatePost(context.Background(), "Title", "Body", "u_1", []string{"go"}, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, post)
+}
+
+func TestUpdatePostValidation(t *testing.T) {
+	repo := &testutil.MockPostRepository{
+		FindByIDFn: func(ctx context.Context, id string) (*domain.Post, error) {
+			return &domain.Post{ID: "p_1", AuthorID: "u_1", Title: "Old"}, nil
+		},
+	}
+	s := newService(t, repo, nil, nil)
+
+	empty := ""
+	_, err := s.UpdatePost(context.Background(), "p_1", "u_1", &empty, nil, nil, nil)
+	require.ErrorIs(t, err, domain.ErrValidation)
+	assert.Contains(t, err.Error(), "title is required")
+
+	_, err = s.UpdatePost(context.Background(), "p_1", "u_1", nil, &empty, nil, nil)
+	require.ErrorIs(t, err, domain.ErrValidation)
+	assert.Contains(t, err.Error(), "body is required")
+
+	long := strings.Repeat("a", maxTitleLen+1)
+	_, err = s.UpdatePost(context.Background(), "p_1", "u_1", &long, nil, nil, nil)
+	require.ErrorIs(t, err, domain.ErrValidation)
+}
+
+func TestUpdatePostUnchangedValuesDoNotResetSummary(t *testing.T) {
+	existing := &domain.Post{ID: "p_1", AuthorID: "u_1", Title: "Same", Body: "SameBody"}
+	var got *domain.Post
+	repo := &testutil.MockPostRepository{
+		FindByIDFn: func(ctx context.Context, id string) (*domain.Post, error) { return existing, nil },
+		UpdateFn: func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
+			got = post
+			return post, nil
+		},
+	}
+	s := newService(t, repo, nil, nil)
+
+	title, body := "Same", "SameBody"
+	_, err := s.UpdatePost(context.Background(), "p_1", "u_1", &title, &body, nil, nil)
+
+	require.NoError(t, err)
+	assert.False(t, got.ResetSummary, "unchanged title/body must not reset the summary")
+	assert.Empty(t, got.Title, "unchanged title must not be rewritten")
+	assert.Empty(t, got.Body, "unchanged body must not be rewritten")
+	assert.Empty(t, got.Slug, "unchanged title must not regenerate the slug")
+}
+
+func TestUpdatePostImageOnlyDoesNotResetSummary(t *testing.T) {
+	existing := &domain.Post{ID: "p_1", AuthorID: "u_1", Title: "Title", Body: "Body"}
+	var got *domain.Post
+	repo := &testutil.MockPostRepository{
+		FindByIDFn: func(ctx context.Context, id string) (*domain.Post, error) { return existing, nil },
+		UpdateFn: func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
+			got = post
+			return post, nil
+		},
+	}
+	s := newService(t, repo, nil, nil)
+
+	imageURL := "https://example.com/image.png"
+	_, err := s.UpdatePost(context.Background(), "p_1", "u_1", nil, nil, nil, &imageURL)
+
+	require.NoError(t, err)
+	assert.False(t, got.ResetSummary, "an imageUrl-only edit must not reset the summary")
+	assert.Empty(t, got.Title)
+	assert.Empty(t, got.Body)
+	assert.Empty(t, got.Slug)
+}
+
+func TestUpdatePostChangedValuesResetSummary(t *testing.T) {
+	existing := &domain.Post{ID: "p_1", AuthorID: "u_1", Title: "Old", Body: "OldBody"}
+	var got *domain.Post
+	repo := &testutil.MockPostRepository{
+		FindByIDFn: func(ctx context.Context, id string) (*domain.Post, error) { return existing, nil },
+		UpdateFn: func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
+			got = post
+			return post, nil
+		},
+	}
+	s := newService(t, repo, nil, nil)
+
+	title := "New"
+	_, err := s.UpdatePost(context.Background(), "p_1", "u_1", &title, nil, nil, nil)
+
+	require.NoError(t, err)
+	assert.True(t, got.ResetSummary, "a real title change must reset the summary")
+	assert.Equal(t, "New", got.Title)
+	assert.NotEmpty(t, got.Slug)
+}
+
+func TestUpdatePostTagErrorIsTolerated(t *testing.T) {
+	repo := &testutil.MockPostRepository{
+		FindByIDFn: func(ctx context.Context, id string) (*domain.Post, error) {
+			return &domain.Post{ID: "p_1", AuthorID: "u_1", Title: "Old"}, nil
+		},
+		UpdateFn: func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error) {
+			return post, nil
+		},
+	}
+	s := NewPostService(
+		repo,
+		&testutil.MockTagRepository{CreateOrFindFn: func(ctx context.Context, name string) (*domain.Tag, error) {
+			return nil, errors.New("tag db down")
+		}},
+		&testutil.MockAIService{},
+		nil,
+		nil,
+	)
+
+	title := "New"
+	_, err := s.UpdatePost(context.Background(), "p_1", "u_1", &title, nil, []string{"go"}, nil)
+
+	require.NoError(t, err)
 }
 
 func TestDeletePost(t *testing.T) {

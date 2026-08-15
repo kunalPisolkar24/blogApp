@@ -15,6 +15,8 @@ func mapDomainError(err error) *gqlerror.Error {
 		return &gqlerror.Error{Message: "forbidden"}
 	case errors.Is(err, domain.ErrNotFound):
 		return &gqlerror.Error{Message: "not found"}
+	case errors.Is(err, domain.ErrValidation):
+		return &gqlerror.Error{Message: err.Error()}
 	default:
 		return gqlerror.Wrap(err)
 	}

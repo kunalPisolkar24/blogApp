@@ -14,7 +14,16 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const maxSlugRetries = 5
+// Input limits for post writes. The title cap keeps generated slugs well
+// under Mongo's 1024-byte index key limit; the body cap stays far below
+// the 16MB BSON document limit.
+const (
+	maxSlugRetries = 5
+	maxTitleLen    = 200
+	maxBodyLen     = 1 << 20 // 1 MiB
+	maxTagCount    = 20
+	maxTagLen      = 64
+)
 
 type PostService struct {
 	postRepo       domain.PostRepository
@@ -37,8 +46,17 @@ func NewPostService(postRepo domain.PostRepository, tagRepo domain.TagRepository
 }
 
 func (s *PostService) CreatePost(ctx context.Context, title, body, authorID string, tags []string, imageUrl *string, summary *string) (*domain.Post, error) {
-	for _, tagName := range tags {
-		_, _ = s.tagRepo.CreateOrFind(ctx, tagName)
+	title, err := normalizeTitle(title)
+	if err != nil {
+		return nil, err
+	}
+	body, err = normalizeBody(body)
+	if err != nil {
+		return nil, err
+	}
+	tags, err = normalizeTags(tags)
+	if err != nil {
+		return nil, err
 	}
 
 	summaryValue := ""
@@ -69,6 +87,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		var err error
 		created, err = s.postRepo.Create(ctx, post)
 		if err == nil {
+			s.ensureTags(ctx, created.ID, tags)
 			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
 			metrics.PostsCreated.Inc()
 			if s.eventPublisher != nil {
@@ -93,35 +112,42 @@ func (s *PostService) UpdatePost(ctx context.Context, id, actorID string, title,
 	}
 
 	post := &domain.Post{UpdatedAt: s.clock()}
-	summaryNeedsReset := false
 
 	if title != nil {
-		post.Title = *title
-		post.Slug = slug.Generate(*title, post.UpdatedAt)
-		summaryNeedsReset = true
+		trimmed, err := normalizeTitle(*title)
+		if err != nil {
+			return nil, err
+		}
+		if trimmed != existing.Title {
+			post.Title = trimmed
+			post.Slug = slug.Generate(trimmed, post.UpdatedAt)
+			post.MarkSummaryStale()
+		}
 	}
 	if body != nil {
-		post.Body = *body
-		summaryNeedsReset = true
+		trimmed, err := normalizeBody(*body)
+		if err != nil {
+			return nil, err
+		}
+		if trimmed != existing.Body {
+			post.Body = trimmed
+			post.MarkSummaryStale()
+		}
 	}
 	if imageUrl != nil {
 		post.ImageUrl = imageUrl
 	}
 	if tags != nil {
-		post.Tags = tags
-		for _, tagName := range tags {
-			_, _ = s.tagRepo.CreateOrFind(ctx, tagName)
+		cleaned, err := normalizeTags(tags)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	if summaryNeedsReset {
-		post.Summary = ""
-		post.SummaryStatus = domain.PostStatusPending
-		post.ResetSummary = true
+		post.Tags = cleaned
 	}
 
 	updated, err := s.postRepo.Update(ctx, id, post)
 	if err == nil {
+		s.ensureTags(ctx, updated.ID, post.Tags)
 		s.invalidatePost(ctx, id)
 		metrics.PostsUpdated.Inc()
 		if s.eventPublisher != nil {
@@ -312,4 +338,60 @@ func (s *PostService) GeneratePostContent(ctx context.Context, prompt string) (*
 
 func isDuplicateKey(err error) bool {
 	return mongo.IsDuplicateKeyError(err)
+}
+
+// normalizeTitle trims and bounds-checks a post title.
+func normalizeTitle(title string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", fmt.Errorf("%w: title is required", domain.ErrValidation)
+	}
+	if len(title) > maxTitleLen {
+		return "", fmt.Errorf("%w: title is too long (max %d bytes)", domain.ErrValidation, maxTitleLen)
+	}
+	return title, nil
+}
+
+// normalizeBody trims and bounds-checks a post body.
+func normalizeBody(body string) (string, error) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return "", fmt.Errorf("%w: body is required", domain.ErrValidation)
+	}
+	if len(body) > maxBodyLen {
+		return "", fmt.Errorf("%w: body is too long (max %d bytes)", domain.ErrValidation, maxBodyLen)
+	}
+	return body, nil
+}
+
+// normalizeTags trims the tag list, drops empty entries, and enforces
+// the count and per-tag length caps.
+func normalizeTags(tags []string) ([]string, error) {
+	if len(tags) > maxTagCount {
+		return nil, fmt.Errorf("%w: too many tags (max %d)", domain.ErrValidation, maxTagCount)
+	}
+	cleaned := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if len(tag) > maxTagLen {
+			return nil, fmt.Errorf("%w: tag is too long (max %d bytes)", domain.ErrValidation, maxTagLen)
+		}
+		cleaned = append(cleaned, tag)
+	}
+	return cleaned, nil
+}
+
+// ensureTags upserts the tag names of a post into the tag collection. A
+// failure is logged, not fatal: the post's own tags array is the source
+// of truth for per-post tagging, and the tag collection is only a
+// listing index derived from it.
+func (s *PostService) ensureTags(ctx context.Context, postID string, tags []string) {
+	for _, tagName := range tags {
+		if _, err := s.tagRepo.CreateOrFind(ctx, tagName); err != nil {
+			middleware.LoggerFromContext(ctx).Warn("failed to create tag", "tag", tagName, "postID", postID, "error", err)
+		}
+	}
 }
