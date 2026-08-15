@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -89,10 +90,11 @@ func (s *ChatService) GetMessages(ctx context.Context, chatID, userID string, pa
 	return s.chatRepo.Messages(ctx, chatID, page, limit)
 }
 
-// AskChat answers a query in the given chat: the user message is
-// persisted first, then the last few turns are sent to the AI service as
-// context, and finally the assistant answer is persisted. The assistant
-// message is returned.
+// AskChat answers a query in the given chat. The AI answer is fetched
+// first, so a failed AI call never persists a ghost user message and a
+// retry cannot duplicate the query. On success the user and assistant
+// messages are persisted, and if the assistant message cannot be stored
+// the user message is rolled back to keep the conversation consistent.
 func (s *ChatService) AskChat(ctx context.Context, chatID, userID, query string) (*domain.ChatMessage, error) {
 	if _, err := s.GetChat(ctx, chatID, userID); err != nil {
 		return nil, err
@@ -103,27 +105,37 @@ func (s *ChatService) AskChat(ctx context.Context, chatID, userID, query string)
 		return nil, err
 	}
 
-	if _, err := s.chatRepo.AddMessage(ctx, &domain.ChatMessage{
-		ChatID:    chatID,
-		Role:      domain.ChatMessageRoleUser,
-		Content:   query,
-		CreatedAt: s.clock(),
-	}); err != nil {
-		return nil, err
-	}
-
 	answer, err := s.ai.ChatAnswer(ctx, query, history, chatTopK)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.chatRepo.AddMessage(ctx, &domain.ChatMessage{
+	userMsg, err := s.chatRepo.AddMessage(ctx, &domain.ChatMessage{
+		ChatID:    chatID,
+		Role:      domain.ChatMessageRoleUser,
+		Content:   query,
+		CreatedAt: s.clock(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	assistant, err := s.chatRepo.AddMessage(ctx, &domain.ChatMessage{
 		ChatID:       chatID,
 		Role:         domain.ChatMessageRoleAssistant,
 		Content:      answer.Content,
 		CitedPostIDs: answer.CitedPostIDs,
 		CreatedAt:    s.clock(),
 	})
+	if err != nil {
+		if delErr := s.chatRepo.DeleteMessage(ctx, chatID, userMsg.ID); delErr != nil {
+			slog.Warn("failed to roll back user message after assistant persist failure",
+				"error", delErr, "chat_id", chatID, "message_id", userMsg.ID)
+		}
+		return nil, err
+	}
+
+	return assistant, nil
 }
 
 // recentTurns loads the most recent messages of a chat and returns them
