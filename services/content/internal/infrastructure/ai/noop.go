@@ -2,61 +2,33 @@ package ai
 
 import (
 	"context"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 )
 
-// NoopAI generates content locally from the input. It is used as the
-// fallback when the AI service is unreachable, and in tests.
+// NoopAI provides local fallbacks for read paths (search, related, chat)
+// while the AI service is unreachable, and is used in tests.
+//
+// Generation paths (summary, tags, post) have no safe local equivalent:
+// fabricating content would write corrupted posts into the database, so
+// they return ErrAICircuitOpen and callers retry or dead-letter instead.
 type NoopAI struct{}
 
 func NewNoopAI() *NoopAI {
 	return &NoopAI{}
 }
 
-var tokenSplitRegex = regexp.MustCompile(`[^a-z0-9]+`)
-
-var stopWords = map[string]struct{}{
-	"the": {}, "and": {}, "for": {}, "with": {}, "this": {}, "that": {}, "from": {}, "into": {}, "about": {}, "your": {},
-	"you": {}, "are": {}, "was": {}, "were": {}, "will": {}, "have": {}, "has": {}, "had": {}, "not": {}, "but": {},
-	"can": {}, "could": {}, "should": {}, "would": {}, "our": {}, "their": {}, "they": {}, "them": {}, "his": {}, "her": {},
-	"its": {}, "who": {}, "what": {}, "when": {}, "where": {}, "why": {}, "how": {}, "all": {}, "any": {}, "new": {},
-	"post": {}, "blog": {}, "content": {}, "article": {}, "write": {}, "create": {}, "generate": {},
+func (a *NoopAI) GenerateSummary(_ context.Context, _ string) (string, error) {
+	return "", domain.ErrAICircuitOpen
 }
 
-func (a *NoopAI) GenerateSummary(_ context.Context, text string) (string, error) {
-	summary := truncate(normalizeWhitespace(text), 240)
-	if summary == "" {
-		return "Summary is currently unavailable.", nil
-	}
-	return summary, nil
+func (a *NoopAI) GenerateTags(_ context.Context, _, _ string) ([]string, error) {
+	return nil, domain.ErrAICircuitOpen
 }
 
-func (a *NoopAI) GenerateTags(_ context.Context, title, body string) ([]string, error) {
-	return deriveTags(title, body), nil
-}
-
-func (a *NoopAI) GeneratePost(_ context.Context, prompt string) (*domain.GeneratedPost, error) {
-	normalized := normalizeWhitespace(prompt)
-	title := truncate(normalized, 64)
-	if title == "" {
-		title = "Generated Post"
-	}
-
-	body := normalized
-	if body == "" {
-		body = "Content generation is currently running in fallback mode."
-	}
-
-	return &domain.GeneratedPost{
-		Title:   title,
-		Body:    body,
-		Summary: truncate(body, 220),
-		Tags:    deriveTags(title, body),
-	}, nil
+func (a *NoopAI) GeneratePost(_ context.Context, _ string) (*domain.GeneratedPost, error) {
+	return nil, domain.ErrAICircuitOpen
 }
 
 // IndexPost and DeletePost no-op in fallback mode: search simply has no
@@ -90,52 +62,4 @@ func (a *NoopAI) ChatAnswer(_ context.Context, _ string, _ []domain.ChatTurn, _ 
 
 func (a *NoopAI) Close() error {
 	return nil
-}
-
-func deriveTags(title, body string) []string {
-	text := strings.ToLower(title + " " + body)
-	tokens := tokenSplitRegex.Split(text, -1)
-	seen := make(map[string]struct{})
-	tags := make([]string, 0, 5)
-
-	for _, token := range tokens {
-		if len(token) < 3 {
-			continue
-		}
-		if _, blocked := stopWords[token]; blocked {
-			continue
-		}
-		if _, exists := seen[token]; exists {
-			continue
-		}
-		seen[token] = struct{}{}
-		tags = append(tags, token)
-		if len(tags) == 5 {
-			break
-		}
-	}
-
-	if len(tags) == 0 {
-		return []string{"general"}
-	}
-	return tags
-}
-
-func normalizeWhitespace(input string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(input)), " ")
-}
-
-func truncate(input string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	runes := []rune(input)
-	if len(runes) <= max {
-		return input
-	}
-	cut := string(runes[:max])
-	if idx := strings.LastIndex(cut, " "); idx > 0 {
-		cut = cut[:idx]
-	}
-	return strings.TrimSpace(cut) + "..."
 }

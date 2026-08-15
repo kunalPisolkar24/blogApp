@@ -140,7 +140,7 @@ func (w *SearchWorker) processWithRetries(ctx context.Context, m kafka.Message) 
 		if processErr == nil {
 			return nil
 		}
-		if isPermanent(processErr) {
+		if isPermanent(processErr) || errors.Is(processErr, domain.ErrAICircuitOpen) {
 			return processErr
 		}
 

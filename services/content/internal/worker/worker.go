@@ -182,7 +182,7 @@ func (w *Worker) processWithRetries(ctx context.Context, reader *kafka.Reader, m
 		if processErr == nil {
 			return nil
 		}
-		if isPermanent(processErr) {
+		if isPermanent(processErr) || errors.Is(processErr, domain.ErrAICircuitOpen) {
 			return processErr
 		}
 
@@ -279,7 +279,7 @@ func (w *Worker) processMessage(ctx context.Context, m kafka.Message) error {
 	summary, err := w.aiService.GenerateSummary(ctx, cleanBody)
 	if err != nil {
 		slog.Warn("ai summary generation failed", "postID", post.ID, "error", err)
-		if updateErr := w.processor.SetPostSummary(ctx, post.ID, fallbackSummary(cleanBody), domain.PostStatusFailed); updateErr != nil {
+		if updateErr := w.processor.SetPostSummary(ctx, post.ID, "", domain.PostStatusFailed); updateErr != nil {
 			slog.Error("failed to mark summary failed", "error", updateErr, "postID", post.ID)
 		}
 		return err
@@ -287,9 +287,10 @@ func (w *Worker) processMessage(ctx context.Context, m kafka.Message) error {
 
 	summary = strings.TrimSpace(summary)
 	if summary == "" {
-		summary = fallbackSummary(cleanBody)
-	}
-	if summary == "" {
+		slog.Warn("ai returned an empty summary, marking failed", "postID", post.ID)
+		if updateErr := w.processor.SetPostSummary(ctx, post.ID, "", domain.PostStatusFailed); updateErr != nil {
+			slog.Error("failed to mark summary failed", "error", updateErr, "postID", post.ID)
+		}
 		return errors.New("ai returned an empty summary")
 	}
 
@@ -331,32 +332,5 @@ func stripHTML(input string) string {
 	}
 	decoded := html.UnescapeString(input)
 	stripped := htmlTagRegex.ReplaceAllString(decoded, " ")
-	return normalizeWhitespace(stripped)
-}
-
-func fallbackSummary(input string) string {
-	normalized := normalizeWhitespace(input)
-	if normalized == "" {
-		return "Summary is currently unavailable."
-	}
-	return truncate(normalized, 240)
-}
-
-func normalizeWhitespace(input string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(input)), " ")
-}
-
-func truncate(input string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	runes := []rune(input)
-	if len(runes) <= max {
-		return input
-	}
-	cut := string(runes[:max])
-	if idx := strings.LastIndex(cut, " "); idx > 0 {
-		cut = cut[:idx]
-	}
-	return strings.TrimSpace(cut) + "..."
+	return strings.Join(strings.Fields(strings.TrimSpace(stripped)), " ")
 }
