@@ -79,13 +79,20 @@ extend type User @key(fields: "id") {
   posts(page: Int, limit: Int): PaginatedPosts!
 }
 
+type PaginatedChats {
+  chats: [Chat!]!
+  totalPages: Int!
+  currentPage: Int!
+  totalChats: Int!
+}
+
 type Query {
   posts(page: Int, limit: Int): PaginatedPosts!
   post(id: ID!): Post
   tags(query: String, limit: Int): [Tag!]!
   postsByTag(tag: String!, page: Int, limit: Int): PaginatedPosts!
   searchPosts(query: String!, page: Int, limit: Int): SearchResult!
-  chats: [Chat!]!
+  chats(page: Int, limit: Int): PaginatedChats!
   chat(id: ID!): Chat
   chatMessages(chatId: ID!, page: Int, limit: Int): PaginatedMessages!
 }

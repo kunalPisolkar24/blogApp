@@ -59,8 +59,8 @@ func (s *ChatService) GetChat(ctx context.Context, chatID, userID string) (*doma
 	return chat, nil
 }
 
-func (s *ChatService) ListChats(ctx context.Context, userID string) ([]*domain.Chat, error) {
-	return s.chatRepo.ListByUser(ctx, userID)
+func (s *ChatService) ListChats(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error) {
+	return s.chatRepo.ListByUser(ctx, userID, page, limit)
 }
 
 func (s *ChatService) RenameChat(ctx context.Context, chatID, userID, title string) (*domain.Chat, error) {

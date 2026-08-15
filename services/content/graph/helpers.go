@@ -129,14 +129,24 @@ func mapDomainChatToModel(dc *domain.Chat) *model.Chat {
 	}
 }
 
-func mapDomainChatsToModel(chats []*domain.Chat) []*model.Chat {
-	out := make([]*model.Chat, 0, len(chats))
-	for _, dc := range chats {
+func mapDomainChatsToModel(pc *domain.PaginatedChats) *model.PaginatedChats {
+	if pc == nil {
+		return nil
+	}
+
+	chats := make([]*model.Chat, 0, len(pc.Chats))
+	for _, dc := range pc.Chats {
 		if mapped := mapDomainChatToModel(dc); mapped != nil {
-			out = append(out, mapped)
+			chats = append(chats, mapped)
 		}
 	}
-	return out
+
+	return &model.PaginatedChats{
+		Chats:       chats,
+		TotalPages:  pc.TotalPages,
+		CurrentPage: pc.Page,
+		TotalChats:  int(pc.TotalChats),
+	}
 }
 
 func mapDomainChatMessageToModel(dm *domain.ChatMessage) *model.ChatMessage {

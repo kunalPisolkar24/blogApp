@@ -10,6 +10,7 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
+	"github.com/kunalPisolkar24/topos/services/content/internal/pagination"
 	"github.com/kunalPisolkar24/topos/services/content/internal/slug"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -200,7 +201,7 @@ func (s *PostService) publishEvent(ctx context.Context, name, postID string, pub
 }
 
 func (s *PostService) GetPosts(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error) {
-	page, limit = normalizePagination(page, limit)
+	page, limit = pagination.Normalize(page, limit)
 	return withCache(s.cache, ctx, cache.KeyPosts(page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
 		return s.postRepo.FindAll(ctx, page, limit)
 	})
@@ -213,14 +214,14 @@ func (s *PostService) GetPost(ctx context.Context, id string) (*domain.Post, err
 }
 
 func (s *PostService) GetPostsByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
-	page, limit = normalizePagination(page, limit)
+	page, limit = pagination.Normalize(page, limit)
 	return withCache(s.cache, ctx, cache.KeyPostsByAuthor(authorID, page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
 		return s.postRepo.FindByAuthor(ctx, authorID, page, limit)
 	})
 }
 
 func (s *PostService) GetPostsByTag(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error) {
-	page, limit = normalizePagination(page, limit)
+	page, limit = pagination.Normalize(page, limit)
 	return withCache(s.cache, ctx, cache.KeyPostsByTag(tag, page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
 		return s.postRepo.FindByTag(ctx, tag, page, limit)
 	})
@@ -232,26 +233,11 @@ func (s *PostService) invalidatePost(ctx context.Context, id string) {
 	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
 }
 
-// normalizePagination mirrors the repository's defaulting so cache keys
-// stay canonical regardless of how callers spell the arguments.
-func normalizePagination(page, limit int) (int, int) {
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	return page, limit
-}
-
 // SearchPosts runs a hybrid search through the AI service and hydrates
 // the matching posts from the repository, keeping the relevance order.
 // Results are cached briefly; writes invalidate the whole search cache.
 func (s *PostService) SearchPosts(ctx context.Context, query string, page, limit int) (*domain.SearchPostsResult, error) {
-	page, limit = normalizePagination(page, limit)
+	page, limit = pagination.Normalize(page, limit)
 	return withCache(s.cache, ctx, cache.KeySearch(query, page, limit), cache.SearchTTL, func() (*domain.SearchPostsResult, error) {
 		search, err := s.aiService.SearchPosts(ctx, query, (page-1)*limit, limit)
 		if err != nil {

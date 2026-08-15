@@ -43,6 +43,13 @@ type GeneratedPost struct {
 type Mutation struct {
 }
 
+type PaginatedChats struct {
+	Chats       []*Chat `json:"chats"`
+	TotalPages  int     `json:"totalPages"`
+	CurrentPage int     `json:"currentPage"`
+	TotalChats  int     `json:"totalChats"`
+}
+
 type PaginatedMessages struct {
 	Messages      []*ChatMessage `json:"messages"`
 	TotalPages    int            `json:"totalPages"`

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/pagination"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -58,7 +59,7 @@ func (r *MongoTagRepository) Search(ctx context.Context, query string, limit int
 	}
 
 	if limit < 1 {
-		limit = defaultLimit
+		limit = pagination.DefaultLimit
 	}
 
 	opts := options.Find().

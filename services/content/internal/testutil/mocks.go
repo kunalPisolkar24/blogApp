@@ -235,7 +235,7 @@ func (m *MockEventPublisher) PublishDeadLetter(ctx context.Context, originalTopi
 type MockChatRepository struct {
 	CreateFn      func(ctx context.Context, chat *domain.Chat) (*domain.Chat, error)
 	FindByIDFn    func(ctx context.Context, id string) (*domain.Chat, error)
-	ListByUserFn  func(ctx context.Context, userID string) ([]*domain.Chat, error)
+	ListByUserFn  func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error)
 	RenameFn      func(ctx context.Context, id, title string) (*domain.Chat, error)
 	DeleteFn      func(ctx context.Context, id string) error
 	AddMessageFn  func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error)
@@ -260,11 +260,11 @@ func (m *MockChatRepository) FindByID(ctx context.Context, id string) (*domain.C
 	return &domain.Chat{ID: id, UserID: m.UserID}, nil
 }
 
-func (m *MockChatRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Chat, error) {
+func (m *MockChatRepository) ListByUser(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error) {
 	if m.ListByUserFn != nil {
-		return m.ListByUserFn(ctx, userID)
+		return m.ListByUserFn(ctx, userID, page, limit)
 	}
-	return []*domain.Chat{{ID: m.ChatID, UserID: userID}}, nil
+	return &domain.PaginatedChats{Chats: []*domain.Chat{{ID: m.ChatID, UserID: userID}}}, nil
 }
 
 func (m *MockChatRepository) Rename(ctx context.Context, id, title string) (*domain.Chat, error) {
