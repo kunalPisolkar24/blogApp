@@ -60,6 +60,15 @@ var (
 		Help:      "Cache reads that missed and hit the database.",
 	})
 
+	// CacheErrorsTotal counts Redis command failures the cache swallowed.
+	// Graceful degradation is by design, but a dying Redis must be
+	// visible in metrics, not just in debug logs.
+	CacheErrorsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "content",
+		Name:      "cache_errors_total",
+		Help:      "Redis cache command failures, swallowed by the degrading cache.",
+	})
+
 	// AIFallbackEngaged counts AI calls served from the degraded path:
 	// fallback results returned, or errors surfaced because the primary
 	// failed or its circuit breaker was open, by operation.

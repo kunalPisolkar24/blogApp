@@ -80,6 +80,24 @@ docker run --network topos_local_network --env-file ../../infrastructure/docker/
   content-content-worker ./content-dlq-replay
 ```
 
+### Redis cache
+
+The Redis cache is read-through and degrades gracefully: on any Redis
+failure reads fall through to Mongo and writes always go to Mongo. To
+make degradation observable instead of invisible, every swallowed Redis
+error is logged at warn level and counted in
+`content_cache_errors_total`; hits and misses are counted in
+`content_cache_hits_total` / `content_cache_misses_total`.
+
+Client timeouts and retries are explicit:
+
+- `DialTimeout` 2s, `ReadTimeout`/`WriteTimeout` 3s
+- 3 retries with 50ms–500ms backoff
+
+Concurrent misses for the same key are coalesced (single-flight): a
+burst of requests right after expiry or invalidation shares one fill
+instead of stampeding Mongo or the AI service.
+
 ## Checks
 
 ```sh
