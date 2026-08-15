@@ -6,11 +6,12 @@ import (
 	"unicode"
 )
 
-// Generate converts a title into a URL-friendly slug with a
-// timestamp suffix to keep slugs unique.
+// Generate converts a title into a URL-friendly slug with a UTC,
+// nanosecond-resolution timestamp suffix so slugs are unique regardless
+// of the server timezone or how close in time two posts are created.
 func Generate(title string, now time.Time) string {
 	var b strings.Builder
-	b.Grow(len(title) + 16)
+	b.Grow(len(title) + 32)
 	prevDash := false
 
 	for _, r := range strings.ToLower(title) {
@@ -36,5 +37,5 @@ func Generate(title string, now time.Time) string {
 		slug = "post"
 	}
 
-	return slug + "-" + now.Format("20060102150405")
+	return slug + "-" + now.UTC().Format("20060102150405.000000000")
 }

@@ -16,6 +16,7 @@ type MockPostRepository struct {
 	DeleteFn        func(ctx context.Context, id string) error
 	FindAllFn       func(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error)
 	FindByIDFn      func(ctx context.Context, id string) (*domain.Post, error)
+	FindBySlugFn    func(ctx context.Context, slug string) (*domain.Post, error)
 	FindByIDsFn     func(ctx context.Context, ids []string) ([]*domain.Post, error)
 	FindByAuthorFn  func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error)
 	FindByTagFn     func(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error)
@@ -65,6 +66,13 @@ func (m *MockPostRepository) FindByID(ctx context.Context, id string) (*domain.P
 		return m.FindByIDFn(ctx, id)
 	}
 	return &domain.Post{ID: id}, nil
+}
+
+func (m *MockPostRepository) FindBySlug(ctx context.Context, slug string) (*domain.Post, error) {
+	if m.FindBySlugFn != nil {
+		return m.FindBySlugFn(ctx, slug)
+	}
+	return nil, domain.ErrNotFound
 }
 
 func (m *MockPostRepository) FindByIDs(ctx context.Context, ids []string) ([]*domain.Post, error) {
