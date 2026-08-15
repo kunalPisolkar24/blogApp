@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 """Search tests against the real container: qdrant + gRPC end to end.
 
 The service runs with fake embeddings (deterministic unit-norm vectors),
@@ -23,7 +25,7 @@ def _index(
             post_id=post_id,
             title=title,
             body=body,
-            created_at="2026-01-01T00:00:00Z",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
     )
 

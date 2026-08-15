@@ -5,8 +5,18 @@ import (
 	"time"
 )
 
+// EventType distinguishes structurally identical post events so
+// consumers can tell a new post from an update.
+type EventType string
+
+const (
+	EventTypePostCreated EventType = "post.created"
+	EventTypePostUpdated EventType = "post.updated"
+)
+
 type PostEventPayload struct {
 	PostID        string    `json:"postId"`
+	EventType     EventType `json:"eventType"`
 	Title         string    `json:"title"`
 	Body          string    `json:"body"`
 	ImageURL      *string   `json:"imageUrl"`

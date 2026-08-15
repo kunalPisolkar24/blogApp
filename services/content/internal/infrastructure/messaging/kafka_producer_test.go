@@ -53,11 +53,16 @@ func TestPublishPostEvent(t *testing.T) {
 	var payload domain.PostEventPayload
 	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
 	assert.Equal(t, "p_1", payload.PostID)
+	assert.Equal(t, domain.EventTypePostCreated, payload.EventType)
 	assert.Equal(t, "Hello", payload.Title)
 	assert.Equal(t, string(domain.PostStatusPending), payload.SummaryStatus)
 
 	require.NoError(t, producer.PublishPostUpdated(context.Background(), post))
-	assert.Len(t, w.messages, 2)
+	require.Len(t, w.messages, 2)
+
+	var updated domain.PostEventPayload
+	require.NoError(t, json.Unmarshal(w.messages[1].Value, &updated))
+	assert.Equal(t, domain.EventTypePostUpdated, updated.EventType, "created and updated events must be distinguishable")
 }
 
 func TestPublishPostTombstone(t *testing.T) {

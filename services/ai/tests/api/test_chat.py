@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import grpc
@@ -18,7 +19,7 @@ def _index_request(post_id: str, text: str) -> ai_service_pb2.IndexRequest:
         body=f"<p>{text}</p>",
         summary=f"summary {text}",
         tags=["tutorial"],
-        created_at="2026-01-01T00:00:00Z",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 

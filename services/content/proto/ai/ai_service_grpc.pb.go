@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v3.21.12
-// source: ai_service.proto
+// source: proto/ai/ai_service.proto
 
 package ai
 
@@ -425,5 +425,5 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "ai_service.proto",
+	Metadata: "proto/ai/ai_service.proto",
 }
