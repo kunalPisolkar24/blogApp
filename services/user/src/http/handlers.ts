@@ -1,12 +1,37 @@
 import { ApolloServer, HeaderMap } from '@apollo/server';
 import type { MiddlewareHandler } from 'hono';
 import { createContext } from '../context.js';
-import { PayloadTooLargeError, ValidationError } from '../errors.js';
+import { DomainError, PayloadTooLargeError, ValidationError } from '../errors.js';
 import { hasErrors, operationName, sanitizeOperationName } from '../graphql/formatError.js';
 import { extractErrorCodes, type Metrics } from '../observability/metrics.js';
 import type { UserService } from '../user.service.js';
 
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024;
+const GRAPHQL_OPERATION_TIMEOUT_MS = 10_000;
+
+export class GraphqlTimeoutError extends DomainError {
+  readonly code = 'GRAPHQL_TIMEOUT';
+  readonly httpStatus = 504;
+  constructor() {
+    super('GraphQL operation timed out');
+  }
+}
+
+function withTimeout<T>(op: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new GraphqlTimeoutError()), ms);
+    op.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 async function readJsonBody(request: Request): Promise<unknown> {
   const declaredLength = Number(request.headers.get('content-length') ?? 0);
@@ -49,22 +74,31 @@ export interface GraphqlHandlerDeps {
   apollo: ApolloServer;
   userService: UserService;
   metrics: Metrics;
+  timeoutMs?: number;
 }
 
-export function graphqlHandler({ apollo, userService, metrics }: GraphqlHandlerDeps): MiddlewareHandler {
+export function graphqlHandler({
+  apollo,
+  userService,
+  metrics,
+  timeoutMs = GRAPHQL_OPERATION_TIMEOUT_MS,
+}: GraphqlHandlerDeps): MiddlewareHandler {
   return async (c) => {
     const body = await readJsonBody(c.req.raw);
 
     const start = performance.now();
-    const response = await apollo.executeHTTPGraphQLRequest({
-      httpGraphQLRequest: {
-        method: c.req.method,
-        headers: new HeaderMap(c.req.raw.headers),
-        search: new URL(c.req.url).search,
-        body,
-      },
-      context: () => createContext(c, userService),
-    });
+    const response = await withTimeout(
+      apollo.executeHTTPGraphQLRequest({
+        httpGraphQLRequest: {
+          method: c.req.method,
+          headers: new HeaderMap(c.req.raw.headers),
+          search: new URL(c.req.url).search,
+          body,
+        },
+        context: () => createContext(c, userService),
+      }),
+      timeoutMs,
+    );
     const operation = sanitizeOperationName(operationName(body));
     const hasBodyErrors =
       response.body.kind === 'complete' && hasErrors(response.body.string);
