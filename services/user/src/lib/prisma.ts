@@ -27,3 +27,7 @@ export const prisma = (extended ?? primary) as PrismaClient;
 export function primaryDb(): PrismaClient {
   return (extended ? extended.$primary() : primary) as PrismaClient;
 }
+
+export async function closeDb(): Promise<void> {
+  await Promise.allSettled([prisma.$disconnect(), primaryDb().$disconnect()]);
+}

@@ -1,4 +1,5 @@
 import type { ServerType } from '@hono/node-server';
+import { closeDb } from './prisma.js';
 import { closeRedis } from './redis.js';
 
 export function setupGracefulShutdown(server: ServerType): void {
@@ -7,6 +8,7 @@ export function setupGracefulShutdown(server: ServerType): void {
       console.log(`${signal} received, shutting down`);
       server.close(async () => {
         await closeRedis();
+        await closeDb();
         process.exit(0);
       });
       setTimeout(() => {

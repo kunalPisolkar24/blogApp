@@ -3,9 +3,11 @@ import { setupGracefulShutdown } from '../shutdown.js';
 
 const mocks = vi.hoisted(() => ({
   closeRedis: vi.fn(),
+  closeDb: vi.fn(),
 }));
 
 vi.mock('../redis.js', () => ({ closeRedis: mocks.closeRedis }));
+vi.mock('../prisma.js', () => ({ closeDb: mocks.closeDb }));
 
 describe('setupGracefulShutdown', () => {
   beforeEach(() => {
@@ -19,7 +21,7 @@ describe('setupGracefulShutdown', () => {
     vi.useRealTimers();
   });
 
-  it('closes the server, disconnects redis, and exits cleanly on SIGTERM', async () => {
+  it('closes the server, disconnects redis and db, and exits cleanly on SIGTERM', async () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
     const close = vi.fn((callback: () => void) => callback());
@@ -30,6 +32,7 @@ describe('setupGracefulShutdown', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
     expect(close).toHaveBeenCalledOnce();
     expect(mocks.closeRedis).toHaveBeenCalledOnce();
+    expect(mocks.closeDb).toHaveBeenCalledOnce();
     expect(consoleLog).toHaveBeenCalledWith('SIGTERM received, shutting down');
   });
 
