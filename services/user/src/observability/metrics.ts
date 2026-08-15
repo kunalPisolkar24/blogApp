@@ -1,4 +1,6 @@
 import client from 'prom-client';
+import type { Pool } from 'pg';
+import type { Redis } from 'ioredis';
 import { env } from '../config/env.js';
 
 export type CacheReadResult = 'hit' | 'miss' | 'read_error' | 'write_error';
@@ -6,6 +8,23 @@ export type CacheInvalidationResult = 'ok' | 'error';
 export type DbQueryStatus = 'success' | 'error';
 
 const HTTP_DURATION_BUCKETS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5];
+
+export interface DbPoolRegistration {
+  node: 'primary' | 'replica';
+  pool: Pool;
+}
+
+export function extractErrorCodes(body: string): string[] {
+  try {
+    const parsed = JSON.parse(body) as { errors?: Array<{ extensions?: { code?: string } }> };
+    if (!Array.isArray(parsed.errors)) {
+      return [];
+    }
+    return parsed.errors.map((error) => error?.extensions?.code ?? 'UNKNOWN');
+  } catch {
+    return [];
+  }
+}
 
 export class Metrics {
   private readonly httpRequests = new client.Counter({
@@ -21,6 +40,11 @@ export class Metrics {
     buckets: HTTP_DURATION_BUCKETS,
   });
 
+  private readonly httpInFlight = new client.Gauge({
+    name: 'http_requests_in_flight',
+    help: 'Number of HTTP requests currently being processed',
+  });
+
   private readonly graphqlOperations = new client.Counter({
     name: 'graphql_operations_total',
     help: 'Total number of GraphQL operations',
@@ -32,6 +56,32 @@ export class Metrics {
     help: 'GraphQL operation latency',
     labelNames: ['operation', 'status'],
     buckets: HTTP_DURATION_BUCKETS,
+  });
+
+  private readonly graphqlErrors = new client.Counter({
+    name: 'graphql_errors_total',
+    help: 'Total number of GraphQL errors by operation and error code',
+    labelNames: ['operation', 'code'],
+  });
+
+  private readonly dbPools: DbPoolRegistration[] = [];
+
+  private readonly dbPoolConnections = new client.Gauge({
+    name: 'db_pool_connections',
+    help: 'Postgres pool connections by node and state',
+    labelNames: ['node', 'state'],
+    collect: () => {
+      for (const { node, pool } of this.dbPools) {
+        this.dbPoolConnections.set({ node, state: 'total' }, pool.totalCount);
+        this.dbPoolConnections.set({ node, state: 'idle' }, pool.idleCount);
+        this.dbPoolConnections.set({ node, state: 'waiting' }, pool.waitingCount);
+      }
+    },
+  });
+
+  private readonly redisConnected = new client.Gauge({
+    name: 'redis_connected',
+    help: '1 when Redis is connected, 0 otherwise',
   });
 
   private readonly cacheReads = new client.Counter({
@@ -79,6 +129,14 @@ export class Metrics {
     this.httpDuration.observe({ method, route, status }, durationSeconds);
   }
 
+  recordRequestStart(): void {
+    this.httpInFlight.inc();
+  }
+
+  recordRequestEnd(): void {
+    this.httpInFlight.dec();
+  }
+
   recordGraphqlOperation(
     operation: string,
     status: 'success' | 'error',
@@ -86,6 +144,25 @@ export class Metrics {
   ): void {
     this.graphqlOperations.inc({ operation, status });
     this.graphqlDuration.observe({ operation, status }, durationSeconds);
+  }
+
+  recordGraphqlError(operation: string, code: string): void {
+    this.graphqlErrors.inc({ operation, code });
+  }
+
+  registerDbPools(pools: DbPoolRegistration[]): void {
+    this.dbPools.push(...pools);
+  }
+
+  registerRedis(redis: Redis | null): void {
+    if (!redis) {
+      this.redisConnected.set(0);
+      return;
+    }
+    redis.on('ready', () => this.redisConnected.set(1));
+    redis.on('close', () => this.redisConnected.set(0));
+    redis.on('end', () => this.redisConnected.set(0));
+    redis.on('error', () => this.redisConnected.set(0));
   }
 
   recordCacheRead(result: CacheReadResult): void {

@@ -32,8 +32,13 @@ export function requestMetrics(metrics: Metrics): MiddlewareHandler {
     if (c.req.path === EXCLUDED_PATH) {
       return next();
     }
+    metrics.recordRequestStart();
     const start = performance.now();
-    await next();
+    try {
+      await next();
+    } finally {
+      metrics.recordRequestEnd();
+    }
     metrics.recordRequest(
       c.req.method,
       c.req.routePath || 'unmatched',
