@@ -1,6 +1,7 @@
 # One-shot job that enables sharding on the posts collection. It waits for
 # mongos to answer and for both shards to register, then shards posts on a
-# hashed slug key (keeps the existing unique slug index valid). Idempotent.
+# hashed _id key. Fails loudly if sharding does not take effect; reruns
+# detect the existing shard key and exit cleanly (idempotent).
 
 services:
   mongo-shard-init:

@@ -1,6 +1,10 @@
 #!/bin/sh
 # Waits for mongos and both shards, then shards blog_content.posts on a
-# hashed slug key (keeps the existing unique slug index valid). Idempotent.
+# hashed _id key: documented-safe for hashed sharding, evenly distributes
+# writes, and keeps targeted post(id) lookups fast. Idempotent: a second
+# run detects the existing shard key and exits cleanly. Any real failure
+# exits non-zero so the job visibly fails instead of silently leaving the
+# stack unsharded.
 set -eu
 
 URI="mongodb://root:${MONGO_ROOT_PASSWORD}@content-mongo-mongos-0:27017/admin"
@@ -29,12 +33,19 @@ if (count < 2) {
   print('expected 2 shards, found ' + count);
   quit(1);
 }
+
 sh.enableSharding('blog_content');
-try {
-  sh.shardCollection('blog_content.posts', { slug: 'hashed' });
-  print('sharded blog_content.posts on hashed slug');
-} catch (e) {
-  print('shardCollection skipped: ' + e.message);
+
+const existing = db.getSiblingDB('config').collections.findOne({ _id: 'blog_content.posts' });
+if (existing && existing.shardKey) {
+  print('blog_content.posts already sharded on ' + JSON.stringify(existing.shardKey));
+  quit(0);
 }
-print('sharding ready');
+
+const res = sh.shardCollection('blog_content.posts', { _id: 'hashed' });
+if (!res.ok) {
+  print('shardCollection failed: ' + JSON.stringify(res));
+  quit(1);
+}
+print('sharded blog_content.posts on hashed _id');
 EOF
