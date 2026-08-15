@@ -685,8 +685,11 @@ func (x *RelatedRequest) GetLimit() uint32 {
 }
 
 type RelatedResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PostIds       []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	PostIds []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
+	// total is the number of indexed posts available as related
+	// candidates, not the size of this page.
+	Total         int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -728,6 +731,169 @@ func (x *RelatedResponse) GetPostIds() []string {
 	return nil
 }
 
+func (x *RelatedResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type RelatedBatchRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PostIds       []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
+	Limit         uint32                 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RelatedBatchRequest) Reset() {
+	*x = RelatedBatchRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelatedBatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelatedBatchRequest) ProtoMessage() {}
+
+func (x *RelatedBatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelatedBatchRequest.ProtoReflect.Descriptor instead.
+func (*RelatedBatchRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RelatedBatchRequest) GetPostIds() []string {
+	if x != nil {
+		return x.PostIds
+	}
+	return nil
+}
+
+func (x *RelatedBatchRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type RelatedBatchItem struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PostId         string                 `protobuf:"bytes,1,opt,name=post_id,json=postId,proto3" json:"post_id,omitempty"`
+	RelatedPostIds []string               `protobuf:"bytes,2,rep,name=related_post_ids,json=relatedPostIds,proto3" json:"related_post_ids,omitempty"`
+	Total          int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RelatedBatchItem) Reset() {
+	*x = RelatedBatchItem{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelatedBatchItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelatedBatchItem) ProtoMessage() {}
+
+func (x *RelatedBatchItem) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelatedBatchItem.ProtoReflect.Descriptor instead.
+func (*RelatedBatchItem) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RelatedBatchItem) GetPostId() string {
+	if x != nil {
+		return x.PostId
+	}
+	return ""
+}
+
+func (x *RelatedBatchItem) GetRelatedPostIds() []string {
+	if x != nil {
+		return x.RelatedPostIds
+	}
+	return nil
+}
+
+func (x *RelatedBatchItem) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type RelatedBatchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*RelatedBatchItem    `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RelatedBatchResponse) Reset() {
+	*x = RelatedBatchResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelatedBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelatedBatchResponse) ProtoMessage() {}
+
+func (x *RelatedBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelatedBatchResponse.ProtoReflect.Descriptor instead.
+func (*RelatedBatchResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RelatedBatchResponse) GetResults() []*RelatedBatchItem {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
 type EmbedRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
@@ -737,7 +903,7 @@ type EmbedRequest struct {
 
 func (x *EmbedRequest) Reset() {
 	*x = EmbedRequest{}
-	mi := &file_proto_ai_ai_service_proto_msgTypes[14]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -749,7 +915,7 @@ func (x *EmbedRequest) String() string {
 func (*EmbedRequest) ProtoMessage() {}
 
 func (x *EmbedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ai_ai_service_proto_msgTypes[14]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -762,7 +928,7 @@ func (x *EmbedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmbedRequest.ProtoReflect.Descriptor instead.
 func (*EmbedRequest) Descriptor() ([]byte, []int) {
-	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{14}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *EmbedRequest) GetText() string {
@@ -781,7 +947,7 @@ type EmbedResponse struct {
 
 func (x *EmbedResponse) Reset() {
 	*x = EmbedResponse{}
-	mi := &file_proto_ai_ai_service_proto_msgTypes[15]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -793,7 +959,7 @@ func (x *EmbedResponse) String() string {
 func (*EmbedResponse) ProtoMessage() {}
 
 func (x *EmbedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ai_ai_service_proto_msgTypes[15]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -806,7 +972,7 @@ func (x *EmbedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmbedResponse.ProtoReflect.Descriptor instead.
 func (*EmbedResponse) Descriptor() ([]byte, []int) {
-	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{15}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *EmbedResponse) GetVector() []float32 {
@@ -826,7 +992,7 @@ type ChatMessage struct {
 
 func (x *ChatMessage) Reset() {
 	*x = ChatMessage{}
-	mi := &file_proto_ai_ai_service_proto_msgTypes[16]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -838,7 +1004,7 @@ func (x *ChatMessage) String() string {
 func (*ChatMessage) ProtoMessage() {}
 
 func (x *ChatMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ai_ai_service_proto_msgTypes[16]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -851,7 +1017,7 @@ func (x *ChatMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessage.ProtoReflect.Descriptor instead.
 func (*ChatMessage) Descriptor() ([]byte, []int) {
-	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{16}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ChatMessage) GetRole() string {
@@ -879,7 +1045,7 @@ type ChatAnswerRequest struct {
 
 func (x *ChatAnswerRequest) Reset() {
 	*x = ChatAnswerRequest{}
-	mi := &file_proto_ai_ai_service_proto_msgTypes[17]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -891,7 +1057,7 @@ func (x *ChatAnswerRequest) String() string {
 func (*ChatAnswerRequest) ProtoMessage() {}
 
 func (x *ChatAnswerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ai_ai_service_proto_msgTypes[17]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -904,7 +1070,7 @@ func (x *ChatAnswerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatAnswerRequest.ProtoReflect.Descriptor instead.
 func (*ChatAnswerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{17}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ChatAnswerRequest) GetQuery() string {
@@ -940,7 +1106,7 @@ type ChatChunk struct {
 
 func (x *ChatChunk) Reset() {
 	*x = ChatChunk{}
-	mi := &file_proto_ai_ai_service_proto_msgTypes[18]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -952,7 +1118,7 @@ func (x *ChatChunk) String() string {
 func (*ChatChunk) ProtoMessage() {}
 
 func (x *ChatChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_ai_ai_service_proto_msgTypes[18]
+	mi := &file_proto_ai_ai_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -965,7 +1131,7 @@ func (x *ChatChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatChunk.ProtoReflect.Descriptor instead.
 func (*ChatChunk) Descriptor() ([]byte, []int) {
-	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{18}
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ChatChunk) GetDelta() string {
@@ -1038,9 +1204,19 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"?\n" +
 	"\x0eRelatedRequest\x12\x17\n" +
 	"\apost_id\x18\x01 \x01(\tR\x06postId\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\rR\x05limit\",\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"B\n" +
 	"\x0fRelatedResponse\x12\x19\n" +
-	"\bpost_ids\x18\x01 \x03(\tR\apostIds\"\"\n" +
+	"\bpost_ids\x18\x01 \x03(\tR\apostIds\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"F\n" +
+	"\x13RelatedBatchRequest\x12\x19\n" +
+	"\bpost_ids\x18\x01 \x03(\tR\apostIds\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\"k\n" +
+	"\x10RelatedBatchItem\x12\x17\n" +
+	"\apost_id\x18\x01 \x01(\tR\x06postId\x12(\n" +
+	"\x10related_post_ids\x18\x02 \x03(\tR\x0erelatedPostIds\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\"F\n" +
+	"\x14RelatedBatchResponse\x12.\n" +
+	"\aresults\x18\x01 \x03(\v2\x14.ai.RelatedBatchItemR\aresults\"\"\n" +
 	"\fEmbedRequest\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\"'\n" +
 	"\rEmbedResponse\x12\x16\n" +
@@ -1056,7 +1232,7 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x05delta\x18\x01 \x01(\tR\x05delta\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12$\n" +
 	"\x0ecited_post_ids\x18\x03 \x03(\tR\fcitedPostIds\x12\x14\n" +
-	"\x05error\x18\x04 \x01(\tR\x05error2\xfe\x03\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error2\xc6\x04\n" +
 	"\tAIService\x12:\n" +
 	"\x0fGenerateSummary\x12\x12.ai.ContentRequest\x1a\x13.ai.ContentResponse\x124\n" +
 	"\fGenerateTags\x12\x12.ai.ContextRequest\x1a\x10.ai.TagsResponse\x12E\n" +
@@ -1065,7 +1241,8 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\n" +
 	"DeletePost\x12\x11.ai.DeleteRequest\x1a\x12.ai.DeleteResponse\x124\n" +
 	"\vSearchPosts\x12\x11.ai.SearchRequest\x1a\x12.ai.SearchResponse\x127\n" +
-	"\fRelatedPosts\x12\x12.ai.RelatedRequest\x1a\x13.ai.RelatedResponse\x12,\n" +
+	"\fRelatedPosts\x12\x12.ai.RelatedRequest\x1a\x13.ai.RelatedResponse\x12F\n" +
+	"\x11RelatedPostsBatch\x12\x17.ai.RelatedBatchRequest\x1a\x18.ai.RelatedBatchResponse\x12,\n" +
 	"\x05Embed\x12\x10.ai.EmbedRequest\x1a\x11.ai.EmbedResponse\x124\n" +
 	"\n" +
 	"ChatAnswer\x12\x15.ai.ChatAnswerRequest\x1a\r.ai.ChatChunk0\x01B<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
@@ -1082,7 +1259,7 @@ func file_proto_ai_ai_service_proto_rawDescGZIP() []byte {
 	return file_proto_ai_ai_service_proto_rawDescData
 }
 
-var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_proto_ai_ai_service_proto_goTypes = []any{
 	(*ContentRequest)(nil),         // 0: ai.ContentRequest
 	(*ContentResponse)(nil),        // 1: ai.ContentResponse
@@ -1098,39 +1275,45 @@ var file_proto_ai_ai_service_proto_goTypes = []any{
 	(*SearchResponse)(nil),         // 11: ai.SearchResponse
 	(*RelatedRequest)(nil),         // 12: ai.RelatedRequest
 	(*RelatedResponse)(nil),        // 13: ai.RelatedResponse
-	(*EmbedRequest)(nil),           // 14: ai.EmbedRequest
-	(*EmbedResponse)(nil),          // 15: ai.EmbedResponse
-	(*ChatMessage)(nil),            // 16: ai.ChatMessage
-	(*ChatAnswerRequest)(nil),      // 17: ai.ChatAnswerRequest
-	(*ChatChunk)(nil),              // 18: ai.ChatChunk
-	(*timestamppb.Timestamp)(nil),  // 19: google.protobuf.Timestamp
+	(*RelatedBatchRequest)(nil),    // 14: ai.RelatedBatchRequest
+	(*RelatedBatchItem)(nil),       // 15: ai.RelatedBatchItem
+	(*RelatedBatchResponse)(nil),   // 16: ai.RelatedBatchResponse
+	(*EmbedRequest)(nil),           // 17: ai.EmbedRequest
+	(*EmbedResponse)(nil),          // 18: ai.EmbedResponse
+	(*ChatMessage)(nil),            // 19: ai.ChatMessage
+	(*ChatAnswerRequest)(nil),      // 20: ai.ChatAnswerRequest
+	(*ChatChunk)(nil),              // 21: ai.ChatChunk
+	(*timestamppb.Timestamp)(nil),  // 22: google.protobuf.Timestamp
 }
 var file_proto_ai_ai_service_proto_depIdxs = []int32{
-	19, // 0: ai.IndexRequest.created_at:type_name -> google.protobuf.Timestamp
-	16, // 1: ai.ChatAnswerRequest.history:type_name -> ai.ChatMessage
-	0,  // 2: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
-	2,  // 3: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
-	4,  // 4: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
-	6,  // 5: ai.AIService.IndexPost:input_type -> ai.IndexRequest
-	8,  // 6: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
-	10, // 7: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
-	12, // 8: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
-	14, // 9: ai.AIService.Embed:input_type -> ai.EmbedRequest
-	17, // 10: ai.AIService.ChatAnswer:input_type -> ai.ChatAnswerRequest
-	1,  // 11: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
-	3,  // 12: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
-	5,  // 13: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
-	7,  // 14: ai.AIService.IndexPost:output_type -> ai.IndexResponse
-	9,  // 15: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
-	11, // 16: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
-	13, // 17: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
-	15, // 18: ai.AIService.Embed:output_type -> ai.EmbedResponse
-	18, // 19: ai.AIService.ChatAnswer:output_type -> ai.ChatChunk
-	11, // [11:20] is the sub-list for method output_type
-	2,  // [2:11] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	22, // 0: ai.IndexRequest.created_at:type_name -> google.protobuf.Timestamp
+	15, // 1: ai.RelatedBatchResponse.results:type_name -> ai.RelatedBatchItem
+	19, // 2: ai.ChatAnswerRequest.history:type_name -> ai.ChatMessage
+	0,  // 3: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
+	2,  // 4: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
+	4,  // 5: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
+	6,  // 6: ai.AIService.IndexPost:input_type -> ai.IndexRequest
+	8,  // 7: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
+	10, // 8: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
+	12, // 9: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
+	14, // 10: ai.AIService.RelatedPostsBatch:input_type -> ai.RelatedBatchRequest
+	17, // 11: ai.AIService.Embed:input_type -> ai.EmbedRequest
+	20, // 12: ai.AIService.ChatAnswer:input_type -> ai.ChatAnswerRequest
+	1,  // 13: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
+	3,  // 14: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
+	5,  // 15: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
+	7,  // 16: ai.AIService.IndexPost:output_type -> ai.IndexResponse
+	9,  // 17: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
+	11, // 18: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
+	13, // 19: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
+	16, // 20: ai.AIService.RelatedPostsBatch:output_type -> ai.RelatedBatchResponse
+	18, // 21: ai.AIService.Embed:output_type -> ai.EmbedResponse
+	21, // 22: ai.AIService.ChatAnswer:output_type -> ai.ChatChunk
+	13, // [13:23] is the sub-list for method output_type
+	3,  // [3:13] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_ai_ai_service_proto_init() }
@@ -1144,7 +1327,7 @@ func file_proto_ai_ai_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ai_ai_service_proto_rawDesc), len(file_proto_ai_ai_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

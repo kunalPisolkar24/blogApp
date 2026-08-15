@@ -14,6 +14,7 @@ service AIService {
   rpc DeletePost (DeleteRequest) returns (DeleteResponse);
   rpc SearchPosts (SearchRequest) returns (SearchResponse);
   rpc RelatedPosts (RelatedRequest) returns (RelatedResponse);
+  rpc RelatedPostsBatch (RelatedBatchRequest) returns (RelatedBatchResponse);
   rpc Embed (EmbedRequest) returns (EmbedResponse);
   rpc ChatAnswer (ChatAnswerRequest) returns (stream ChatChunk);
 }
@@ -83,6 +84,24 @@ message RelatedRequest {
 
 message RelatedResponse {
   repeated string post_ids = 1;
+  // total is the number of indexed posts available as related
+  // candidates, not the size of this page.
+  int32 total = 2;
+}
+
+message RelatedBatchRequest {
+  repeated string post_ids = 1;
+  uint32 limit = 2;
+}
+
+message RelatedBatchItem {
+  string post_id = 1;
+  repeated string related_post_ids = 2;
+  int32 total = 3;
+}
+
+message RelatedBatchResponse {
+  repeated RelatedBatchItem results = 1;
 }
 
 message EmbedRequest {

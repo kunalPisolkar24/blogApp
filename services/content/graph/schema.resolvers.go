@@ -142,7 +142,7 @@ func (r *mutationResolver) AskChat(ctx context.Context, chatID string, query str
 
 // Related is the resolver for the related field.
 func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error) {
-	posts, err := r.PostService.RelatedPosts(ctx, obj.ID, deref(limit))
+	posts, err := relatedPostsFrom(ctx, r.PostService, obj.ID, deref(limit))
 	if err != nil {
 		return nil, mapDomainError(err)
 	}

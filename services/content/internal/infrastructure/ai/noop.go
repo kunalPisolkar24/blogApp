@@ -51,6 +51,15 @@ func (a *NoopAI) RelatedPosts(_ context.Context, _ string, _ int) (*domain.Searc
 	return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
 }
 
+// RelatedPostsBatch degrades to an empty map, one entry per requested id.
+func (a *NoopAI) RelatedPostsBatch(_ context.Context, postIDs []string, _ int) (map[string]*domain.SearchResult, error) {
+	results := make(map[string]*domain.SearchResult, len(postIDs))
+	for _, postID := range postIDs {
+		results[postID] = &domain.SearchResult{PostIDs: nil, Total: 0}
+	}
+	return results, nil
+}
+
 // ChatAnswer degrades to a short notice without citations so chat remains
 // available while the AI service is down.
 func (a *NoopAI) ChatAnswer(_ context.Context, _ string, _ []domain.ChatTurn, _ int) (*domain.ChatAnswer, error) {

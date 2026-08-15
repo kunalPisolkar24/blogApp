@@ -245,6 +245,12 @@ func (s *PostService) GetPost(ctx context.Context, id string) (*domain.Post, err
 	})
 }
 
+// GetPostsByIDs loads many posts in one repository call. It is the
+// batch counterpart to GetPost, used by federation _entities resolution.
+func (s *PostService) GetPostsByIDs(ctx context.Context, ids []string) ([]*domain.Post, error) {
+	return s.postRepo.FindByIDs(ctx, ids)
+}
+
 func (s *PostService) GetPostsByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
 	page, limit = pagination.Normalize(page, limit)
 	return withCache(s.cache, ctx, cache.KeyPostsByAuthor(authorID, page, limit), cache.PostsTTL, func() (*domain.PaginatedPosts, error) {
@@ -334,6 +340,83 @@ func (s *PostService) RelatedPosts(ctx context.Context, postID string, limit int
 		}
 		return related, nil
 	})
+}
+
+// RelatedPostsBatch resolves related posts for several post ids with a
+// single AI RPC and a single hydration pass, keyed by the requested
+// post id. Each id is served from the cache when present; only the
+// misses hit the AI service, and their results are cached back. The AI
+// client degrades to empty results when the AI service is down, so list
+// pages never fail for a non-critical section.
+func (s *PostService) RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string][]*domain.Post, error) {
+	limit = normalizeRelatedLimit(limit)
+	results := make(map[string][]*domain.Post, len(postIDs))
+
+	seen := make(map[string]bool, len(postIDs))
+	var missing []string
+	for _, postID := range postIDs {
+		if postID == "" || seen[postID] {
+			continue
+		}
+		seen[postID] = true
+
+		key := cache.KeyRelated(postID, limit)
+		if cached, ok := cache.Get[[]*domain.Post](s.cache, ctx, key); ok {
+			metrics.CacheHits.Inc()
+			results[postID] = *cached
+			continue
+		}
+		metrics.CacheMisses.Inc()
+		missing = append(missing, postID)
+	}
+
+	if len(missing) == 0 {
+		return results, nil
+	}
+
+	search, err := s.aiService.RelatedPostsBatch(ctx, missing, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	hydrated, err := s.postRepo.FindByIDs(ctx, uniqueIDs(search))
+	if err != nil {
+		return nil, err
+	}
+
+	byID := make(map[string]*domain.Post, len(hydrated))
+	for _, post := range hydrated {
+		byID[post.ID] = post
+	}
+
+	for _, postID := range missing {
+		result := search[postID]
+		related := make([]*domain.Post, 0, len(result.PostIDs))
+		for _, id := range result.PostIDs {
+			if post, ok := byID[id]; ok {
+				related = append(related, post)
+			}
+		}
+		cache.Set(s.cache, ctx, cache.KeyRelated(postID, limit), related, cache.RelatedTTL)
+		results[postID] = related
+	}
+	return results, nil
+}
+
+// uniqueIDs collects the distinct post ids referenced by the search
+// results, so hydration needs a single bounded FindByIDs call.
+func uniqueIDs(search map[string]*domain.SearchResult) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	for _, result := range search {
+		for _, id := range result.PostIDs {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
 }
 
 func normalizeRelatedLimit(limit int) int {

@@ -179,6 +179,13 @@ class SearchIndex:
         )
         return [_post_id_from_point(point.id) for point in response.points]
 
+    async def count(self) -> int:
+        """Number of indexed posts: the pool related results draw from."""
+        response = await self._client.count(
+            collection_name=settings.QDRANT_COLLECTION,
+        )
+        return response.count
+
     async def search(self, query: str, offset: int, limit: int) -> SearchResult:
         dense = (await self._embeddings.embed([query]))[0]
         sparse = sparse_embed(query)
@@ -359,6 +366,10 @@ class MemoryIndex:
             if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
         ]
         return above_threshold[:limit]
+
+    async def count(self) -> int:
+        """Number of stored posts: the pool related results draw from."""
+        return len(self._posts)
 
     async def search(self, query: str, offset: int, limit: int) -> SearchResult:
         dense = (await self._embeddings.embed([query]))[0]

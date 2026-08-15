@@ -35,6 +35,25 @@ func (f *fakeAIServiceServer) GeneratePost(ctx context.Context, req *pb.PostGene
 	return &pb.PostGenerationResponse{Title: "t", Body: "b", Summary: "s", Tags: []string{"go"}}, nil
 }
 
+func (f *fakeAIServiceServer) RelatedPosts(ctx context.Context, req *pb.RelatedRequest) (*pb.RelatedResponse, error) {
+	return &pb.RelatedResponse{
+		PostIds: []string{req.PostId + "_rel1", req.PostId + "_rel2"},
+		Total:   42,
+	}, nil
+}
+
+func (f *fakeAIServiceServer) RelatedPostsBatch(ctx context.Context, req *pb.RelatedBatchRequest) (*pb.RelatedBatchResponse, error) {
+	items := make([]*pb.RelatedBatchItem, 0, len(req.PostIds))
+	for _, postID := range req.PostIds {
+		items = append(items, &pb.RelatedBatchItem{
+			PostId:         postID,
+			RelatedPostIds: []string{postID + "_b1"},
+			Total:          int32(len(req.PostIds)),
+		})
+	}
+	return &pb.RelatedBatchResponse{Results: items}, nil
+}
+
 func newTestGRPCClient(t *testing.T, server pb.AIServiceServer) domain.AIService {
 	t.Helper()
 
@@ -94,4 +113,25 @@ func TestGRPCClientGeneratePost(t *testing.T) {
 func TestGRPCClientClose(t *testing.T) {
 	client := newTestGRPCClient(t, &fakeAIServiceServer{})
 	require.NoError(t, client.Close())
+}
+
+func TestGRPCClientRelatedPostsCarriesTotal(t *testing.T) {
+	client := newTestGRPCClient(t, &fakeAIServiceServer{})
+
+	result, err := client.RelatedPosts(context.Background(), "p_1", 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_1_rel1", "p_1_rel2"}, result.PostIDs)
+	assert.Equal(t, 42, result.Total, "the total from the AI service must surface on the result")
+}
+
+func TestGRPCClientRelatedPostsBatch(t *testing.T) {
+	client := newTestGRPCClient(t, &fakeAIServiceServer{})
+
+	results, err := client.RelatedPostsBatch(context.Background(), []string{"p_1", "p_2"}, 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_1_b1"}, results["p_1"].PostIDs)
+	assert.Equal(t, []string{"p_2_b1"}, results["p_2"].PostIDs)
+	assert.Equal(t, 2, results["p_1"].Total)
 }

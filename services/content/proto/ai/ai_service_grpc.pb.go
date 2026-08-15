@@ -19,15 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AIService_GenerateSummary_FullMethodName = "/ai.AIService/GenerateSummary"
-	AIService_GenerateTags_FullMethodName    = "/ai.AIService/GenerateTags"
-	AIService_GeneratePost_FullMethodName    = "/ai.AIService/GeneratePost"
-	AIService_IndexPost_FullMethodName       = "/ai.AIService/IndexPost"
-	AIService_DeletePost_FullMethodName      = "/ai.AIService/DeletePost"
-	AIService_SearchPosts_FullMethodName     = "/ai.AIService/SearchPosts"
-	AIService_RelatedPosts_FullMethodName    = "/ai.AIService/RelatedPosts"
-	AIService_Embed_FullMethodName           = "/ai.AIService/Embed"
-	AIService_ChatAnswer_FullMethodName      = "/ai.AIService/ChatAnswer"
+	AIService_GenerateSummary_FullMethodName   = "/ai.AIService/GenerateSummary"
+	AIService_GenerateTags_FullMethodName      = "/ai.AIService/GenerateTags"
+	AIService_GeneratePost_FullMethodName      = "/ai.AIService/GeneratePost"
+	AIService_IndexPost_FullMethodName         = "/ai.AIService/IndexPost"
+	AIService_DeletePost_FullMethodName        = "/ai.AIService/DeletePost"
+	AIService_SearchPosts_FullMethodName       = "/ai.AIService/SearchPosts"
+	AIService_RelatedPosts_FullMethodName      = "/ai.AIService/RelatedPosts"
+	AIService_RelatedPostsBatch_FullMethodName = "/ai.AIService/RelatedPostsBatch"
+	AIService_Embed_FullMethodName             = "/ai.AIService/Embed"
+	AIService_ChatAnswer_FullMethodName        = "/ai.AIService/ChatAnswer"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -41,6 +42,7 @@ type AIServiceClient interface {
 	DeletePost(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 	SearchPosts(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	RelatedPosts(ctx context.Context, in *RelatedRequest, opts ...grpc.CallOption) (*RelatedResponse, error)
+	RelatedPostsBatch(ctx context.Context, in *RelatedBatchRequest, opts ...grpc.CallOption) (*RelatedBatchResponse, error)
 	Embed(ctx context.Context, in *EmbedRequest, opts ...grpc.CallOption) (*EmbedResponse, error)
 	ChatAnswer(ctx context.Context, in *ChatAnswerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatChunk], error)
 }
@@ -123,6 +125,16 @@ func (c *aIServiceClient) RelatedPosts(ctx context.Context, in *RelatedRequest, 
 	return out, nil
 }
 
+func (c *aIServiceClient) RelatedPostsBatch(ctx context.Context, in *RelatedBatchRequest, opts ...grpc.CallOption) (*RelatedBatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RelatedBatchResponse)
+	err := c.cc.Invoke(ctx, AIService_RelatedPostsBatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIServiceClient) Embed(ctx context.Context, in *EmbedRequest, opts ...grpc.CallOption) (*EmbedResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EmbedResponse)
@@ -163,6 +175,7 @@ type AIServiceServer interface {
 	DeletePost(context.Context, *DeleteRequest) (*DeleteResponse, error)
 	SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error)
 	RelatedPosts(context.Context, *RelatedRequest) (*RelatedResponse, error)
+	RelatedPostsBatch(context.Context, *RelatedBatchRequest) (*RelatedBatchResponse, error)
 	Embed(context.Context, *EmbedRequest) (*EmbedResponse, error)
 	ChatAnswer(*ChatAnswerRequest, grpc.ServerStreamingServer[ChatChunk]) error
 	mustEmbedUnimplementedAIServiceServer()
@@ -195,6 +208,9 @@ func (UnimplementedAIServiceServer) SearchPosts(context.Context, *SearchRequest)
 }
 func (UnimplementedAIServiceServer) RelatedPosts(context.Context, *RelatedRequest) (*RelatedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RelatedPosts not implemented")
+}
+func (UnimplementedAIServiceServer) RelatedPostsBatch(context.Context, *RelatedBatchRequest) (*RelatedBatchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RelatedPostsBatch not implemented")
 }
 func (UnimplementedAIServiceServer) Embed(context.Context, *EmbedRequest) (*EmbedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Embed not implemented")
@@ -349,6 +365,24 @@ func _AIService_RelatedPosts_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_RelatedPostsBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RelatedBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).RelatedPostsBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_RelatedPostsBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).RelatedPostsBatch(ctx, req.(*RelatedBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIService_Embed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EmbedRequest)
 	if err := dec(in); err != nil {
@@ -412,6 +446,10 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RelatedPosts",
 			Handler:    _AIService_RelatedPosts_Handler,
+		},
+		{
+			MethodName: "RelatedPostsBatch",
+			Handler:    _AIService_RelatedPostsBatch_Handler,
 		},
 		{
 			MethodName: "Embed",
