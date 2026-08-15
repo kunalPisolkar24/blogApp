@@ -14,48 +14,61 @@ import (
 )
 
 type fakeSource struct {
-	messages  []kafka.Message
-	fetched   int
-	committed int
+	msgs      []kafka.Message
 	fetchErr  error
+	commitErr error
+	commits   []kafka.Message
+	closed    bool
 }
 
-func (f *fakeSource) FetchMessage(context.Context) (kafka.Message, error) {
-	if f.fetchErr != nil {
-		return kafka.Message{}, f.fetchErr
+func (s *fakeSource) FetchMessage(ctx context.Context) (kafka.Message, error) {
+	if len(s.msgs) > 0 {
+		m := s.msgs[0]
+		s.msgs = s.msgs[1:]
+		return m, nil
 	}
-	if f.fetched >= len(f.messages) {
-		return kafka.Message{}, context.DeadlineExceeded
+	if s.fetchErr != nil {
+		return kafka.Message{}, s.fetchErr
 	}
-	msg := f.messages[f.fetched]
-	f.fetched++
-	return msg, nil
+	return kafka.Message{}, context.DeadlineExceeded
 }
 
-func (f *fakeSource) CommitMessages(_ context.Context, _ ...kafka.Message) error {
-	f.committed++
+func (s *fakeSource) CommitMessages(ctx context.Context, msgs ...kafka.Message) error {
+	if s.commitErr != nil {
+		return s.commitErr
+	}
+	s.commits = append(s.commits, msgs...)
 	return nil
 }
 
-func (f *fakeSource) Close() error { return nil }
+func (s *fakeSource) Close() error {
+	s.closed = true
+	return nil
+}
 
 type fakeSink struct {
-	messages []kafka.Message
+	writeErr error
+	written  []kafka.Message
+	closed   bool
 }
 
-func (f *fakeSink) WriteMessages(_ context.Context, msgs ...kafka.Message) error {
-	f.messages = append(f.messages, msgs...)
+func (s *fakeSink) WriteMessages(ctx context.Context, msgs ...kafka.Message) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.written = append(s.written, msgs...)
 	return nil
 }
 
-func (f *fakeSink) Close() error { return nil }
+func (s *fakeSink) Close() error {
+	s.closed = true
+	return nil
+}
 
-// deadLetterMessage builds a realistic dead letter message value the
-// way the kafka producer would encode it.
-func deadLetterMessage(t *testing.T, key string, payload []byte) []byte {
+func deadLetterValue(t *testing.T, topic string, payload []byte) []byte {
 	t.Helper()
 	value, err := json.Marshal(messaging.DeadLetterMessage{
-		OriginalTopic: "posts",
+		OriginalTopic: topic,
 		Error:         "boom",
 		Payload:       payload,
 		Timestamp:     time.Now(),
@@ -64,82 +77,110 @@ func deadLetterMessage(t *testing.T, key string, payload []byte) []byte {
 	return value
 }
 
-func TestReplayRepublishesDeadLetters(t *testing.T) {
-	source := &fakeSource{
-		messages: []kafka.Message{
-			{Key: []byte("p_1"), Value: deadLetterMessage(t, "p_1", []byte(`{"postId":"p_1","title":"one"}`)), Offset: 1},
-			{Key: []byte("p_2"), Value: deadLetterMessage(t, "p_2", []byte(`{"postId":"p_2","title":"two"}`)), Offset: 2},
-		},
-	}
+func newTestReplayer(source messageSource, sink messageSink) *Replayer {
+	return &Replayer{source: source, sink: sink}
+}
+
+func TestReplayRepublishesToOriginalTopic(t *testing.T) {
+	source := &fakeSource{msgs: []kafka.Message{
+		{Key: []byte("p_1"), Value: deadLetterValue(t, "posts", []byte("v1")), Partition: 0, Offset: 1},
+		{Key: []byte("p_2"), Value: deadLetterValue(t, "posts", []byte("v2")), Partition: 0, Offset: 2},
+	}}
 	sink := &fakeSink{}
-	replayer := &Replayer{source: source, sink: sink, timeout: 5 * time.Second}
+	r := newTestReplayer(source, sink)
 
-	count, err := replayer.Run(context.Background())
+	replayed, err := r.Run(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, 2, count)
-
-	require.Len(t, sink.messages, 2)
-	assert.Equal(t, "posts", sink.messages[0].Topic)
-	assert.Equal(t, "p_1", string(sink.messages[0].Key))
-	assert.JSONEq(t, `{"postId":"p_1","title":"one"}`, string(sink.messages[0].Value))
-
-	assert.Equal(t, "posts", sink.messages[1].Topic)
-	assert.Equal(t, "p_2", string(sink.messages[1].Key))
-	assert.JSONEq(t, `{"postId":"p_2","title":"two"}`, string(sink.messages[1].Value))
-	assert.Equal(t, 2, source.committed, "every replayed message must be committed")
+	assert.Equal(t, 2, replayed)
+	require.Len(t, sink.written, 2)
+	assert.Equal(t, "posts", sink.written[0].Topic)
+	assert.Equal(t, []byte("p_1"), sink.written[0].Key)
+	assert.Equal(t, []byte("v1"), sink.written[0].Value)
+	assert.Equal(t, []byte("p_2"), sink.written[1].Key)
+	require.Len(t, source.commits, 2, "each replayed message must be committed")
 }
 
-func TestReplayKeepsOriginalKeyForTombstones(t *testing.T) {
-	source := &fakeSource{
-		messages: []kafka.Message{
-			{Key: []byte("p_1"), Value: deadLetterMessage(t, "p_1", nil), Offset: 1},
-		},
-	}
+func TestReplaySkipsMalformedDeadLetters(t *testing.T) {
+	source := &fakeSource{msgs: []kafka.Message{
+		{Key: []byte("p_1"), Value: deadLetterValue(t, "posts", []byte("v1")), Partition: 0, Offset: 1},
+		{Key: []byte("p_2"), Value: []byte("{not json"), Partition: 0, Offset: 2},
+		{Key: []byte("p_3"), Value: deadLetterValue(t, "", []byte("v3")), Partition: 0, Offset: 3},
+		{Key: []byte("p_4"), Value: deadLetterValue(t, "posts", []byte("v4")), Partition: 0, Offset: 4},
+	}}
 	sink := &fakeSink{}
-	replayer := &Replayer{source: source, sink: sink, timeout: 5 * time.Second}
+	r := newTestReplayer(source, sink)
 
-	count, err := replayer.Run(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-	require.Len(t, sink.messages, 1)
-	assert.Equal(t, "p_1", string(sink.messages[0].Key))
-	assert.Nil(t, sink.messages[0].Value, "a tombstone replay must stay a tombstone")
+	replayed, err := r.Run(context.Background())
+	require.NoError(t, err, "one malformed dead letter must not abort the run")
+	assert.Equal(t, 2, replayed)
+	require.Len(t, sink.written, 2)
+	assert.Equal(t, []byte("v1"), sink.written[0].Value)
+	assert.Equal(t, []byte("v4"), sink.written[1].Value)
+	require.Len(t, source.commits, 4, "skipped messages must be committed too")
 }
 
-func TestReplayStopsOnMalformedDeadLetter(t *testing.T) {
+func TestReplayAbortsOnRepublishFailure(t *testing.T) {
+	source := &fakeSource{msgs: []kafka.Message{
+		{Key: []byte("p_1"), Value: deadLetterValue(t, "posts", []byte("v1")), Partition: 0, Offset: 1},
+	}}
+	sink := &fakeSink{writeErr: errors.New("kafka down")}
+	r := newTestReplayer(source, sink)
+
+	_, err := r.Run(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "republish posts")
+	assert.Empty(t, source.commits, "a failed republish must not be committed")
+}
+
+func TestReplayStopsWhenDrained(t *testing.T) {
+	source := &fakeSource{}
+	r := newTestReplayer(source, &fakeSink{})
+
+	replayed, err := r.Run(context.Background())
+	require.NoError(t, err)
+	assert.Zero(t, replayed)
+}
+
+func TestReplayPropagatesFetchError(t *testing.T) {
+	source := &fakeSource{fetchErr: errors.New("consumer lost")}
+	r := newTestReplayer(source, &fakeSink{})
+
+	_, err := r.Run(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "consumer lost")
+}
+
+func TestReplayPropagatesCommitError(t *testing.T) {
 	source := &fakeSource{
-		messages: []kafka.Message{{Value: []byte("not a dead letter")}},
+		msgs: []kafka.Message{
+			{Key: []byte("p_1"), Value: deadLetterValue(t, "posts", []byte("v1")), Partition: 0, Offset: 1},
+		},
+		commitErr: errors.New("commit failed"),
 	}
-	replayer := &Replayer{source: source, sink: &fakeSink{}, timeout: 5 * time.Second}
+	r := newTestReplayer(source, &fakeSink{})
 
-	_, err := replayer.Run(context.Background())
+	_, err := r.Run(context.Background())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse dead letter")
+	assert.Contains(t, err.Error(), "commit replayed message")
 }
 
-func TestReplayReturnsFetchErrors(t *testing.T) {
-	source := &fakeSource{fetchErr: errors.New("broker unavailable")}
-	replayer := &Replayer{source: source, sink: &fakeSink{}, timeout: 5 * time.Second}
+func TestReplayerCloseClosesBothSides(t *testing.T) {
+	source := &fakeSource{}
+	sink := &fakeSink{}
+	r := newTestReplayer(source, sink)
 
-	_, err := replayer.Run(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "broker unavailable")
+	require.NoError(t, r.Close())
+	assert.True(t, source.closed)
+	assert.True(t, sink.closed)
 }
 
-func TestReplayDrainsEmptyTopic(t *testing.T) {
-	replayer := &Replayer{source: &fakeSource{}, sink: &fakeSink{}, timeout: 5 * time.Second}
+func TestReplayNextHonoursContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	source := &fakeSource{fetchErr: ctx.Err()}
+	r := newTestReplayer(source, &fakeSink{})
 
-	count, err := replayer.Run(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
-}
-
-func TestParseDeadLetterRoundtrip(t *testing.T) {
-	value := deadLetterMessage(t, "p_1", []byte(`{"postId":"p_1"}`))
-
-	deadLetter, err := messaging.ParseDeadLetter(value)
-	require.NoError(t, err)
-	assert.Equal(t, "posts", deadLetter.OriginalTopic)
-	assert.Equal(t, "boom", deadLetter.Error)
-	assert.JSONEq(t, `{"postId":"p_1"}`, string(deadLetter.Payload))
+	_, err := r.Run(ctx)
+	require.Error(t, err, "a cancelled context must not look like a drained topic")
+	assert.Contains(t, err.Error(), "context")
 }

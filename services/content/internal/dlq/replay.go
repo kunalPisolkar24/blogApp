@@ -30,15 +30,27 @@ type messageSink interface {
 // original topic. It uses a consumer group so a second run resumes where
 // the previous one stopped instead of replaying everything again.
 type Replayer struct {
-	source  messageSource
-	sink    messageSink
-	timeout time.Duration
+	source messageSource
+	sink   messageSink
 }
 
-// warmupTimeout covers the consumer group join on the first fetch;
-// after that a replayer is reading live and only needs a short idle
-// window to decide the topic is drained.
-const warmupTimeout = 30 * time.Second
+// drainTimeout is the idle window that ends a run: after a message has
+// been replayed, the replayer keeps reading until no message arrives
+// for this long. Every message restarts the window, so slow but steady
+// dead letter traffic never ends the run prematurely. The first fetch
+// also fits inside it, including the consumer group join.
+const drainTimeout = 30 * time.Second
+
+// malformedError marks a dead letter that can never be replayed (broken
+// envelope, missing original topic). Such messages are skipped instead
+// of aborting the rest of the run.
+type malformedError struct {
+	error
+}
+
+func (e malformedError) Unwrap() error {
+	return e.error
+}
 
 // New creates a Replayer that reads from the given dlq topic and
 // republishes events to the topic recorded in each message. The hash
@@ -65,23 +77,22 @@ func New(brokers []string, dlqTopic string, groupID string) *Replayer {
 		WriteTimeout: 10 * time.Second,
 		RequiredAcks: kafka.RequireAll,
 	}
-	return &Replayer{source: reader, sink: writer, timeout: 5 * time.Second}
+	return &Replayer{source: reader, sink: writer}
 }
 
 // Run replays messages until the topic is drained, then returns the
-// number of messages replayed. A message is committed only after it has
-// been republished successfully.
+// number of messages replayed. Malformed dead letters are skipped and
+// logged; only republish failures abort the run.
+//
+// Replay is at-least-once: a message is committed only after it has
+// been republished, so a crash between the write and the commit replays
+// it once more. The consumers upsert idempotently, which makes the
+// double delivery benign.
 func (r *Replayer) Run(ctx context.Context) (int, error) {
 	replayed := 0
+	skipped := 0
 	for {
-		// The first fetch must fit the consumer group join in its
-		// budget; only later fetches get the short drain timeout.
-		budget := warmupTimeout
-		if replayed > 0 {
-			budget = r.timeout
-		}
-
-		msg, err := r.next(ctx, budget)
+		msg, err := r.next(ctx, drainTimeout)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				break
@@ -90,17 +101,31 @@ func (r *Replayer) Run(ctx context.Context) (int, error) {
 		}
 
 		if err := r.replay(ctx, msg); err != nil {
-			return replayed, err
+			var malformed malformedError
+			if !errors.As(err, &malformed) {
+				return replayed, err
+			}
+			skipped++
+			slog.Warn("skipping malformed dead letter",
+				"error", err,
+				"partition", msg.Partition,
+				"offset", msg.Offset,
+			)
+		} else {
+			replayed++
+			slog.Info("dead letter replayed",
+				"topic", msg.Topic,
+				"partition", msg.Partition,
+				"offset", msg.Offset,
+			)
 		}
+
 		if err := r.source.CommitMessages(ctx, msg); err != nil {
 			return replayed, fmt.Errorf("commit replayed message: %w", err)
 		}
-		replayed++
-		slog.Info("dead letter replayed",
-			"topic", msg.Topic,
-			"partition", msg.Partition,
-			"offset", msg.Offset,
-		)
+	}
+	if skipped > 0 {
+		slog.Warn("replay complete with skipped messages", "replayed", replayed, "skipped", skipped)
 	}
 	return replayed, nil
 }
@@ -118,10 +143,10 @@ func (r *Replayer) next(ctx context.Context, timeout time.Duration) (kafka.Messa
 func (r *Replayer) replay(ctx context.Context, msg kafka.Message) error {
 	deadLetter, err := messaging.ParseDeadLetter(msg.Value)
 	if err != nil {
-		return fmt.Errorf("parse dead letter: %w", err)
+		return malformedError{fmt.Errorf("parse dead letter: %w", err)}
 	}
 	if deadLetter.OriginalTopic == "" {
-		return errors.New("dead letter is missing originalTopic")
+		return malformedError{errors.New("dead letter is missing originalTopic")}
 	}
 
 	republished := kafka.Message{

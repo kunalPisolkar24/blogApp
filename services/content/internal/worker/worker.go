@@ -30,6 +30,11 @@ const (
 	retryBase  = 5 * time.Second
 
 	lagReportInterval = 15 * time.Second
+
+	// dlqRetryDelay is the pause between a failed DLQ publish and the
+	// next attempt. The offset is left uncommitted during that time so
+	// the message is redelivered rather than lost.
+	dlqRetryDelay = 2 * time.Second
 )
 
 // permanentError marks a message that can never succeed, no matter how
@@ -166,7 +171,21 @@ func (w *Worker) consume(ctx context.Context, reader *kafka.Reader) {
 
 		processErr := w.processWithRetries(ctx, reader, m)
 		if processErr != nil && ctx.Err() == nil {
-			w.sendToDLQ(ctx, reader, m, processErr)
+			if err := w.sendToDLQ(ctx, reader, m, processErr); err != nil {
+				// The offset stays uncommitted so the message is
+				// redelivered on the next fetch; back off so a Kafka
+				// outage does not spin in a hot loop.
+				slog.Error("dlq publish failed, leaving offset uncommitted",
+					"error", err,
+					"offset", m.Offset,
+					"partition", m.Partition,
+				)
+				metrics.WorkerMessagesTotal.WithLabelValues("dlq_failed").Inc()
+				if !sleep(ctx, dlqRetryDelay) {
+					return
+				}
+				continue
+			}
 		}
 
 		if err := reader.CommitMessages(ctx, m); err != nil {
@@ -204,7 +223,7 @@ func (w *Worker) processWithRetries(ctx context.Context, reader *kafka.Reader, m
 	return processErr
 }
 
-func (w *Worker) sendToDLQ(ctx context.Context, reader *kafka.Reader, m kafka.Message, cause error) {
+func (w *Worker) sendToDLQ(ctx context.Context, reader *kafka.Reader, m kafka.Message, cause error) error {
 	slog.Error("message failed after all retries, sending to dlq",
 		"error", cause,
 		"offset", m.Offset,
@@ -213,10 +232,23 @@ func (w *Worker) sendToDLQ(ctx context.Context, reader *kafka.Reader, m kafka.Me
 	)
 	metrics.WorkerMessagesTotal.WithLabelValues("dlq").Inc()
 
-	if w.producer != nil {
-		if err := w.producer.PublishDeadLetter(ctx, m.Topic, w.dlqTopic, m.Key, m.Value, cause); err != nil {
-			slog.Error("failed to publish to dlq", "error", err)
-		}
+	if w.producer == nil {
+		return nil
+	}
+	if err := w.producer.PublishDeadLetter(ctx, m.Topic, w.dlqTopic, m.Key, m.Value, cause); err != nil {
+		slog.Error("failed to publish to dlq", "error", err)
+		return err
+	}
+	return nil
+}
+
+// sleep pauses for d and reports whether the context survived the wait.
+func sleep(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
 	}
 }
 

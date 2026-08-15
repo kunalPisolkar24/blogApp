@@ -124,7 +124,21 @@ func (w *SearchWorker) consume(ctx context.Context, reader *kafka.Reader) {
 
 		processErr := w.processWithRetries(ctx, m)
 		if processErr != nil && ctx.Err() == nil {
-			w.sendToDLQ(ctx, m, processErr)
+			if err := w.sendToDLQ(ctx, m, processErr); err != nil {
+				// The offset stays uncommitted so the message is
+				// redelivered on the next fetch; back off so a Kafka
+				// outage does not spin in a hot loop.
+				slog.Error("dlq publish failed, leaving offset uncommitted",
+					"error", err,
+					"offset", m.Offset,
+					"partition", m.Partition,
+				)
+				metrics.WorkerMessagesTotal.WithLabelValues("dlq_failed").Inc()
+				if !sleep(ctx, dlqRetryDelay) {
+					return
+				}
+				continue
+			}
 		}
 
 		if err := reader.CommitMessages(ctx, m); err != nil {
@@ -162,7 +176,7 @@ func (w *SearchWorker) processWithRetries(ctx context.Context, m kafka.Message) 
 	return processErr
 }
 
-func (w *SearchWorker) sendToDLQ(ctx context.Context, m kafka.Message, cause error) {
+func (w *SearchWorker) sendToDLQ(ctx context.Context, m kafka.Message, cause error) error {
 	slog.Error("message failed after all retries, sending to dlq",
 		"error", cause,
 		"offset", m.Offset,
@@ -171,11 +185,14 @@ func (w *SearchWorker) sendToDLQ(ctx context.Context, m kafka.Message, cause err
 	)
 	metrics.WorkerMessagesTotal.WithLabelValues("dlq").Inc()
 
-	if w.producer != nil {
-		if err := w.producer.PublishDeadLetter(ctx, m.Topic, w.dlqTopic, m.Key, m.Value, cause); err != nil {
-			slog.Error("failed to publish to dlq", "error", err)
-		}
+	if w.producer == nil {
+		return nil
 	}
+	if err := w.producer.PublishDeadLetter(ctx, m.Topic, w.dlqTopic, m.Key, m.Value, cause); err != nil {
+		slog.Error("failed to publish to dlq", "error", err)
+		return err
+	}
+	return nil
 }
 
 func (w *SearchWorker) processMessage(ctx context.Context, m kafka.Message) error {
