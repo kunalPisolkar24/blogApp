@@ -196,23 +196,32 @@ describe('graphqlHandler', () => {
 });
 
 describe('healthHandler', () => {
-  it('returns ok with the redis status', async () => {
+  it('returns ok with db and redis status', async () => {
     const app = new Hono();
-    app.get('/health', healthHandler(() => Promise.resolve('ok')));
+    app.get(
+      '/health',
+      healthHandler({ pingDb: () => Promise.resolve('ok'), pingRedis: () => Promise.resolve('ok') }),
+    );
 
     const res = await app.request('/health');
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: 'ok', redis: 'ok' });
+    expect(await res.json()).toEqual({ status: 'ok', db: 'ok', redis: 'ok' });
   });
 
-  it('reports redis as unavailable when the ping fails', async () => {
+  it('reports db and redis as unavailable when the pings fail', async () => {
     const app = new Hono();
-    app.get('/health', healthHandler(() => Promise.resolve('unavailable')));
+    app.get(
+      '/health',
+      healthHandler({
+        pingDb: () => Promise.resolve('unavailable'),
+        pingRedis: () => Promise.resolve('unavailable'),
+      }),
+    );
 
     const res = await app.request('/health');
 
-    expect(await res.json()).toEqual({ status: 'ok', redis: 'unavailable' });
+    expect(await res.json()).toEqual({ status: 'ok', db: 'unavailable', redis: 'unavailable' });
   });
 });
 

@@ -86,10 +86,14 @@ export function graphqlHandler({ apollo, userService, metrics }: GraphqlHandlerD
   };
 }
 
-export function healthHandler(
-  ping: () => Promise<'ok' | 'unavailable'>,
-): MiddlewareHandler {
-  return async (c) => c.json({ status: 'ok', redis: await ping() });
+export interface HealthPings {
+  pingDb: () => Promise<'ok' | 'unavailable'>;
+  pingRedis: () => Promise<'ok' | 'unavailable'>;
+}
+
+export function healthHandler({ pingDb, pingRedis }: HealthPings): MiddlewareHandler {
+  return async (c) =>
+    c.json({ status: 'ok', db: await pingDb(), redis: await pingRedis() });
 }
 
 export function metricsHandler(metrics: Metrics): MiddlewareHandler {

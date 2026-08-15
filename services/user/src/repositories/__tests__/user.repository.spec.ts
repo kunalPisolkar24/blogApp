@@ -79,6 +79,22 @@ describe('UserRepository', () => {
 
       await expect(repository.create(data)).rejects.toThrow('database unreachable');
     });
+
+    it('retries transient connection errors before failing', async () => {
+      prisma.user.create
+        .mockRejectedValueOnce(prismaError('P1001'))
+        .mockResolvedValueOnce(makeUser());
+
+      await expect(repository.create(data)).resolves.toEqual(makeUser());
+      expect(prisma.user.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry fatal errors', async () => {
+      prisma.user.create.mockRejectedValue(prismaError('P2002'));
+
+      await expect(repository.create(data)).rejects.toBeInstanceOf(UserAlreadyExistsError);
+      expect(prisma.user.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('findByEmail', () => {
@@ -97,6 +113,15 @@ describe('UserRepository', () => {
       primary.user.findUnique.mockResolvedValue(null);
 
       await expect(repository.findByEmail('nobody@example.com')).resolves.toBeNull();
+    });
+
+    it('retries transient read errors', async () => {
+      primary.user.findUnique
+        .mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
+        .mockResolvedValueOnce(makeUser());
+
+      await expect(repository.findByEmail('alice@example.com')).resolves.toEqual(makeUser());
+      expect(primary.user.findUnique).toHaveBeenCalledTimes(2);
     });
   });
 

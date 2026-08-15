@@ -4,6 +4,7 @@ import { createServices } from './container.js';
 import { DomainError } from './errors.js';
 import { createApolloServer } from './graphql/server.js';
 import { graphqlHandler, healthHandler, metricsHandler } from './http/handlers.js';
+import { pingDb } from './lib/prisma.js';
 import { pingRedis } from './lib/redis.js';
 import { logger } from './observability/logger.js';
 import { requestLogging, requestMetrics } from './observability/middleware.js';
@@ -30,7 +31,7 @@ export async function buildApp(): Promise<Hono> {
   app.post('/graphql', graphqlHandler({ apollo, userService, metrics }));
   app.get('/metrics', metricsHandler(metrics));
   app.get('/', (c) => c.text('user service running'));
-  app.get('/health', healthHandler(() => pingRedis()));
+  app.get('/health', healthHandler({ pingDb, pingRedis }));
 
   return app;
 }
