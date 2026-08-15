@@ -5,17 +5,27 @@ import (
 	"time"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 )
 
 // withCache returns the cached value when present, otherwise runs fill,
-// stores the result, and returns it. Caching is skipped entirely when
-// the cache is nil (disabled).
+// stores the result, and returns it. Concurrent misses for the same key
+// are coalesced into a single fill (single-flight), so a burst of
+// requests right after expiry or invalidation cannot stampede the
+// underlying store. Caching is skipped entirely when the cache is nil
+// (disabled).
 func withCache[T any](c *cache.Cache, ctx context.Context, key string, ttl time.Duration, fill func() (T, error)) (T, error) {
-	if cached, ok := cache.Get[T](c, ctx, key); ok {
-		return *cached, nil
+	if c == nil {
+		return fill()
 	}
 
-	result, err := fill()
+	if cached, ok := cache.Get[T](c, ctx, key); ok {
+		metrics.CacheHits.Inc()
+		return *cached, nil
+	}
+	metrics.CacheMisses.Inc()
+
+	result, err := cache.Coalesce[T](c, key, fill)
 	if err != nil {
 		return result, err
 	}

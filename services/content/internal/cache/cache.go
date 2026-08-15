@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -22,12 +24,38 @@ const (
 	TagsPattern    = "tags:*"
 	SearchPattern  = "search:*"
 	RelatedPattern = "related:*"
+
+	// dialTimeout bounds the initial connection handshake.
+	dialTimeout = 2 * time.Second
+	// commandTimeout bounds a single command round trip; together with
+	// MaxRetries it bounds the total time a call can block the request.
+	commandTimeout = 3 * time.Second
+	// retries and backoff are stated explicitly so behavior does not
+	// silently depend on go-redis defaults.
+	maxRetries      = 3
+	minRetryBackoff = 50 * time.Millisecond
+	maxRetryBackoff = 500 * time.Millisecond
 )
 
-// Cache is a thin, best-effort Redis cache. Every call swallows errors and
-// logs at debug level so the cache can never break the service.
+// Cache is a thin, best-effort Redis cache. Every call swallows errors so
+// the cache can never break the service, but Redis failures are logged at
+// warn level and counted in content_cache_errors_total so degradation is
+// observable instead of invisible.
 type Cache struct {
 	client *redis.Client
+
+	// coalesceMu guards inFlight, the single-flight registry that
+	// merges concurrent fills of the same key into one.
+	coalesceMu sync.Mutex
+	inFlight   map[string]*inFlightCall
+}
+
+// inFlightCall is a shared fill in progress; waiters block on done and
+// read the fill result once it is closed.
+type inFlightCall struct {
+	done   chan struct{}
+	result any
+	err    error
 }
 
 // Options configures the redis connection. Either a single Addr or a
@@ -64,14 +92,24 @@ func newClient(opts Options) *redis.Client {
 			SentinelAddrs:    opts.Sentinels,
 			Password:         opts.Password,
 			SentinelPassword: opts.SentinelPassword,
-			DialTimeout:      2 * time.Second,
+			DialTimeout:      dialTimeout,
+			ReadTimeout:      commandTimeout,
+			WriteTimeout:     commandTimeout,
+			MaxRetries:       maxRetries,
+			MinRetryBackoff:  minRetryBackoff,
+			MaxRetryBackoff:  maxRetryBackoff,
 		})
 	}
 
 	return redis.NewClient(&redis.Options{
-		Addr:        opts.Addr,
-		Password:    opts.Password,
-		DialTimeout: 2 * time.Second,
+		Addr:            opts.Addr,
+		Password:        opts.Password,
+		DialTimeout:     dialTimeout,
+		ReadTimeout:     commandTimeout,
+		WriteTimeout:    commandTimeout,
+		MaxRetries:      maxRetries,
+		MinRetryBackoff: minRetryBackoff,
+		MaxRetryBackoff: maxRetryBackoff,
 	})
 }
 
@@ -79,7 +117,10 @@ func (c *Cache) Close() error {
 	return c.client.Close()
 }
 
-// Get returns the cached value for key, if present and decodable.
+// Get returns the cached value for key, if present and decodable. A
+// missing key is a normal miss and stays silent; any other Redis error
+// is logged at warn level and counted as a cache error so degradation
+// is observable.
 func Get[T any](c *Cache, ctx context.Context, key string) (*T, bool) {
 	if c == nil {
 		return nil, false
@@ -87,6 +128,10 @@ func Get[T any](c *Cache, ctx context.Context, key string) (*T, bool) {
 
 	data, err := c.client.Get(ctx, key).Bytes()
 	if err != nil {
+		if err == redis.Nil {
+			return nil, false
+		}
+		cacheError("get", "key", key, err)
 		return nil, false
 	}
 
@@ -111,7 +156,7 @@ func Set(c *Cache, ctx context.Context, key string, value any, ttl time.Duration
 	}
 
 	if err := c.client.Set(ctx, key, data, ttl).Err(); err != nil {
-		slog.Debug("cache: set failed", "key", key, "error", err)
+		cacheError("set", "key", key, err)
 	}
 }
 
@@ -121,7 +166,7 @@ func Del(c *Cache, ctx context.Context, key string) {
 		return
 	}
 	if err := c.client.Del(ctx, key).Err(); err != nil {
-		slog.Debug("cache: del failed", "key", key, "error", err)
+		cacheError("del", "key", key, err)
 	}
 }
 
@@ -137,7 +182,7 @@ func DelPattern(c *Cache, ctx context.Context, pattern string) {
 		keys = append(keys, iter.Val())
 	}
 	if err := iter.Err(); err != nil {
-		slog.Debug("cache: scan failed", "pattern", pattern, "error", err)
+		cacheError("scan", "pattern", pattern, err)
 		return
 	}
 	if len(keys) == 0 {
@@ -145,8 +190,62 @@ func DelPattern(c *Cache, ctx context.Context, pattern string) {
 	}
 
 	if err := c.client.Del(ctx, keys...).Err(); err != nil {
-		slog.Debug("cache: del failed", "pattern", pattern, "error", err)
+		cacheError("del", "pattern", pattern, err)
 	}
+}
+
+// cacheError logs a Redis failure at warn level and counts it, so a
+// dying Redis shows up in logs and metrics instead of only as a debug
+// line. The cache still degrades gracefully: the caller falls through
+// to the database.
+func cacheError(op string, keyAttr string, keyValue string, err error) {
+	slog.Warn("cache: operation failed", "op", op, keyAttr, keyValue, "error", err)
+	metrics.CacheErrorsTotal.Inc()
+}
+
+// coalesce runs fill once for key; concurrent callers for the same key
+// wait on the shared call instead of each executing the underlying
+// operation (cache stampede). The in-flight entry is removed when the
+// fill completes, so a later request starts a fresh fill; failed fills
+// are not shared beyond the flight.
+func (c *Cache) coalesce(key string, fill func() (any, error)) (any, error) {
+	if c == nil {
+		return fill()
+	}
+
+	c.coalesceMu.Lock()
+	if c.inFlight == nil {
+		c.inFlight = make(map[string]*inFlightCall)
+	}
+	if call, ok := c.inFlight[key]; ok {
+		c.coalesceMu.Unlock()
+		<-call.done
+		return call.result, call.err
+	}
+
+	call := &inFlightCall{done: make(chan struct{})}
+	c.inFlight[key] = call
+	c.coalesceMu.Unlock()
+
+	call.result, call.err = fill()
+	close(call.done)
+
+	c.coalesceMu.Lock()
+	delete(c.inFlight, key)
+	c.coalesceMu.Unlock()
+
+	return call.result, call.err
+}
+
+// Coalesce is the generic entry point for single-flight fills: only the
+// first caller executes fill, the rest share its result or error.
+func Coalesce[T any](c *Cache, key string, fill func() (T, error)) (T, error) {
+	got, err := c.coalesce(key, func() (any, error) { return fill() })
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return got.(T), nil
 }
 
 func KeyPost(id string) string {
