@@ -3,7 +3,9 @@
         load-test-build load-test load-test-signup load-test-signin \
         load-test-me load-test-users load-test-update-profile \
         load-test-cold load-test-stop load-test-clean load-test-tail \
-        ha-test-up ha-test-logs ha-test-stop
+        ha-test-up ha-test-logs ha-test-stop \
+        local-up local-down local-logs local-clean \
+        ha-up ha-down ha-logs ha-clean
 
 NODE_VERSION ?= 22.14.0
 IMAGE       ?= topos-user
@@ -131,3 +133,40 @@ ha-test-stop:
 	docker rm -f hatest-postgres-primary hatest-postgres-replica-2 2>/dev/null || true
 	$(HA_TEST_COMPOSE) down -v --remove-orphans
 	docker network rm $(HA_TEST_NETWORK) 2>/dev/null || true
+
+# --- Standalone Local Stack (single Postgres + Redis + service) ---
+
+LOCAL_COMPOSE := docker compose -f compose.local.yml --project-name topos-user-local
+
+local-up:
+	$(LOCAL_COMPOSE) up -d --build --wait user-service
+
+local-down:
+	$(LOCAL_COMPOSE) down
+
+local-logs:
+	$(LOCAL_COMPOSE) logs -f
+
+local-clean:
+	$(LOCAL_COMPOSE) down -v --remove-orphans
+
+# --- Standalone HA Stack (Postgres tripod + Pgpool-II + Redis sentinels) ---
+
+HA_ENV      ?= .env.ha
+HA_NETWORK  ?= topos-user-ha
+HA_COMPOSE  := docker compose -f compose.yml --env-file $(HA_ENV) \
+	--project-name topos-user-ha
+
+ha-up:
+	docker network create $(HA_NETWORK) 2>/dev/null || true
+	$(HA_COMPOSE) up -d --build --wait user-service
+	$(HA_COMPOSE) logs --no-color user-migrator
+
+ha-down:
+	$(HA_COMPOSE) down -v --remove-orphans
+	docker network rm $(HA_NETWORK) 2>/dev/null || true
+
+ha-logs:
+	$(HA_COMPOSE) logs -f
+
+ha-clean: ha-down

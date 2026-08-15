@@ -3,4 +3,6 @@ node_modules/
 dist/
 coverage/
 .env
+.env.ha
+.env.ha-test
 src/generated/
