@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -69,9 +71,12 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		}
 	}
 
-	now := s.clock()
-	var created *domain.Post
+	var lastErr error
 	for attempt := 0; attempt < maxSlugRetries; attempt++ {
+		// A fresh timestamp per attempt regenerates the slug, so a
+		// collision on the previous attempt gets a new suffix instead
+		// of failing identically forever.
+		now := s.clock()
 		post := &domain.Post{
 			Title:         title,
 			Body:          body,
@@ -85,8 +90,16 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 			UpdatedAt:     now,
 		}
 
-		var err error
-		created, err = s.postRepo.Create(ctx, post)
+		if err := s.ensureSlugAvailable(ctx, post.Slug); err != nil {
+			if !errors.Is(err, domain.ErrValidation) {
+				return nil, err
+			}
+			lastErr = err
+			slog.Warn("slug collision, retrying with a fresh timestamp", "slug", post.Slug, "attempt", attempt)
+			continue
+		}
+
+		created, err := s.postRepo.Create(ctx, post)
 		if err == nil {
 			s.ensureTags(ctx, created.ID, tags)
 			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
@@ -99,8 +112,27 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		if !isDuplicateKey(err) {
 			return nil, err
 		}
+		lastErr = err
 	}
-	return nil, fmt.Errorf("failed to create post after %d slug retries", maxSlugRetries)
+	return nil, fmt.Errorf("failed to create post after %d slug retries: %w", maxSlugRetries, lastErr)
+}
+
+// ensureSlugAvailable rejects a slug that another post already owns.
+// The duplicate-key index remains the final authority; this check just
+// turns the common collision into a clear validation error instead of
+// exhausting the retry loop.
+func (s *PostService) ensureSlugAvailable(ctx context.Context, slugValue string) error {
+	existing, err := s.postRepo.FindBySlug(ctx, slugValue)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if existing != nil {
+		return fmt.Errorf("%w: slug %q is already taken", domain.ErrValidation, slugValue)
+	}
+	return nil
 }
 
 func (s *PostService) UpdatePost(ctx context.Context, id, actorID string, title, body *string, tags []string, imageUrl *string) (*domain.Post, error) {

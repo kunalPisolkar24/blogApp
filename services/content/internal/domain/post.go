@@ -58,6 +58,7 @@ type PostRepository interface {
 	Delete(ctx context.Context, id string) error
 	FindAll(ctx context.Context, page, limit int) (*PaginatedPosts, error)
 	FindByID(ctx context.Context, id string) (*Post, error)
+	FindBySlug(ctx context.Context, slug string) (*Post, error)
 	FindByIDs(ctx context.Context, ids []string) ([]*Post, error)
 	FindByAuthor(ctx context.Context, authorID string, page, limit int) (*PaginatedPosts, error)
 	FindByTag(ctx context.Context, tag string, page, limit int) (*PaginatedPosts, error)

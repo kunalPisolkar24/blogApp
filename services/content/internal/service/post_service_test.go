@@ -91,6 +91,49 @@ func TestCreatePostSlugRetriesExhausted(t *testing.T) {
 	assert.Equal(t, maxSlugRetries, repo.CreateCalls)
 }
 
+func TestCreatePostRegeneratesSlugPerAttempt(t *testing.T) {
+	seen := map[string]bool{}
+	repo := &testutil.MockPostRepository{CreateFn: func(ctx context.Context, post *domain.Post) (*domain.Post, error) {
+		if seen[post.Slug] {
+			return nil, errors.New("slug repeated across retries")
+		}
+		seen[post.Slug] = true
+		return nil, mongo.CommandError{Code: 11000}
+	}}
+	s := newService(t, repo, nil, nil)
+
+	_, err := s.CreatePost(context.Background(), "Title", "Body", "u_1", nil, nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "slug retries")
+	assert.Len(t, seen, maxSlugRetries, "every retry must try a different slug")
+}
+
+func TestCreatePostSlugCollisionFailsFast(t *testing.T) {
+	repo := &testutil.MockPostRepository{
+		FindBySlugFn: func(ctx context.Context, slug string) (*domain.Post, error) {
+			return &domain.Post{ID: "existing", Slug: slug}, nil
+		},
+	}
+	s := newService(t, repo, nil, nil)
+
+	_, err := s.CreatePost(context.Background(), "Title", "Body", "u_1", nil, nil, nil)
+	require.ErrorIs(t, err, domain.ErrValidation)
+	assert.Contains(t, err.Error(), "already taken")
+	assert.Zero(t, repo.CreateCalls, "a known collision must not attempt an insert")
+}
+
+func TestCreatePostSlugCheckDBErrorPropagates(t *testing.T) {
+	repo := &testutil.MockPostRepository{FindBySlugFn: func(ctx context.Context, slug string) (*domain.Post, error) {
+		return nil, errors.New("db down")
+	}}
+	s := newService(t, repo, nil, nil)
+
+	_, err := s.CreatePost(context.Background(), "Title", "Body", "u_1", nil, nil, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db down")
+	assert.Zero(t, repo.CreateCalls)
+}
+
 func TestCreatePostPublishFailureIsIgnored(t *testing.T) {
 	publisher := &testutil.MockEventPublisher{Err: errors.New("kafka down")}
 	s := newService(t, nil, publisher, nil)

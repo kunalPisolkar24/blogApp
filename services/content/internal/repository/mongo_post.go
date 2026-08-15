@@ -129,6 +129,16 @@ func (r *MongoPostRepository) FindByID(ctx context.Context, id string) (*domain.
 	return &post, nil
 }
 
+// FindBySlug returns the post with the given slug.
+func (r *MongoPostRepository) FindBySlug(ctx context.Context, slug string) (*domain.Post, error) {
+	var post domain.Post
+	err := r.collection.FindOne(ctx, bson.M{"slug": slug}).Decode(&post)
+	if err != nil {
+		return nil, wrapNotFound(err)
+	}
+	return &post, nil
+}
+
 // FindByIDs returns the posts matching the given ids. Unparseable or
 // missing ids are dropped so a stale search index entry can never fail
 // the whole query.
