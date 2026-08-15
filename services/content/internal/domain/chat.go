@@ -67,5 +67,6 @@ type ChatRepository interface {
 	Rename(ctx context.Context, id string, title string) (*Chat, error)
 	Delete(ctx context.Context, id string) error
 	AddMessage(ctx context.Context, msg *ChatMessage) (*ChatMessage, error)
+	DeleteMessage(ctx context.Context, chatID, messageID string) error
 	Messages(ctx context.Context, chatID string, page, limit int) (*PaginatedMessages, error)
 }

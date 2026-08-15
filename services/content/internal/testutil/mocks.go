@@ -241,16 +241,20 @@ func (m *MockEventPublisher) PublishDeadLetter(ctx context.Context, originalTopi
 
 // MockChatRepository fakes the chat store for service tests.
 type MockChatRepository struct {
-	CreateFn      func(ctx context.Context, chat *domain.Chat) (*domain.Chat, error)
-	FindByIDFn    func(ctx context.Context, id string) (*domain.Chat, error)
-	ListByUserFn  func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error)
-	RenameFn      func(ctx context.Context, id, title string) (*domain.Chat, error)
-	DeleteFn      func(ctx context.Context, id string) error
-	AddMessageFn  func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error)
-	MessagesFn    func(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error)
-	MessagesCalls int
-	ChatID        string
-	UserID        string
+	CreateFn            func(ctx context.Context, chat *domain.Chat) (*domain.Chat, error)
+	FindByIDFn          func(ctx context.Context, id string) (*domain.Chat, error)
+	ListByUserFn        func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedChats, error)
+	RenameFn            func(ctx context.Context, id, title string) (*domain.Chat, error)
+	DeleteFn            func(ctx context.Context, id string) error
+	AddMessageFn        func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error)
+	DeleteMessageFn     func(ctx context.Context, chatID, messageID string) error
+	DeleteMessageCalls  int
+	DeleteMessageChatID string
+	DeleteMessageID     string
+	MessagesFn          func(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error)
+	MessagesCalls       int
+	ChatID              string
+	UserID              string
 }
 
 func (m *MockChatRepository) Create(ctx context.Context, chat *domain.Chat) (*domain.Chat, error) {
@@ -295,6 +299,16 @@ func (m *MockChatRepository) AddMessage(ctx context.Context, msg *domain.ChatMes
 	}
 	msg.ID = "msg-created"
 	return msg, nil
+}
+
+func (m *MockChatRepository) DeleteMessage(ctx context.Context, chatID, messageID string) error {
+	m.DeleteMessageCalls++
+	m.DeleteMessageChatID = chatID
+	m.DeleteMessageID = messageID
+	if m.DeleteMessageFn != nil {
+		return m.DeleteMessageFn(ctx, chatID, messageID)
+	}
+	return nil
 }
 
 func (m *MockChatRepository) Messages(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error) {

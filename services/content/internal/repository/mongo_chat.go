@@ -120,6 +120,16 @@ func (r *MongoChatRepository) AddMessage(ctx context.Context, msg *domain.ChatMe
 	return msg, nil
 }
 
+func (r *MongoChatRepository) DeleteMessage(ctx context.Context, chatID, messageID string) error {
+	oid, err := primitive.ObjectIDFromHex(messageID)
+	if err != nil {
+		return fmt.Errorf("%w: invalid message id format", domain.ErrNotFound)
+	}
+
+	_, err = r.messages.DeleteOne(ctx, bson.M{"_id": oid, "chatId": chatID})
+	return err
+}
+
 // Messages returns the messages of a chat in chronological order, newest
 // first, with the given page/limit applied to the total count.
 func (r *MongoChatRepository) Messages(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error) {

@@ -175,10 +175,73 @@ func TestAskChatFailsWhenAIErrors(t *testing.T) {
 			return nil, aiErr
 		},
 	}
-	repo := &testutil.MockChatRepository{UserID: "u_1"}
+	var added []*domain.ChatMessage
+	repo := &testutil.MockChatRepository{
+		UserID: "u_1",
+		AddMessageFn: func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error) {
+			added = append(added, msg)
+			return msg, nil
+		},
+	}
 	s := newChatService(t, repo, ai)
 
 	_, err := s.AskChat(context.Background(), "c_1", "u_1", "hi")
 
 	assert.ErrorIs(t, err, aiErr)
+	assert.Empty(t, added, "a failed AI call must not leave a ghost user message behind")
+	assert.Zero(t, repo.DeleteMessageCalls)
+}
+
+func TestAskChatRollsBackUserMessageWhenAssistantPersistFails(t *testing.T) {
+	ai := &testutil.MockAIService{
+		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+			return &domain.ChatAnswer{Content: "ok"}, nil
+		},
+	}
+	persistErr := errors.New("mongo down")
+	repo := &testutil.MockChatRepository{
+		UserID: "u_1",
+		AddMessageFn: func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error) {
+			if msg.Role == domain.ChatMessageRoleAssistant {
+				return nil, persistErr
+			}
+			msg.ID = "m_user"
+			return msg, nil
+		},
+	}
+	s := newChatService(t, repo, ai)
+
+	_, err := s.AskChat(context.Background(), "c_1", "u_1", "hi")
+
+	assert.ErrorIs(t, err, persistErr)
+	require.Equal(t, 1, repo.DeleteMessageCalls)
+	assert.Equal(t, "c_1", repo.DeleteMessageChatID)
+	assert.Equal(t, "m_user", repo.DeleteMessageID)
+}
+
+func TestAskChatToleratesFailedRollback(t *testing.T) {
+	ai := &testutil.MockAIService{
+		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+			return &domain.ChatAnswer{Content: "ok"}, nil
+		},
+	}
+	persistErr := errors.New("mongo down")
+	repo := &testutil.MockChatRepository{
+		UserID: "u_1",
+		AddMessageFn: func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error) {
+			if msg.Role == domain.ChatMessageRoleAssistant {
+				return nil, persistErr
+			}
+			msg.ID = "m_user"
+			return msg, nil
+		},
+		DeleteMessageFn: func(ctx context.Context, chatID, messageID string) error {
+			return errors.New("rollback also failed")
+		},
+	}
+	s := newChatService(t, repo, ai)
+
+	_, err := s.AskChat(context.Background(), "c_1", "u_1", "hi")
+
+	assert.ErrorIs(t, err, persistErr, "the original persist error must win even when rollback fails")
 }
