@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import { requestId } from 'hono/request-id';
 import { env } from './config/env.js';
 import { createContext } from './context.js';
-import { DomainError, ValidationError } from './errors.js';
+import { DomainError, PayloadTooLargeError, ValidationError } from './errors.js';
 import { resolvers } from './graphql/resolvers.js';
 import { typeDefs } from './graphql/typeDefs.js';
 import { CacheManager } from './lib/cache.js';
@@ -88,6 +88,7 @@ export async function buildApp(): Promise<Hono> {
       resolvers: resolvers as any,
     }),
     formatError,
+    introspection: env.NODE_ENV !== 'production',
   });
   await apollo.start();
 
