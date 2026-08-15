@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -25,28 +26,41 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 	return v, ok && v != ""
 }
 
-// AuthMiddleware parses the Bearer token, validates it against the JWT
-// config, and injects the user id into the request context. Requests
-// without a valid token pass through unauthenticated.
+// AuthMiddleware validates Bearer tokens and injects the user id into
+// the request context. Headerless requests pass through anonymously;
+// any request carrying an Authorization header that is not a valid
+// Bearer token gets 401 Unauthorized, so a broken or expired token can
+// never be silently downgraded to anonymous access.
 func AuthMiddleware(cfg config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userID, ok := userIDFromRequest(r, cfg)
-			if !ok {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), userIDKey, userID)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			userID, err := userIDFromHeader(authHeader, cfg)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+				return
+			}
+
+			if userID != "" {
+				ctx := context.WithValue(r.Context(), userIDKey, userID)
+				r = r.WithContext(ctx)
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-func userIDFromRequest(r *http.Request, cfg config.Config) (string, bool) {
-	authHeader := r.Header.Get("Authorization")
+// userIDFromHeader extracts and validates the user id from an
+// Authorization header. It only accepts Bearer tokens; anything else is
+// an error so the caller can reject it.
+func userIDFromHeader(authHeader string, cfg config.Config) (string, error) {
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return "", false
+		return "", errors.New("unauthorized: unsupported authorization scheme")
 	}
 
 	token, err := jwt.Parse(
@@ -63,16 +77,19 @@ func userIDFromRequest(r *http.Request, cfg config.Config) (string, bool) {
 		jwt.WithExpirationRequired(),
 	)
 	if err != nil || !token.Valid {
-		return "", false
+		return "", errors.New("unauthorized: invalid or expired token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", false
+		return "", errors.New("unauthorized: invalid token claims")
 	}
 
 	userID, ok := idFromClaims(claims)
-	return userID, ok
+	if !ok {
+		return "", errors.New("unauthorized: token is missing a valid id claim")
+	}
+	return userID, nil
 }
 
 func idFromClaims(claims jwt.MapClaims) (string, bool) {
@@ -81,12 +98,13 @@ func idFromClaims(claims jwt.MapClaims) (string, bool) {
 		return "", false
 	}
 
-	switch v := id.(type) {
-	case string:
-		return v, v != ""
-	case float64:
-		return fmt.Sprintf("%.0f", v), true
-	default:
+	// Only string ids are accepted. JSON numbers decode to float64,
+	// which cannot represent integers above 2^53 exactly, so distinct
+	// users could collapse into the same userID; numeric ids from the
+	// user service must be issued as strings.
+	userID, ok := id.(string)
+	if !ok || userID == "" {
 		return "", false
 	}
+	return userID, true
 }

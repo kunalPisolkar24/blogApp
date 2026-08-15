@@ -40,7 +40,7 @@ func validClaims(id string) jwt.MapClaims {
 	}
 }
 
-func runThroughAuth(t *testing.T, header string) (userID string, ok bool) {
+func runThroughAuth(t *testing.T, header string) (userID string, ok bool, status int) {
 	t.Helper()
 
 	handler := AuthMiddleware(testConfig())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -52,85 +52,107 @@ func runThroughAuth(t *testing.T, header string) (userID string, ok bool) {
 	if header != "" {
 		req.Header.Set("Authorization", header)
 	}
-	handler.ServeHTTP(httptest.NewRecorder(), req)
-	return userID, ok
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return userID, ok, rec.Code
 }
 
 func TestAuthValidToken(t *testing.T) {
-	userID, ok := runThroughAuth(t, "Bearer "+signToken(t, validClaims("u_1")))
+	userID, ok, status := runThroughAuth(t, "Bearer "+signToken(t, validClaims("u_1")))
 	assert.True(t, ok)
 	assert.Equal(t, "u_1", userID)
+	assert.Equal(t, http.StatusOK, status)
 }
 
-func TestAuthNumericID(t *testing.T) {
+func TestAuthNumericIDRejected(t *testing.T) {
 	claims := validClaims("42")
 	claims["id"] = float64(42)
-	userID, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
-	assert.True(t, ok)
-	assert.Equal(t, "42", userID)
-}
-
-func TestAuthMissingHeader(t *testing.T) {
-	_, ok := runThroughAuth(t, "")
+	_, ok, status := runThroughAuth(t, "Bearer "+signToken(t, claims))
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status, "numeric id claims must be rejected, not rounded")
 }
 
-func TestAuthNonBearerHeader(t *testing.T) {
-	_, ok := runThroughAuth(t, "Basic abc")
+func TestAuthMissingHeaderAnonymous(t *testing.T) {
+	_, ok, status := runThroughAuth(t, "")
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusOK, status, "headerless requests pass through anonymously")
 }
 
-func TestAuthExpiredToken(t *testing.T) {
+func TestAuthNonBearerHeaderRejected(t *testing.T) {
+	_, ok, status := runThroughAuth(t, "Basic abc")
+	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
+}
+
+func TestAuthExpiredTokenRejected(t *testing.T) {
 	claims := validClaims("u_1")
 	claims["exp"] = time.Now().Add(-time.Hour).Unix()
-	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	_, ok, status := runThroughAuth(t, "Bearer "+signToken(t, claims))
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestAuthWrongIssuer(t *testing.T) {
+func TestAuthWrongIssuerRejected(t *testing.T) {
 	claims := validClaims("u_1")
 	claims["iss"] = "someone-else"
-	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	_, ok, status := runThroughAuth(t, "Bearer "+signToken(t, claims))
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestAuthWrongAudience(t *testing.T) {
+func TestAuthWrongAudienceRejected(t *testing.T) {
 	claims := validClaims("u_1")
 	claims["aud"] = "someone-else"
-	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	_, ok, status := runThroughAuth(t, "Bearer "+signToken(t, claims))
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestAuthWrongSigningMethod(t *testing.T) {
+func TestAuthWrongSigningMethodRejected(t *testing.T) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, validClaims("u_1"))
 	signed, err := token.SignedString([]byte(testSecret))
 	require.NoError(t, err)
-	_, ok := runThroughAuth(t, "Bearer "+signed)
+	_, ok, status := runThroughAuth(t, "Bearer "+signed)
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestAuthMissingIDClaim(t *testing.T) {
+func TestAuthMissingIDClaimRejected(t *testing.T) {
 	claims := validClaims("")
 	delete(claims, "id")
-	_, ok := runThroughAuth(t, "Bearer "+signToken(t, claims))
+	_, ok, status := runThroughAuth(t, "Bearer "+signToken(t, claims))
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestAuthEmptyIDClaim(t *testing.T) {
-	_, ok := runThroughAuth(t, "Bearer "+signToken(t, validClaims("")))
+func TestAuthEmptyIDClaimRejected(t *testing.T) {
+	_, ok, status := runThroughAuth(t, "Bearer "+signToken(t, validClaims("")))
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestAuthGarbageToken(t *testing.T) {
-	_, ok := runThroughAuth(t, "Bearer not.a.token")
+func TestAuthGarbageTokenRejected(t *testing.T) {
+	_, ok, status := runThroughAuth(t, "Bearer not.a.token")
 	assert.False(t, ok)
+	assert.Equal(t, http.StatusUnauthorized, status)
 }
 
-func TestIDFromClaimsUnsupportedType(t *testing.T) {
-	_, ok := idFromClaims(jwt.MapClaims{"id": []string{"x"}})
-	assert.False(t, ok)
-
-	userID, ok := idFromClaims(jwt.MapClaims{"id": 3.5})
+func TestIDFromClaimsStringOnly(t *testing.T) {
+	userID, ok := idFromClaims(jwt.MapClaims{"id": "u_1"})
 	assert.True(t, ok)
-	assert.Equal(t, "4", userID)
+	assert.Equal(t, "u_1", userID)
+
+	_, ok = idFromClaims(jwt.MapClaims{"id": []string{"x"}})
+	assert.False(t, ok)
+
+	_, ok = idFromClaims(jwt.MapClaims{"id": 3.5})
+	assert.False(t, ok, "non-integer numeric ids must be rejected")
+
+	// 2^53 + 1 cannot be represented by float64; accepting it would let
+	// two distinct users decode to the same id.
+	_, ok = idFromClaims(jwt.MapClaims{"id": float64(1<<53) + 1})
+	assert.False(t, ok, "large numeric ids must be rejected instead of losing precision")
+
+	_, ok = idFromClaims(jwt.MapClaims{"id": ""})
+	assert.False(t, ok)
 }
