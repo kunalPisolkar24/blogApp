@@ -272,13 +272,17 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         if len(request.body) > settings.MAX_INPUT_CHARS:
             raise TooLargeError(settings.MAX_INPUT_CHARS)
 
+        created_at = ""
+        if request.HasField("created_at"):
+            created_at = request.created_at.ToDatetime().strftime("%Y-%m-%dT%H:%M:%SZ")
+
         await self._search.upsert(
             post_id=request.post_id,
             title=request.title,
             body=request.body,
             summary=request.summary,
             tags=list(request.tags),
-            created_at=request.created_at,
+            created_at=created_at,
         )
         return ai_service_pb2.IndexResponse()
 

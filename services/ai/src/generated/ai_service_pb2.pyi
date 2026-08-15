@@ -1,3 +1,6 @@
+import datetime
+
+from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
@@ -63,8 +66,8 @@ class IndexRequest(_message.Message):
     body: str
     summary: str
     tags: _containers.RepeatedScalarFieldContainer[str]
-    created_at: str
-    def __init__(self, post_id: _Optional[str] = ..., title: _Optional[str] = ..., body: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., created_at: _Optional[str] = ...) -> None: ...
+    created_at: _timestamp_pb2.Timestamp
+    def __init__(self, post_id: _Optional[str] = ..., title: _Optional[str] = ..., body: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class IndexResponse(_message.Message):
     __slots__ = ()

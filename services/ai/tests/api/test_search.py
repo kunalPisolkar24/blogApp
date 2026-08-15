@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import grpc
@@ -15,7 +16,7 @@ def _index_request(post_id: str | None = None) -> ai_service_pb2.IndexRequest:
         body="<p>How to configure a gRPC client with keepalive options.</p>",
         summary="A short summary",
         tags=["grpc", "tutorial"],
-        created_at="2026-01-01T00:00:00Z",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 

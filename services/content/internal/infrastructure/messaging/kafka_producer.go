@@ -46,11 +46,11 @@ func NewKafkaProducer(brokers []string, topic string) domain.EventProducer {
 }
 
 func (k *kafkaProducer) PublishPostCreated(ctx context.Context, post *domain.Post) error {
-	return k.publish(ctx, post)
+	return k.publish(ctx, post, domain.EventTypePostCreated)
 }
 
 func (k *kafkaProducer) PublishPostUpdated(ctx context.Context, post *domain.Post) error {
-	return k.publish(ctx, post)
+	return k.publish(ctx, post, domain.EventTypePostUpdated)
 }
 
 // PublishPostDeleted publishes a tombstone: a message with the post id
@@ -95,9 +95,10 @@ func (k *kafkaProducer) Close() error {
 	return k.writer.Close()
 }
 
-func (k *kafkaProducer) publish(ctx context.Context, post *domain.Post) error {
+func (k *kafkaProducer) publish(ctx context.Context, post *domain.Post, eventType domain.EventType) error {
 	payload := domain.PostEventPayload{
 		PostID:        post.ID,
+		EventType:     eventType,
 		Title:         post.Title,
 		Body:          post.Body,
 		ImageURL:      post.ImageUrl,

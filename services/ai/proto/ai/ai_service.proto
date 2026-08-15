@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ai;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/kunalPisolkar24/topos/services/content/proto/ai";
 
 service AIService {
@@ -50,7 +52,9 @@ message IndexRequest {
   string body = 3;
   string summary = 4;
   repeated string tags = 5;
-  string created_at = 6;
+  // created_at is the post's creation time, UTC. It is carried as a
+  // typed timestamp so consumers never have to guess a string format.
+  google.protobuf.Timestamp created_at = 6;
 }
 
 message IndexResponse {}
