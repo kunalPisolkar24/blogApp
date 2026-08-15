@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import client from 'prom-client';
-import { Metrics } from '../metrics.js';
+import { EventEmitter } from 'node:events';
+import { Metrics, extractErrorCodes } from '../metrics.js';
+import type { Pool } from 'pg';
 
 const mocks = vi.hoisted(() => ({
   env: { NODE_ENV: 'test' },
 }));
 
 vi.mock('../../config/env.js', () => ({ env: mocks.env }));
+
+function fakePool(stats: { total: number; idle: number; waiting: number }): Pool {
+  return { totalCount: stats.total, idleCount: stats.idle, waitingCount: stats.waiting } as Pool;
+}
 
 describe('Metrics', () => {
   afterEach(() => {
@@ -75,6 +81,70 @@ describe('Metrics', () => {
     expect(output).toContain('user_signin_failures_total 1');
   });
 
+  it('tracks in-flight requests with the start/end gauge', async () => {
+    const metrics = new Metrics();
+    metrics.recordRequestStart();
+    metrics.recordRequestStart();
+    metrics.recordRequestEnd();
+
+    const output = await metrics.getMetrics();
+    expect(output).toContain('http_requests_in_flight 1');
+  });
+
+  it('records graphql errors by operation and code', async () => {
+    const metrics = new Metrics();
+    metrics.recordGraphqlError('signin', 'INVALID_CREDENTIALS');
+    metrics.recordGraphqlError('signin', 'INVALID_CREDENTIALS');
+    metrics.recordGraphqlError('users', 'VALIDATION_ERROR');
+
+    const output = await metrics.getMetrics();
+    expect(output).toContain(
+      'graphql_errors_total{operation="signin",code="INVALID_CREDENTIALS"} 2',
+    );
+    expect(output).toContain(
+      'graphql_errors_total{operation="users",code="VALIDATION_ERROR"} 1',
+    );
+  });
+
+  it('exposes db pool connections from registered pools on scrape', async () => {
+    const metrics = new Metrics();
+    metrics.registerDbPools([
+      { node: 'primary', pool: fakePool({ total: 5, idle: 3, waiting: 1 }) },
+      { node: 'replica', pool: fakePool({ total: 2, idle: 2, waiting: 0 }) },
+    ]);
+
+    const output = await metrics.getMetrics();
+    expect(output).toContain('db_pool_connections{node="primary",state="total"} 5');
+    expect(output).toContain('db_pool_connections{node="primary",state="idle"} 3');
+    expect(output).toContain('db_pool_connections{node="primary",state="waiting"} 1');
+    expect(output).toContain('db_pool_connections{node="replica",state="total"} 2');
+  });
+
+  it('tracks redis connectivity from client events', async () => {
+    const redis = new EventEmitter() as unknown as import('ioredis').Redis;
+    const metrics = new Metrics();
+    metrics.registerRedis(redis);
+
+    const before = await metrics.getMetrics();
+    expect(before).toContain('redis_connected 0');
+
+    redis.emit('ready');
+    const ready = await metrics.getMetrics();
+    expect(ready).toContain('redis_connected 1');
+
+    redis.emit('close');
+    const closed = await metrics.getMetrics();
+    expect(closed).toContain('redis_connected 0');
+  });
+
+  it('reports redis as disconnected when none is configured', async () => {
+    const metrics = new Metrics();
+    metrics.registerRedis(null);
+
+    const output = await metrics.getMetrics();
+    expect(output).toContain('redis_connected 0');
+  });
+
   it('collects default node metrics outside tests', async () => {
     mocks.env.NODE_ENV = 'production';
     const metrics = new Metrics();
@@ -86,5 +156,28 @@ describe('Metrics', () => {
   it('exposes the prometheus content type', () => {
     const metrics = new Metrics();
     expect(metrics.getContentType()).toContain('text/plain');
+  });
+});
+
+describe('extractErrorCodes', () => {
+  it('extracts extension codes from graphql error bodies', () => {
+    const body = JSON.stringify({
+      errors: [
+        { extensions: { code: 'INVALID_CREDENTIALS' } },
+        { extensions: { code: 'VALIDATION_ERROR' } },
+        { message: 'no code' },
+      ],
+    });
+
+    expect(extractErrorCodes(body)).toEqual([
+      'INVALID_CREDENTIALS',
+      'VALIDATION_ERROR',
+      'UNKNOWN',
+    ]);
+  });
+
+  it('returns an empty list for success or invalid bodies', () => {
+    expect(extractErrorCodes('{"data":{}}')).toEqual([]);
+    expect(extractErrorCodes('not-json')).toEqual([]);
   });
 });

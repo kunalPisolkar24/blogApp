@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from 'hono';
 import { createContext } from '../context.js';
 import { PayloadTooLargeError, ValidationError } from '../errors.js';
 import { hasErrors, operationName } from '../graphql/formatError.js';
-import type { Metrics } from '../observability/metrics.js';
+import { extractErrorCodes, type Metrics } from '../observability/metrics.js';
 import type { UserService } from '../user.service.js';
 
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024;
@@ -65,11 +65,19 @@ export function graphqlHandler({ apollo, userService, metrics }: GraphqlHandlerD
       },
       context: () => createContext(c, userService),
     });
+    const operation = operationName(body);
+    const hasBodyErrors =
+      response.body.kind === 'complete' && hasErrors(response.body.string);
     metrics.recordGraphqlOperation(
-      operationName(body),
-      response.body.kind === 'complete' && hasErrors(response.body.string) ? 'error' : 'success',
+      operation,
+      hasBodyErrors ? 'error' : 'success',
       (performance.now() - start) / 1000,
     );
+    if (response.body.kind === 'complete' && hasBodyErrors) {
+      for (const code of extractErrorCodes(response.body.string)) {
+        metrics.recordGraphqlError(operation, code);
+      }
+    }
 
     return new Response(response.body.kind === 'complete' ? response.body.string : null, {
       status: response.status ?? 200,

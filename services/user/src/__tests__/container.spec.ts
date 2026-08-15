@@ -12,6 +12,8 @@ vi.mock('../config/env.js', () => ({ env: mocks.env }));
 vi.mock('../lib/prisma.js', () => ({
   prisma: {},
   primaryDb: () => ({}),
+  primaryPool: { totalCount: 0, idleCount: 0, waitingCount: 0 },
+  replicaPool: null,
 }));
 vi.mock('../lib/redis.js', () => ({ redis: null }));
 

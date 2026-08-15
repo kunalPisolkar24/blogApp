@@ -141,6 +141,31 @@ describe('graphqlHandler', () => {
     const output = await metrics.getMetrics();
     expect(output).toContain('graphql_operations_total{operation="Me",status="error"} 1');
   });
+
+  it('records graphql error codes from the response body', async () => {
+    const metrics = new Metrics();
+    const app = buildApp(
+      fakeApollo({
+        body: {
+          kind: 'complete',
+          string:
+            '{"data":null,"errors":[{"message":"bad creds","extensions":{"code":"INVALID_CREDENTIALS"}}]}',
+        },
+      }),
+      metrics,
+    );
+
+    await app.request('/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: '{ me { id } }', operationName: 'Signin' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const output = await metrics.getMetrics();
+    expect(output).toContain(
+      'graphql_errors_total{operation="Signin",code="INVALID_CREDENTIALS"} 1',
+    );
+  });
 });
 
 describe('healthHandler', () => {

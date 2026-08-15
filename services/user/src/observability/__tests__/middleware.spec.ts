@@ -82,6 +82,39 @@ describe('request observability middleware', () => {
     expect(entry.status).toBe(500);
   });
 
+  it('tracks in-flight requests around the request lifecycle', async () => {
+    const { logger } = captureLogger();
+    const metrics = new Metrics();
+    const app = new Hono();
+    app.use(requestLogging(logger), requestMetrics(metrics));
+    app.get('/ping', async (c) => {
+      const inFlight = await metrics.getMetrics();
+      expect(inFlight).toContain('http_requests_in_flight 1');
+      return c.text('pong');
+    });
+
+    await app.request('/ping');
+
+    const after = await metrics.getMetrics();
+    expect(after).toContain('http_requests_in_flight 0');
+  });
+
+  it('decrements the in-flight gauge when the handler throws', async () => {
+    const { logger } = captureLogger();
+    const metrics = new Metrics();
+    const app = new Hono();
+    app.use(requestLogging(logger), requestMetrics(metrics));
+    app.onError((error, c) => c.json({ error: String(error) }, 500));
+    app.get('/boom', () => {
+      throw new Error('boom');
+    });
+
+    await app.request('/boom');
+
+    const after = await metrics.getMetrics();
+    expect(after).toContain('http_requests_in_flight 0');
+  });
+
   it('skips logging and metrics for the metrics endpoint', async () => {
     const { logger, lines } = captureLogger();
     const metrics = new Metrics();
