@@ -42,6 +42,46 @@ func TestRequestIDMiddlewareGenerates(t *testing.T) {
 	assert.NotEmpty(t, rec.Header().Get("X-Request-Id"))
 }
 
+func TestRequestIDMiddlewareRejectsOversized(t *testing.T) {
+	handler := RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := RequestIDFromContext(r.Context())
+		require.True(t, ok)
+		assert.LessOrEqual(t, len(id), maxRequestIDLen, "an oversized client id must be replaced by a server id")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Request-ID", string(make([]byte, 100)))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.LessOrEqual(t, len(rec.Header().Get("X-Request-Id")), maxRequestIDLen)
+}
+
+func TestRequestIDMiddlewareRejectsUnsafeCharset(t *testing.T) {
+	handler := RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := RequestIDFromContext(r.Context())
+		require.True(t, ok)
+		assert.NotEqual(t, "evil\nforged-log-line", id, "unsafe ids must not reach logs or headers")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Request-ID", "evil\nforged-log-line")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.NotContains(t, rec.Header().Get("X-Request-Id"), "\n")
+}
+
+func TestSanitizeRequestID(t *testing.T) {
+	assert.Equal(t, "abc-123.ABC_DEF", sanitizeRequestID("abc-123.ABC_DEF"))
+	assert.Equal(t, "", sanitizeRequestID(""))
+	assert.Equal(t, "", sanitizeRequestID(string(make([]byte, 65))))
+	assert.Equal(t, "", sanitizeRequestID("has space"))
+	assert.Equal(t, "", sanitizeRequestID("semi;colon"))
+}
+
 func TestRequestIDFromContextMissing(t *testing.T) {
 	_, ok := RequestIDFromContext(context.Background())
 	assert.False(t, ok)

@@ -5,6 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"net/http"
+	"net/http/httptest"
+
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
@@ -12,6 +16,7 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
@@ -266,8 +271,54 @@ func TestMapDomainError(t *testing.T) {
 	assert.Equal(t, "unauthorized", mapDomainError(domain.ErrUnauthorized).Message)
 	assert.Equal(t, "forbidden", mapDomainError(domain.ErrForbidden).Message)
 	assert.Equal(t, "not found", mapDomainError(domain.ErrNotFound).Message)
+
 	generic := mapDomainError(errors.New("boom"))
-	assert.Contains(t, generic.Error(), "boom")
+	assert.Equal(t, "internal error", generic.Message, "unexpected errors must never leak internal details")
+}
+
+func presentCtx() context.Context {
+	return graphql.WithOperationContext(context.Background(), &graphql.OperationContext{})
+}
+
+func TestPresentErrorMasksInternalDetails(t *testing.T) {
+	ctx := presentCtx()
+
+	out := PresentError(ctx, errors.New("mongo: connection refused at 10.0.0.5:27017"))
+	assert.Equal(t, "internal error", out.Message)
+	assert.NotContains(t, out.Message, "mongo")
+	assert.NotContains(t, out.Message, "10.0.0.5")
+}
+
+func TestPresentErrorPassesSafeMessages(t *testing.T) {
+	ctx := presentCtx()
+
+	for _, tc := range []struct {
+		err     error
+		message string
+	}{
+		{domain.ErrUnauthorized, "unauthorized"},
+		{domain.ErrForbidden, "forbidden"},
+		{domain.ErrNotFound, "not found"},
+	} {
+		out := PresentError(ctx, mapDomainError(tc.err))
+		assert.Equal(t, tc.message, out.Message)
+	}
+
+	out := PresentError(ctx, &gqlerror.Error{Message: "validation failed", Path: ast.Path{ast.PathName("createPost")}})
+	assert.Equal(t, "validation failed", out.Message)
+}
+
+func TestPresentErrorAddsRequestIDExtension(t *testing.T) {
+	handler := middleware.RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := graphql.WithOperationContext(r.Context(), &graphql.OperationContext{})
+		out := PresentError(ctx, mapDomainError(domain.ErrForbidden))
+		assert.Equal(t, "forbidden", out.Message)
+		rid, _ := out.Extensions["request_id"].(string)
+		assert.NotEmpty(t, rid)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
 }
 
 func TestMapDomainPostToModel(t *testing.T) {
