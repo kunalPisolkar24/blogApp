@@ -26,6 +26,45 @@ function hasErrors(body: string): boolean {
   }
 }
 
+const MAX_GRAPHQL_BODY_BYTES = 256 * 1024;
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  const declaredLength = Number(request.headers.get('content-length') ?? 0);
+  if (declaredLength > MAX_GRAPHQL_BODY_BYTES) {
+    throw new PayloadTooLargeError();
+  }
+
+  const body = request.body;
+  if (!body) {
+    throw new ValidationError('Request body must be valid JSON');
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      total += value.byteLength;
+      if (total > MAX_GRAPHQL_BODY_BYTES) {
+        throw new PayloadTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new ValidationError('Request body must be valid JSON');
+  }
+}
+
 function operationName(body: unknown): string {
   if (
     body !== null &&
@@ -108,12 +147,7 @@ export async function buildApp(): Promise<Hono> {
   });
 
   app.post('/graphql', async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      throw new ValidationError('Request body must be valid JSON');
-    }
+    const body = await readJsonBody(c.req.raw);
 
     const start = performance.now();
     const response = await apollo.executeHTTPGraphQLRequest({
