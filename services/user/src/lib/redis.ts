@@ -51,9 +51,12 @@ export async function closeRedis(): Promise<void> {
   }
 }
 
-export async function pingRedis(): Promise<'ok' | 'unavailable'> {
+export async function pingRedis(client: Redis | null = redis): Promise<'ok' | 'unavailable'> {
+  if (!client) {
+    return 'unavailable';
+  }
   try {
-    await redis?.ping();
+    await client.ping();
     return 'ok';
   } catch {
     return 'unavailable';
