@@ -1,7 +1,7 @@
 import type { User } from './generated/prisma/client.js';
 import type { AuthResponse, PaginationArgs, UserResponse } from './domain/user.js';
 import { toUserResponse } from './domain/user.js';
-import { InvalidCredentialsError } from './errors.js';
+import { InvalidCredentialsError, UserAlreadyExistsError } from './errors.js';
 import { CacheManager } from './lib/cache.js';
 import type { Metrics } from './observability/metrics.js';
 import { UserRepository } from './repositories/user.repository.js';
@@ -18,6 +18,10 @@ export class UserService {
   ) {}
 
   async signup(data: SignupInput): Promise<AuthResponse> {
+    const existing = await this.users.findByEmailOrUsername(data.email, data.username);
+    if (existing) {
+      throw new UserAlreadyExistsError();
+    }
     const password = await hashPassword(data.password);
     const user = await this.users.create({
       email: data.email,

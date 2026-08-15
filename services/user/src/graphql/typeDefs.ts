@@ -6,7 +6,7 @@ export const typeDefs = parse(`
   type User @key(fields: "id") {
     id: ID!
     username: String!
-    email: String!
+    email: String
     name: String
     bio: String
     avatarUrl: String

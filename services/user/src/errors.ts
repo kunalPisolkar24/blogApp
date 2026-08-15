@@ -38,6 +38,14 @@ export class ValidationError extends DomainError {
   }
 }
 
+export class PayloadTooLargeError extends DomainError {
+  readonly code = 'PAYLOAD_TOO_LARGE';
+  readonly httpStatus = 413;
+  constructor() {
+    super('Request body exceeds the maximum allowed size');
+  }
+}
+
 export class UnauthorizedError extends DomainError {
   readonly code = 'UNAUTHORIZED';
   readonly httpStatus = 401;
@@ -50,6 +58,9 @@ export function toDomainError(error: unknown): DomainError {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
       return new UserAlreadyExistsError();
+    }
+    if (error.code === 'P2023') {
+      return new ValidationError('Invalid cursor');
     }
     if (error.code === 'P2025') {
       return new UserNotFoundError();

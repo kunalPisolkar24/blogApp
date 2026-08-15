@@ -29,6 +29,7 @@ const prismaError = (code: string): Prisma.PrismaClientKnownRequestError =>
 const createUserMocks = () => ({
   user: {
     findUnique: vi.fn<(args: Prisma.UserFindUniqueArgs) => Promise<User | null>>(),
+    findFirst: vi.fn<(args: Prisma.UserFindFirstArgs) => Promise<User | null>>(),
     findMany: vi.fn<(args: Prisma.UserFindManyArgs) => Promise<User[]>>(),
     create: vi.fn<(args: Prisma.UserCreateArgs) => Promise<User>>(),
     update: vi.fn<(args: Prisma.UserUpdateArgs) => Promise<User>>(),
@@ -96,6 +97,26 @@ describe('UserRepository', () => {
       primary.user.findUnique.mockResolvedValue(null);
 
       await expect(repository.findByEmail('nobody@example.com')).resolves.toBeNull();
+    });
+  });
+
+  describe('findByEmailOrUsername', () => {
+    it('matches either the email or the username', async () => {
+      const user = makeUser();
+      prisma.user.findFirst.mockResolvedValue(user);
+
+      await expect(repository.findByEmailOrUsername('alice@example.com', 'alice')).resolves.toEqual(
+        user,
+      );
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { OR: [{ email: 'alice@example.com' }, { username: 'alice' }] },
+      });
+    });
+
+    it('returns null when neither matches', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(repository.findByEmailOrUsername('new@example.com', 'newbie')).resolves.toBeNull();
     });
   });
 

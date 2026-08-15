@@ -72,6 +72,10 @@ describe('updateProfileSchema', () => {
     expect(updateProfileSchema.safeParse({}).success).toBe(true);
   });
 
+  it('accepts a null name to clear it', () => {
+    expect(updateProfileSchema.safeParse({ name: null }).success).toBe(true);
+  });
+
   it('rejects an empty name', () => {
     expect(updateProfileSchema.safeParse({ name: '' }).success).toBe(false);
   });

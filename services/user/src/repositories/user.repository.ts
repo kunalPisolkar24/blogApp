@@ -30,6 +30,14 @@ export class UserRepository {
     return this.timed('findByEmail', () => this.primary.user.findUnique({ where: { email } }));
   }
 
+  async findByEmailOrUsername(email: string, username: string): Promise<User | null> {
+    return this.timed('findByEmailOrUsername', () =>
+      this.prisma.user.findFirst({
+        where: { OR: [{ email }, { username }] },
+      }),
+    );
+  }
+
   async findById(id: string): Promise<User | null> {
     return this.timed('findById', () => this.prisma.user.findUnique({ where: { id } }));
   }
