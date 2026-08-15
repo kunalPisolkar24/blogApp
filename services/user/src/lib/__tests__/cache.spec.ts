@@ -61,6 +61,22 @@ describe('CacheManager', () => {
       });
     });
 
+    it('records a read_error metric when redis.get fails', async () => {
+      const metrics = {
+        recordCacheRead: vi.fn(),
+        recordCacheInvalidation: vi.fn(),
+      };
+      const cacheWithMetrics = new CacheManager(
+        redis as unknown as Redis,
+        metrics as unknown as import('../../observability/metrics.js').Metrics,
+      );
+      redis.get.mockRejectedValue(new Error('redis unavailable'));
+
+      await cacheWithMetrics.read('user:u1', 3600000, miss({ id: 'u1' }));
+
+      expect(metrics.recordCacheRead).toHaveBeenCalledWith('read_error');
+    });
+
     it('still returns the value when the cache write fails', async () => {
       redis.get.mockResolvedValue(null);
       redis.set.mockRejectedValue(new Error('write failed'));

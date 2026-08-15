@@ -20,4 +20,12 @@ describe('pingRedis', () => {
 
     await expect(pingRedis(client)).resolves.toBe('unavailable');
   });
+
+  it('returns unavailable when the ping hangs past the timeout', async () => {
+    const client = {
+      ping: vi.fn(() => new Promise((resolve) => setTimeout(() => resolve('PONG'), 5000))),
+    } as unknown as Redis;
+
+    await expect(pingRedis(client)).resolves.toBe('unavailable');
+  });
 });

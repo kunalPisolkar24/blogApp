@@ -30,7 +30,7 @@ function fakeApollo(response: {
   };
 }
 
-function buildApp(apollo: FakeApollo, metrics: Metrics): Hono {
+function buildApp(apollo: FakeApollo, metrics: Metrics, timeoutMs?: number): Hono {
   const app = new Hono();
   app.use(requestId());
   app.onError((error, c) => {
@@ -45,6 +45,7 @@ function buildApp(apollo: FakeApollo, metrics: Metrics): Hono {
       apollo: apollo as unknown as ApolloServer,
       userService: {} as UserService,
       metrics,
+      timeoutMs,
     }),
   );
   return app;
@@ -167,6 +168,30 @@ describe('graphqlHandler', () => {
     );
   });
 
+  it('returns a clean timeout error when the operation exceeds the bound', async () => {
+    const metrics = new Metrics();
+    const slowApollo = {
+      executeHTTPGraphQLRequest: vi.fn(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ body: { kind: 'complete', string: '{}' } }), 20_000),
+          ),
+      ),
+    } as unknown as Pick<ApolloServer, 'executeHTTPGraphQLRequest'>;
+    const app = buildApp(slowApollo, metrics, 10);
+
+    const res = await app.request('/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query: '{ me { id } }' }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(res.status).toBe(504);
+    expect(await res.json()).toEqual({
+      error: { code: 'GRAPHQL_TIMEOUT', message: 'GraphQL operation timed out' },
+    });
+  });
+
   it('buckets unknown operation names into the unknown label', async () => {
     const metrics = new Metrics();
     const app = buildApp(
@@ -196,23 +221,32 @@ describe('graphqlHandler', () => {
 });
 
 describe('healthHandler', () => {
-  it('returns ok with the redis status', async () => {
+  it('returns ok with db and redis status', async () => {
     const app = new Hono();
-    app.get('/health', healthHandler(() => Promise.resolve('ok')));
+    app.get(
+      '/health',
+      healthHandler({ pingDb: () => Promise.resolve('ok'), pingRedis: () => Promise.resolve('ok') }),
+    );
 
     const res = await app.request('/health');
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: 'ok', redis: 'ok' });
+    expect(await res.json()).toEqual({ status: 'ok', db: 'ok', redis: 'ok' });
   });
 
-  it('reports redis as unavailable when the ping fails', async () => {
+  it('reports db and redis as unavailable when the pings fail', async () => {
     const app = new Hono();
-    app.get('/health', healthHandler(() => Promise.resolve('unavailable')));
+    app.get(
+      '/health',
+      healthHandler({
+        pingDb: () => Promise.resolve('unavailable'),
+        pingRedis: () => Promise.resolve('unavailable'),
+      }),
+    );
 
     const res = await app.request('/health');
 
-    expect(await res.json()).toEqual({ status: 'ok', redis: 'unavailable' });
+    expect(await res.json()).toEqual({ status: 'ok', db: 'unavailable', redis: 'unavailable' });
   });
 });
 
