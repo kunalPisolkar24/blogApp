@@ -52,8 +52,11 @@ jobs:
           DATABASE_URL_MIGRATE: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: npx prisma generate
 
-      - name: Run Lint
-        run: npm run lint
+      - name: Run TypeScript Lint
+        run: npx tsc --noEmit
+
+      - name: Run ESLint
+        run: npx eslint .
 
       - name: Run Tests
         run: npm run test

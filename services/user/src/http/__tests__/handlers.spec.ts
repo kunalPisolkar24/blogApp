@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { requestId } from 'hono/request-id';
 import client from 'prom-client';
-import { DomainError, ValidationError } from '../../errors.js';
+import { DomainError } from '../../errors.js';
 import { graphqlHandler, healthHandler, metricsHandler } from '../handlers.js';
 import { Metrics } from '../../observability/metrics.js';
 import type { UserService } from '../../user.service.js';
