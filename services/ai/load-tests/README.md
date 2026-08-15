@@ -40,6 +40,7 @@ threshold failures cause the Make target to fail.
 | `generate-post` | `GeneratePost` | ~400-char prompt, full JSON parse + sanitize |
 | `generate-search` | `IndexPost` (seed) + `SearchPosts` | seeds 7 posts in `setup()`, then searches; every 10th iteration is a gibberish query that must return 0 results (score threshold — only asserted with fake embeddings; a real model may find weak similarity) |
 | `generate-related` | `IndexPost` (seed) + `RelatedPosts` | seeds 6 posts plus an identical-text twin each, so every post has a guaranteed nearest neighbour; asserts results, twin on top, self excluded |
+| `generate-chat` | `IndexPost` (seed) + `ChatAnswer` (stream) | seeds the same 6-post corpus, then streams grounded answers; asserts the stream completes with cited posts, gibberish every 10th iteration must cite nothing (fake embeddings only) |
 | `mixed` (default) | all three | weighted mix, `WEIGHTS` env tunable |
 
 ## Store and embedding modes
@@ -71,6 +72,8 @@ for the `generate-*` LLM scenarios.
 | `EMBEDDING_MODE` | `fake` | `fake` = deterministic, `ollama` = real model (starts the `ollama` container) |
 | `EMBEDDING_MODEL` | `snowflake-arctic-embed2:568m` | Model used by the `ollama` container |
 | `SEARCH_P95` `SEARCH_P99` | `250`/`600` | Search/related latency budgets; auto-widened to `2000`/`4000` for embedding-real runs, still overridable |
+| `CHAT_P95` `CHAT_P99` | `500`/`1500` | Chat latency budgets; auto-widened to `2000`/`4000` for embedding-real and `15000`/`30000` for `LLM_MODE=real`, still overridable |
+| `LLM_API_KEY` | unset | Required only for `LLM_MODE=real` runs |
 | `LOG_LEVEL` | `WARNING` | Quiet access logs during the run |
 | `SVC_MEM` `QDRANT_MEM` `OLLAMA_MEM` `K6_MEM` | `512M` `256M` `2G` `384M` | Container memory caps |
 
@@ -97,6 +100,11 @@ make -C services/ai load-test-related VECTOR_MODE=fake RPS=200 DURATION=1m
 make -C services/ai load-test-related EMBEDDING_MODE=ollama RPS=20 DURATION=1m
 make -C services/ai load-test-search EMBEDDING_MODE=ollama SEARCH_P95=3000 RPS=20 DURATION=1m
 
+# Chat: fake LLM (default), real embeddings, or the full real stack
+make -C services/ai load-test-chat RPS=20 DURATION=1m
+make -C services/ai load-test-chat EMBEDDING_MODE=ollama RPS=10 DURATION=1m
+make -C services/ai load-test-chat LLM_MODE=real EMBEDDING_MODE=ollama RPS=2 DURATION=1m
+
 # Post-heavy mix
 make -C services/ai load-test WEIGHTS=post:70,summary:20,tags:10 DURATION=1m
 ```
@@ -106,10 +114,13 @@ make -C services/ai load-test WEIGHTS=post:70,summary:20,tags:10 DURATION=1m
 - `grpc_req_duration` — built-in latency trend, thresholds p(95)<100ms, p(99)<250ms
   (search/related widen and tune theirs via `SEARCH_P95`/`SEARCH_P99`)
 - `summary_duration` / `tags_duration` / `post_duration` — per-RPC custom trends
+- `chat_duration` — streaming chat latency trend, thresholded via
+  `CHAT_P95`/`CHAT_P99` (an LLM answer per call dominates)
 - `checks` — every RPC must return gRPC status OK (0); `generate-search` also
   asserts relevant queries return results and gibberish returns none
   (gibberish only binds with fake embeddings, see "Store and embedding modes");
-  `generate-related` asserts every post finds its twin and never itself
+  `generate-related` asserts every post finds its twin and never itself;
+  `generate-chat` asserts the stream completes and cites retrieved posts
 
 ## Inspecting state
 

@@ -7,17 +7,22 @@ independent Docker Compose rigs.
 
 ### Service profile (`compose.loadtest.yml`)
 
-k6 exercises the GraphQL API (`content-service:4002`). Only the service's own
-dependencies are running: Mongo, Redis and Kafka (no worker, no AI service).
+k6 exercises the GraphQL API (`content-service:4002`). The service's own
+dependencies (Mongo, Redis, Kafka) plus the AI stack run: qdrant and the
+AI service (fake LLM/embeddings by default, so no API key is needed). The
+AI service is what backs chat answers; the other endpoints fall back to
+the noop path when the AI service is down.
 
 - **Seed** — `setup()` mints `SEED_USERS` JWTs and creates `SEED_POST_COUNT`
-  posts through the API, so read queries have a populated dataset. On the
-  service, `generatePostContent`/`generateTags` fall back to the noop path
-  because no AI service is running.
+  posts through the API, so read queries have a populated dataset. The
+  `chat.js` script additionally indexes a factual corpus into the AI
+  service over gRPC, so answers are grounded in real content.
 - **Scripts**
-  - `mixed.js` — weighted mix of reads and writes (`WEIGHTS` variable)
+  - `mixed.js` — weighted mix of reads, writes and chat (`WEIGHTS` variable)
   - `reads.js` — posts list, post by id, tags, author posts
   - `writes.js` — create/update/delete; writers only modify posts they created
+  - `chat.js` — chat CRUD plus grounded `askChat` traffic; every 10th ask
+    is gibberish to verify irrelevant queries get no citations
 - **JWT** — minted in k6 with `k6/crypto` HMAC-SHA256 using `JWT_SECRET`,
   matching the service's `JwtIssuer`/`JwtAudience` defaults.
 
@@ -46,6 +51,7 @@ the search worker can index them (the AI service requires hex point ids).
 make load-test            # service profile, default script (mixed)
 make load-test-reads      # service profile, reads only
 make load-test-writes     # service profile, writes only
+make load-test-chat       # service profile, chat only
 make load-test-worker     # worker profile (producer + worker + k6)
 ```
 
@@ -63,13 +69,19 @@ Variables (defaults in brackets):
 | `PARTITIONS`    | 3       | partitions for the `posts` topic          |
 | `SEARCH_WORKER_CONCURRENCY` | 3 | readers for the content search worker  |
 | `JWT_SECRET`    | local-dev-secret | secret used for minting JWTs      |
+| `LLM_MODE`      | fake    | `fake` (deterministic, no key) or `real`  |
+| `EMBEDDING_MODE`| fake    | `fake` or `ollama` (needs model pull)     |
+| `LLM_API_KEY`   | (none)  | Lightning AI key for `LLM_MODE=real`      |
+| `CHAT_P95`/`CHAT_P99` | 500/1500 | chat latency budgets (ms), widened automatically for ollama/real LLM |
 | `MONGO_MEM`/`REDIS_MEM`/`SVC_MEM`/`QDRANT_MEM`/`K6_MEM` | 768M/640M/768M/256M/192M | memory limits |
 
 Examples:
 
 ```sh
-make load-test RPS=100 DURATION=2m WEIGHTS=posts:40,post:20,tag:10,author:10,create:10,update:5,delete:5
+make load-test RPS=100 DURATION=2m WEIGHTS=posts:40,post:20,tag:10,author:10,create:10,update:5,delete:5,chat:5
 make load-test-reads RPS=200 DURATION=1m SEED_POST_COUNT=5000
+make load-test-chat RPS=20 DURATION=2m
+make load-test-chat RPS=10 DURATION=2m LLM_MODE=real EMBEDDING_MODE=ollama LLM_API_KEY=sk-lit-...
 make load-test-worker RPS=200 DURATION=2m PARTITIONS=6 VUS=10
 ```
 
@@ -79,7 +91,9 @@ Cleanup: `make load-test-clean` (down + remove containers), `make load-test-stop
 ## Thresholds
 
 Service profile: read `p(95)<300ms` / `p(99)<800ms`, write `p(95)<500ms` /
-`p(99)<1200ms`, error rate `<1%` (grouped via request tags).
+`p(99)<1200ms`, error rate `<1%` (grouped via request tags). Chat: asks use
+the `CHAT_P95`/`CHAT_P99` budgets, which the Makefile widens automatically
+(500/1500ms fake, 2000/4000ms ollama embeddings, 15000/30000ms real LLM).
 
 Worker profile: lag `p(95)<500` for both workers, no failed messages,
 `worker_skipped max>0`, `search_indexed max>0`, `search_dlq max<1`, scrape

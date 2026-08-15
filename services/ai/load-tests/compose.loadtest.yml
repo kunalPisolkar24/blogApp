@@ -3,6 +3,7 @@ name: topos-ai-loadtest
 x-ai-service-env: &ai-service-env
   PORT: 50051
   LLM_MODE: ${LLM_MODE:-fake}
+  LLM_API_KEY: ${LLM_API_KEY:-}
   EMBEDDING_MODE: ${EMBEDDING_MODE:-fake}
   EMBEDDING_URL: http://ollama:11434
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}
@@ -101,6 +102,8 @@ services:
       EMBEDDING_MODE: ${EMBEDDING_MODE:-fake}
       SEARCH_P95: ${SEARCH_P95:-250}
       SEARCH_P99: ${SEARCH_P99:-600}
+      CHAT_P95: ${CHAT_P95:-500}
+      CHAT_P99: ${CHAT_P99:-1500}
     depends_on:
       ai-service:
         condition: service_healthy

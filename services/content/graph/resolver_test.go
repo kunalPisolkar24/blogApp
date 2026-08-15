@@ -27,7 +27,8 @@ func newTestResolver(t *testing.T, postRepo *testutil.MockPostRepository, tagRep
 
 	postSvc := service.NewPostService(postRepo, tagRepo, nil, nil, nil)
 	tagSvc := service.NewTagService(tagRepo, nil)
-	return NewResolver(postSvc, tagSvc), postSvc, tagSvc
+	chatSvc := service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{})
+	return NewResolver(postSvc, tagSvc, chatSvc), postSvc, tagSvc
 }
 
 func authenticatedContext(userID string) context.Context {
@@ -87,7 +88,7 @@ func TestQueryResolverSearchPosts(t *testing.T) {
 		return []*domain.Post{{ID: "p_1", Title: "Hello"}}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil))
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
 
 	result, err := resolver.Query().SearchPosts(context.Background(), "go", intPtr(1), intPtr(10))
 
@@ -193,7 +194,7 @@ func TestMutationResolverGenerateTags(t *testing.T) {
 		return []string{"go", "web"}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, nil, aiSvc, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(nil, nil))
+	resolver := NewResolver(postSvc, service.NewTagService(nil, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
 
 	tags, err := resolver.Mutation().GenerateTags(authenticatedContext("u_1"), "Go", "web development")
 	require.NoError(t, err)
@@ -206,7 +207,7 @@ func TestMutationResolverGeneratePostContent(t *testing.T) {
 		return &domain.GeneratedPost{Title: "T", Body: "B", Summary: "S", Tags: []string{"go"}}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, nil, aiSvc, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(nil, nil))
+	resolver := NewResolver(postSvc, service.NewTagService(nil, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
 
 	post, err := resolver.Mutation().GeneratePostContent(authenticatedContext("u_1"), "prompt")
 	require.NoError(t, err)
@@ -237,7 +238,7 @@ func TestPostResolverRelated(t *testing.T) {
 		return []*domain.Post{{ID: "p_2", Title: "Similar"}}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil))
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
 
 	posts, err := resolver.Post().Related(context.Background(), &model.Post{ID: "p_1"}, intPtr(5))
 
@@ -253,7 +254,7 @@ func TestPostResolverRelatedDefaultsLimit(t *testing.T) {
 		return &domain.SearchResult{}, nil
 	}}
 	postSvc := service.NewPostService(&testutil.MockPostRepository{}, &testutil.MockTagRepository{}, ai, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil))
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
 
 	posts, err := resolver.Post().Related(context.Background(), &model.Post{ID: "p_1"}, nil)
 	require.NoError(t, err)
@@ -285,6 +286,94 @@ func TestMapDomainPostToModel(t *testing.T) {
 func TestDeref(t *testing.T) {
 	assert.Equal(t, 0, deref(nil))
 	assert.Equal(t, 42, deref(intPtr(42)))
+}
+
+func TestMutationResolverCreateChat(t *testing.T) {
+	repo := &testutil.MockChatRepository{}
+	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+
+	chat, err := resolver.Mutation().CreateChat(authenticatedContext("u_1"), strPtr("My Chat"))
+
+	require.NoError(t, err)
+	assert.Equal(t, "My Chat", chat.Title)
+	assert.NotEmpty(t, chat.CreatedAt)
+}
+
+func TestMutationResolverCreateChatUnauthorized(t *testing.T) {
+	repo := &testutil.MockChatRepository{}
+	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+
+	_, err := resolver.Mutation().CreateChat(context.Background(), strPtr("My Chat"))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unauthorized")
+}
+
+func TestMutationResolverAskChat(t *testing.T) {
+	ai := &testutil.MockAIService{ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+		return &domain.ChatAnswer{Content: "Topos is a blog platform.", CitedPostIDs: []string{"p_1"}}, nil
+	}}
+	repo := &testutil.MockChatRepository{UserID: "u_1"}
+	chatSvc := service.NewChatService(repo, ai)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+
+	msg, err := resolver.Mutation().AskChat(authenticatedContext("u_1"), "c_1", "what is topos?")
+
+	require.NoError(t, err)
+	assert.Equal(t, model.MessageRoleAssistant, msg.Role)
+	assert.Equal(t, "Topos is a blog platform.", msg.Content)
+	assert.Equal(t, []string{"p_1"}, msg.CitedPostIds)
+	assert.NotEmpty(t, msg.CreatedAt)
+}
+
+func TestQueryResolverChats(t *testing.T) {
+	repo := &testutil.MockChatRepository{
+		UserID: "u_1",
+		ListByUserFn: func(ctx context.Context, userID string) ([]*domain.Chat, error) {
+			assert.Equal(t, "u_1", userID)
+			return []*domain.Chat{{ID: "c_1", UserID: "u_1", Title: "My Chat"}}, nil
+		},
+	}
+	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+
+	chats, err := resolver.Query().Chats(authenticatedContext("u_1"))
+
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	assert.Equal(t, "c_1", chats[0].ID)
+	assert.Equal(t, "My Chat", chats[0].Title)
+}
+
+func TestQueryResolverChatsUnauthorized(t *testing.T) {
+	chatSvc := service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{})
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+
+	_, err := resolver.Query().Chats(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unauthorized")
+}
+
+func TestMapDomainChatMessageToModel(t *testing.T) {
+	msg := mapDomainChatMessageToModel(nil)
+	assert.Nil(t, msg)
+
+	mapped := mapDomainChatMessageToModel(&domain.ChatMessage{
+		ID:           "m_1",
+		ChatID:       "c_1",
+		Role:         domain.ChatMessageRoleAssistant,
+		Content:      "hi",
+		CitedPostIDs: []string{"p_1"},
+	})
+	require.NotNil(t, mapped)
+	assert.Equal(t, model.MessageRoleAssistant, mapped.Role)
+	assert.Equal(t, []string{"p_1"}, mapped.CitedPostIds)
+
+	userMapped := mapDomainChatMessageToModel(&domain.ChatMessage{Role: domain.ChatMessageRoleUser})
+	assert.Equal(t, model.MessageRoleUser, userMapped.Role)
 }
 
 func intPtr(v int) *int       { return &v }

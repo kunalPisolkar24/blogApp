@@ -1,8 +1,8 @@
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable
-from typing import ClassVar as _ClassVar, Optional as _Optional
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -111,3 +111,45 @@ class RelatedResponse(_message.Message):
     POST_IDS_FIELD_NUMBER: _ClassVar[int]
     post_ids: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, post_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class EmbedRequest(_message.Message):
+    __slots__ = ("text",)
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    def __init__(self, text: _Optional[str] = ...) -> None: ...
+
+class EmbedResponse(_message.Message):
+    __slots__ = ("vector",)
+    VECTOR_FIELD_NUMBER: _ClassVar[int]
+    vector: _containers.RepeatedScalarFieldContainer[float]
+    def __init__(self, vector: _Optional[_Iterable[float]] = ...) -> None: ...
+
+class ChatMessage(_message.Message):
+    __slots__ = ("role", "content")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    role: str
+    content: str
+    def __init__(self, role: _Optional[str] = ..., content: _Optional[str] = ...) -> None: ...
+
+class ChatAnswerRequest(_message.Message):
+    __slots__ = ("query", "history", "top_k")
+    QUERY_FIELD_NUMBER: _ClassVar[int]
+    HISTORY_FIELD_NUMBER: _ClassVar[int]
+    TOP_K_FIELD_NUMBER: _ClassVar[int]
+    query: str
+    history: _containers.RepeatedCompositeFieldContainer[ChatMessage]
+    top_k: int
+    def __init__(self, query: _Optional[str] = ..., history: _Optional[_Iterable[_Union[ChatMessage, _Mapping]]] = ..., top_k: _Optional[int] = ...) -> None: ...
+
+class ChatChunk(_message.Message):
+    __slots__ = ("delta", "done", "cited_post_ids", "error")
+    DELTA_FIELD_NUMBER: _ClassVar[int]
+    DONE_FIELD_NUMBER: _ClassVar[int]
+    CITED_POST_IDS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    delta: str
+    done: bool
+    cited_post_ids: _containers.RepeatedScalarFieldContainer[str]
+    error: str
+    def __init__(self, delta: _Optional[str] = ..., done: _Optional[bool] = ..., cited_post_ids: _Optional[_Iterable[str]] = ..., error: _Optional[str] = ...) -> None: ...

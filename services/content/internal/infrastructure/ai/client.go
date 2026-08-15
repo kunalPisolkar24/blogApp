@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +24,7 @@ const (
 	deleteTimeout  = 10 * time.Second
 	searchTimeout  = 10 * time.Second
 	relatedTimeout = 5 * time.Second
+	chatTimeout    = 120 * time.Second
 )
 
 // errCircuitOpen is returned by IndexPost/DeletePost while the breaker is
@@ -134,6 +137,19 @@ func (c *resilientClient) RelatedPosts(ctx context.Context, postID string, limit
 		slog.Warn("ai related posts failed, using fallback", "error", err)
 	}
 	return c.fallback.RelatedPosts(ctx, postID, limit)
+}
+
+func (c *resilientClient) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+	if c.breaker.canProceed() {
+		answer, err := c.primary.ChatAnswer(ctx, query, history, topK)
+		if err == nil {
+			c.breaker.recordSuccess()
+			return answer, nil
+		}
+		c.breaker.recordFailure()
+		slog.Warn("ai chat answer failed, using fallback", "error", err)
+	}
+	return c.fallback.ChatAnswer(ctx, query, history, topK)
 }
 
 func (c *resilientClient) Close() error {
@@ -257,6 +273,60 @@ func (c *grpcClient) RelatedPosts(ctx context.Context, postID string, limit int)
 		PostIDs: resp.PostIds,
 		Total:   len(resp.PostIds),
 	}, nil
+}
+
+// ChatAnswer streams the AI response over gRPC and collects the full
+// answer plus the cited post ids. A mid-stream error reported by the
+// service fails the call so nothing incomplete is persisted.
+func (c *grpcClient) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
+	defer cancel()
+
+	req := &pb.ChatAnswerRequest{
+		Query:   query,
+		History: mapTurnsToProto(history),
+		TopK:    uint32(topK),
+	}
+
+	stream, err := c.client.ChatAnswer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var sb strings.Builder
+	var cited []string
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if chunk.Error != "" {
+			return nil, errors.New(chunk.Error)
+		}
+		sb.WriteString(chunk.Delta)
+		if chunk.Done {
+			cited = chunk.CitedPostIds
+		}
+	}
+
+	return &domain.ChatAnswer{
+		Content:      sb.String(),
+		CitedPostIDs: cited,
+	}, nil
+}
+
+func mapTurnsToProto(turns []domain.ChatTurn) []*pb.ChatMessage {
+	msgs := make([]*pb.ChatMessage, 0, len(turns))
+	for _, turn := range turns {
+		msgs = append(msgs, &pb.ChatMessage{
+			Role:    string(turn.Role),
+			Content: turn.Content,
+		})
+	}
+	return msgs
 }
 
 func (c *grpcClient) Close() error {

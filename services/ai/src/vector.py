@@ -69,6 +69,15 @@ class SearchResult:
     total: int
 
 
+@dataclass
+class RetrievedPost:
+    """A post retrieved as grounding context for the chat assistant."""
+
+    post_id: str
+    title: str
+    body: str
+
+
 def _embedding_text(title: str, body: str, summary: str) -> str:
     """Join the searchable parts of a post into a single embedding text."""
     body_text = clean_html(body)[: settings.EMBEDDING_MAX_CHARS]
@@ -115,6 +124,9 @@ class SearchIndex:
     ) -> None:
         text = _embedding_text(title, body, summary)
         dense = (await self._embeddings.embed([text]))[0]
+        # The cleaned body is stored as payload so the chat assistant can
+        # ground its answers in the retrieved excerpts without a round
+        # trip to any other service.
         await self._client.upsert(
             collection_name=settings.QDRANT_COLLECTION,
             points=[
@@ -126,6 +138,7 @@ class SearchIndex:
                     },
                     payload={
                         "title": title,
+                        "body": clean_html(body)[: settings.EMBEDDING_MAX_CHARS],
                         "summary": summary,
                         "tags": tags,
                         "created_at": created_at,
@@ -209,6 +222,36 @@ class SearchIndex:
             post_ids=post_ids[offset : offset + limit], total=len(post_ids)
         )
 
+    async def retrieve_by_vector(
+        self, vector: list[float], top_k: int
+    ) -> list[RetrievedPost]:
+        """Return the top-k posts closest to a query vector, as grounding
+        context for the chat assistant.
+
+        Only the dense channel is used: the query was already embedded by
+        the caller (via the same path exposed by the Embed RPC), and the
+        score threshold keeps irrelevant points out of the context.
+        """
+        response = await self._client.query_points(
+            collection_name=settings.QDRANT_COLLECTION,
+            query=vector,
+            using=DENSE_VECTOR,
+            limit=top_k,
+            score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+        )
+
+        posts: list[RetrievedPost] = []
+        for point in response.points:
+            payload = point.payload or {}
+            posts.append(
+                RetrievedPost(
+                    post_id=_post_id_from_point(point.id),
+                    title=payload.get("title", ""),
+                    body=payload.get("body", ""),
+                )
+            )
+        return posts
+
     async def close(self) -> None:
         await self._client.close()
 
@@ -246,6 +289,8 @@ class _StoredPost:
     post_id: str
     dense: list[float]
     tokens: dict[str, float]
+    title: str
+    body: str
 
 
 class MemoryIndex:
@@ -284,6 +329,8 @@ class MemoryIndex:
             post_id=post_id,
             dense=dense,
             tokens=sparse_embed(text),
+            title=title,
+            body=clean_html(body)[: settings.EMBEDDING_MAX_CHARS],
         )
 
     async def delete(self, post_id: str) -> None:
@@ -343,6 +390,21 @@ class MemoryIndex:
 
         fused = _rrf_fuse(rankings)[:window]
         return SearchResult(post_ids=fused[offset : offset + limit], total=len(fused))
+
+    async def retrieve_by_vector(
+        self, vector: list[float], top_k: int
+    ) -> list[RetrievedPost]:
+        """Mirror SearchIndex.retrieve_by_vector over in-memory posts."""
+        scored = [
+            (post, _cosine_similarity(vector, post.dense))
+            for post in self._posts.values()
+        ]
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return [
+            RetrievedPost(post_id=post.post_id, title=post.title, body=post.body)
+            for post, score in scored[:top_k]
+            if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
+        ]
 
     async def close(self) -> None:
         return None

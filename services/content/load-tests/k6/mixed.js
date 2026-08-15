@@ -16,7 +16,7 @@ import {
 const vus = parseInt(__ENV.VUS) || 20;
 const duration = __ENV.DURATION || '30s';
 const rps = parseInt(__ENV.RPS) || 50;
-const weights = parseWeights(__ENV.WEIGHTS || 'posts:30,post:20,tag:10,author:10,create:15,update:10,delete:5');
+const weights = parseWeights(__ENV.WEIGHTS || 'posts:30,post:20,tag:10,author:10,create:15,update:10,delete:5,chat:5');
 
 export const options = getDefaultOptions({ vus, duration, rps });
 
@@ -62,9 +62,28 @@ const DELETE_MUTATION = `
     mutation($id: ID!) { deletePost(id: $id) }
 `;
 
+const CREATE_CHAT_MUTATION = `
+    mutation($title: String) { createChat(title: $title) { id } }
+`;
+
+const ASK_MUTATION = `
+    mutation($chatId: ID!, $query: String!) {
+        askChat(chatId: $chatId, query: $query) { id content }
+    }
+`;
+
+// Chat answers are not grounded in this script (no AI indexing step), so
+// only the reply round trip is asserted, not citations.
+const CHAT_QUESTIONS = [
+    'what can you tell me about this platform?',
+    'how do I get started here?',
+    'what topics are covered?',
+];
+
 // Posts created by this VU during the run; updates and deletes only touch
 // these, so the seeded dataset stays stable.
 const owned = [];
+let chatId = null;
 
 export default function (data) {
     const token = mintToken(`u_vu_${__VU}`);
@@ -134,6 +153,32 @@ export default function (data) {
             const res = postGraphQL(DELETE_MUTATION, { id }, token, 'write');
             writeDuration.add(Date.now() - start);
             checkOk(res, 'delete');
+            break;
+        }
+        case 'chat': {
+            if (!chatId) {
+                const res = postGraphQL(CREATE_CHAT_MUTATION, {}, token, 'write');
+                const body = JSON.parse(res.body);
+                if (checkOk(res, 'create chat') && body.data && body.data.createChat) {
+                    chatId = body.data.createChat.id;
+                }
+                break;
+            }
+            const start = Date.now();
+            const res = postGraphQL(
+                ASK_MUTATION,
+                { chatId, query: CHAT_QUESTIONS[__ITER % CHAT_QUESTIONS.length] },
+                token,
+                'write',
+            );
+            writeDuration.add(Date.now() - start);
+            if (checkOk(res, 'ask chat')) {
+                const body = JSON.parse(res.body);
+                check(body, {
+                    'chat reply is non-empty': (r) =>
+                        r.data && r.data.askChat && r.data.askChat.content.length > 0,
+                });
+            }
             break;
         }
     }

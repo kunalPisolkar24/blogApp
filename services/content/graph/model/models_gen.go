@@ -9,6 +9,22 @@ import (
 	"strconv"
 )
 
+type Chat struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type ChatMessage struct {
+	ID           string      `json:"id"`
+	ChatID       string      `json:"chatId"`
+	Role         MessageRole `json:"role"`
+	Content      string      `json:"content"`
+	CitedPostIds []string    `json:"citedPostIds"`
+	CreatedAt    string      `json:"createdAt"`
+}
+
 type CreatePostInput struct {
 	Title    string   `json:"title"`
 	Body     string   `json:"body"`
@@ -25,6 +41,13 @@ type GeneratedPost struct {
 }
 
 type Mutation struct {
+}
+
+type PaginatedMessages struct {
+	Messages      []*ChatMessage `json:"messages"`
+	TotalPages    int            `json:"totalPages"`
+	CurrentPage   int            `json:"currentPage"`
+	TotalMessages int            `json:"totalMessages"`
 }
 
 type PaginatedPosts struct {
@@ -77,6 +100,61 @@ type User struct {
 }
 
 func (User) IsEntity() {}
+
+type MessageRole string
+
+const (
+	MessageRoleUser      MessageRole = "USER"
+	MessageRoleAssistant MessageRole = "ASSISTANT"
+)
+
+var AllMessageRole = []MessageRole{
+	MessageRoleUser,
+	MessageRoleAssistant,
+}
+
+func (e MessageRole) IsValid() bool {
+	switch e {
+	case MessageRoleUser, MessageRoleAssistant:
+		return true
+	}
+	return false
+}
+
+func (e MessageRole) String() string {
+	return string(e)
+}
+
+func (e *MessageRole) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = MessageRole(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid MessageRole", str)
+	}
+	return nil
+}
+
+func (e MessageRole) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *MessageRole) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e MessageRole) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
 
 type SummaryStatus string
 

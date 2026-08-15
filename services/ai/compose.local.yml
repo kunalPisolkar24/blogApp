@@ -53,7 +53,7 @@ services:
       embedding-service:
         condition: service_healthy
     entrypoint: ["sh", "-c"]
-    command: "ollama pull ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}"
+    command: "ollama serve >/dev/null 2>&1 & sleep 3; ollama pull ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}; wait"
     volumes:
       - embedding_data:/root/.ollama
     networks:

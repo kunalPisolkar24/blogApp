@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import grpc
@@ -12,24 +12,27 @@ import grpc
 from src.config import settings
 from src.domain.models import GeneratedPost
 from src.domain.prompts import (
+    CHAT_SYSTEM_PROMPT,
     POST_PROMPT,
     SUMMARY_PROMPT,
     TAGS_PROMPT,
+    chat_user_prompt,
     post_user_prompt,
 )
 from src.domain.sanitize import sanitize_post_html
 from src.domain.text import clean_html
-from src.embeddings import EmbeddingError
+from src.embeddings import EmbeddingError, EmbeddingProvider
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
-from src.llm import LLMError, LLMProvider
+from src.llm import LLMError, LLMProvider, estimate_tokens
 from src.observability import metrics
 from src.observability.tracing import get_span_ids
-from src.vector import SearchStore
+from src.vector import RetrievedPost, SearchStore
 
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("access")
 
 Handler = Callable[..., Awaitable[Any]]
+StreamHandler = Callable[..., AsyncIterator[Any]]
 
 
 class TooLargeError(Exception):
@@ -52,6 +55,29 @@ def _extract_json(raw: str) -> str:
     return match.group(1).strip() if match else raw.strip()
 
 
+CITATION_RE = re.compile(r"\[(\d+)\]")
+
+
+def _cited_post_ids(answer: str, contexts: list[RetrievedPost]) -> list[str]:
+    """Map the [n] markers in an answer back to the retrieved post ids.
+
+    The model is instructed to cite excerpts by their bracketed number;
+    markers outside the retrieved range are ignored. When the answer cites
+    nothing, every retrieved post is cited so the client can still surface
+    the sources it was grounded in.
+    """
+    cited: list[str] = []
+    for match in CITATION_RE.finditer(answer):
+        index = int(match.group(1)) - 1
+        if 0 <= index < len(contexts):
+            post_id = contexts[index].post_id
+            if post_id not in cited:
+                cited.append(post_id)
+    if not cited:
+        cited = [post.post_id for post in contexts]
+    return cited
+
+
 def _record_rpc(method: str, status: str, start: float) -> None:
     duration = time.perf_counter() - start
     metrics.GRPC_REQUESTS.labels(method=method, status=status).inc()
@@ -67,6 +93,62 @@ def _record_rpc(method: str, status: str, start: float) -> None:
             "span_id": span_id,
         },
     )
+
+
+def rpc_stream_metrics(method: str) -> Callable[[StreamHandler], StreamHandler]:
+    """Track metrics and access logs around a server-streaming gRPC method.
+
+    Mirrors rpc_metrics for handlers that yield multiple responses: the
+    RPC is recorded when the stream ends, whether it completes, fails, or
+    is cancelled by the client.
+    """
+
+    def decorator(fn: StreamHandler) -> StreamHandler:
+        @functools.wraps(fn)
+        async def wrapper(
+            self: Any, request: Any, context: grpc.aio.ServicerContext
+        ) -> Any:
+            start = time.perf_counter()
+            status = "OK"
+            metrics.GRPC_ACTIVE_REQUESTS.inc()
+            try:
+                async for item in fn(self, request, context):
+                    yield item
+            except TooLargeError as exc:
+                status = "INVALID_ARGUMENT"
+                await context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    f"Input exceeds the maximum length of {exc.limit} characters",
+                )
+            except ValidationError as exc:
+                status = "INVALID_ARGUMENT"
+                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, exc.message)
+            except LLMError:
+                status = "UNAVAILABLE"
+                logger.exception("LLM provider failed")
+                await context.abort(
+                    grpc.StatusCode.UNAVAILABLE, "LLM provider unavailable"
+                )
+            except EmbeddingError:
+                status = "UNAVAILABLE"
+                logger.exception("embedding provider failed")
+                await context.abort(
+                    grpc.StatusCode.UNAVAILABLE, "Embedding provider unavailable"
+                )
+            except asyncio.CancelledError:
+                status = "CANCELLED"
+                raise
+            except Exception:
+                status = "INTERNAL"
+                logger.exception("unexpected error in %s", fn.__name__)
+                await context.abort(grpc.StatusCode.INTERNAL, "Internal service error")
+            finally:
+                metrics.GRPC_ACTIVE_REQUESTS.dec()
+                _record_rpc(method, status, start)
+
+        return wrapper
+
+    return decorator
 
 
 def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
@@ -120,9 +202,12 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
 
 
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
-    def __init__(self, llm: LLMProvider, search: SearchStore) -> None:
+    def __init__(
+        self, llm: LLMProvider, search: SearchStore, embeddings: EmbeddingProvider
+    ) -> None:
         self._llm = llm
         self._search = search
+        self._embeddings = embeddings
 
     @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
@@ -243,3 +328,98 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
 
         post_ids = await self._search.related(request.post_id, limit)
         return ai_service_pb2.RelatedResponse(post_ids=post_ids)
+
+    @rpc_metrics("/ai.AIService/Embed")
+    async def Embed(
+        self, request: ai_service_pb2.EmbedRequest, context: grpc.aio.ServicerContext
+    ) -> ai_service_pb2.EmbedResponse:
+        text = request.text.strip()
+        if not text:
+            raise ValidationError("text must be a non-empty string")
+        if len(text) > settings.SEARCH_MAX_QUERY_CHARS:
+            raise ValidationError(
+                f"text length must be <= {settings.SEARCH_MAX_QUERY_CHARS} characters"
+            )
+
+        vector = await self._embed(text)
+        return ai_service_pb2.EmbedResponse(vector=vector)
+
+    @rpc_stream_metrics("/ai.AIService/ChatAnswer")
+    async def ChatAnswer(
+        self,
+        request: ai_service_pb2.ChatAnswerRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> AsyncIterator[ai_service_pb2.ChatChunk]:
+        """Ground a question in the indexed posts and stream the answer.
+
+        The query is embedded through the same path exposed by the Embed
+        RPC, then the top-k closest posts are retrieved and handed to the
+        LLM as numbered excerpts. The final chunk carries the post ids the
+        model actually cited.
+        """
+        query = request.query.strip()
+        if not query:
+            raise ValidationError("query must be a non-empty string")
+        if len(query) > settings.SEARCH_MAX_QUERY_CHARS:
+            raise ValidationError(
+                f"query length must be <= {settings.SEARCH_MAX_QUERY_CHARS} characters"
+            )
+        top_k = request.top_k or settings.CHAT_TOP_K_DEFAULT
+        if top_k > settings.CHAT_MAX_TOP_K:
+            raise ValidationError(f"top_k must be <= {settings.CHAT_MAX_TOP_K}")
+
+        history: list[tuple[str, str]] = []
+        for message in request.history:
+            role = message.role.strip()
+            if role not in ("user", "assistant"):
+                raise ValidationError(f"unsupported history role: {role!r}")
+            if len(message.content) > settings.MAX_INPUT_CHARS:
+                raise TooLargeError(settings.MAX_INPUT_CHARS)
+            if message.content.strip():
+                history.append((role, message.content.strip()))
+        history = history[-settings.CHAT_MAX_HISTORY_TURNS :]
+
+        contexts = await self._retrieve_context(query, top_k)
+        system = CHAT_SYSTEM_PROMPT
+        user = chat_user_prompt(
+            query, history, [(post.title, post.body) for post in contexts]
+        )
+
+        answer_parts: list[str] = []
+        async for delta in self._llm.generate_stream(system, user):
+            answer_parts.append(delta)
+            yield ai_service_pb2.ChatChunk(delta=delta)
+
+        answer = "".join(answer_parts)
+        cited = _cited_post_ids(answer, contexts)
+        access_logger.info(
+            "chat completed",
+            extra={
+                "prompt_tokens_est": estimate_tokens(system + user),
+                "completion_tokens_est": estimate_tokens(answer),
+                "contexts": len(contexts),
+                "cited_posts": len(cited),
+            },
+        )
+        yield ai_service_pb2.ChatChunk(done=True, cited_post_ids=cited)
+
+    async def _embed(self, text: str) -> list[float]:
+        """Embed a single text through the provider backing the Embed RPC."""
+        return (await self._embeddings.embed([text]))[0]
+
+    async def _retrieve_context(self, query: str, top_k: int) -> list[RetrievedPost]:
+        """Embed the query and fetch its nearest posts as grounding context.
+
+        Body lengths are capped by the shared context budget so the
+        prompt stays well inside the LLM's window regardless of top_k.
+        """
+        vector = await self._embed(query)
+        posts = await self._search.retrieve_by_vector(vector, top_k)
+        budget = settings.CHAT_MAX_CONTEXT_CHARS
+        per_post = budget // len(posts) if posts else budget
+        return [
+            RetrievedPost(
+                post_id=post.post_id, title=post.title, body=post.body[:per_post]
+            )
+            for post in posts
+        ]

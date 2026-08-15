@@ -117,12 +117,84 @@ func mapDomainPostsToModel(posts []*domain.Post) []*model.Post {
 	return related
 }
 
+func mapDomainChatToModel(dc *domain.Chat) *model.Chat {
+	if dc == nil {
+		return nil
+	}
+	return &model.Chat{
+		ID:        dc.ID,
+		Title:     dc.Title,
+		CreatedAt: dc.CreatedAt.String(),
+		UpdatedAt: dc.UpdatedAt.String(),
+	}
+}
+
+func mapDomainChatsToModel(chats []*domain.Chat) []*model.Chat {
+	out := make([]*model.Chat, 0, len(chats))
+	for _, dc := range chats {
+		if mapped := mapDomainChatToModel(dc); mapped != nil {
+			out = append(out, mapped)
+		}
+	}
+	return out
+}
+
+func mapDomainChatMessageToModel(dm *domain.ChatMessage) *model.ChatMessage {
+	if dm == nil {
+		return nil
+	}
+	return &model.ChatMessage{
+		ID:           dm.ID,
+		ChatID:       dm.ChatID,
+		Role:         messageRoleToModel(dm.Role),
+		Content:      dm.Content,
+		CitedPostIds: dm.CitedPostIDs,
+		CreatedAt:    dm.CreatedAt.String(),
+	}
+}
+
+func messageRoleToModel(role domain.ChatMessageRole) model.MessageRole {
+	switch role {
+	case domain.ChatMessageRoleAssistant:
+		return model.MessageRoleAssistant
+	default:
+		return model.MessageRoleUser
+	}
+}
+
+func mapDomainPaginatedMessagesToModel(pm *domain.PaginatedMessages) *model.PaginatedMessages {
+	if pm == nil {
+		return nil
+	}
+
+	messages := make([]*model.ChatMessage, 0, len(pm.Messages))
+	for _, dm := range pm.Messages {
+		if mapped := mapDomainChatMessageToModel(dm); mapped != nil {
+			messages = append(messages, mapped)
+		}
+	}
+
+	return &model.PaginatedMessages{
+		Messages:      messages,
+		TotalPages:    pm.TotalPages,
+		CurrentPage:   pm.Page,
+		TotalMessages: int(pm.TotalMessages),
+	}
+}
+
 // deref returns the value behind v, or 0 when v is nil. Optional GraphQL
 // arguments arrive as pointers, and the resolvers default them to 0 and
 // let the services apply their own defaults.
 func deref(v *int) int {
 	if v == nil {
 		return 0
+	}
+	return *v
+}
+
+func derefStr(v *string) string {
+	if v == nil {
+		return ""
 	}
 	return *v
 }

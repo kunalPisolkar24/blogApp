@@ -12,7 +12,8 @@ import (
 
 const indexTimeout = 30 * time.Second
 
-// EnsureIndexes creates the indexes required by the posts and tags collections.
+// EnsureIndexes creates the indexes required by the posts, tags, chats
+// and messages collections.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	ctx, cancel := context.WithTimeout(ctx, indexTimeout)
 	defer cancel()
@@ -49,6 +50,28 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 
 	if _, err := db.Collection("tags").Indexes().CreateMany(ctx, tagIndexes); err != nil {
 		return fmt.Errorf("create tags indexes: %w", err)
+	}
+
+	chatIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("userId_createdAt"),
+		},
+	}
+
+	if _, err := db.Collection("chats").Indexes().CreateMany(ctx, chatIndexes); err != nil {
+		return fmt.Errorf("create chats indexes: %w", err)
+	}
+
+	messageIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "chatId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("chatId_createdAt"),
+		},
+	}
+
+	if _, err := db.Collection("messages").Indexes().CreateMany(ctx, messageIndexes); err != nil {
+		return fmt.Errorf("create messages indexes: %w", err)
 	}
 
 	return nil

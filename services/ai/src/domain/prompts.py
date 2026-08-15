@@ -33,3 +33,40 @@ def post_user_prompt(topic: str) -> str:
         "- Conclusion.\n"
         "Keep the tone professional yet accessible."
     )
+
+
+CHAT_SYSTEM_PROMPT = (
+    "You are the Topos blog assistant. Answer the user's question using ONLY "
+    "the provided blog post excerpts, and cite the source of each claim with "
+    "its bracketed number, e.g. [1]. Never invent facts that are not in the "
+    "excerpts. If the excerpts do not answer the question, say that you could "
+    "not find any relevant posts. Keep the answer concise and helpful."
+)
+
+
+def chat_user_prompt(
+    query: str, history: list[tuple[str, str]], contexts: list[tuple[str, str]]
+) -> str:
+    """Assemble the grounded user prompt from history and retrieved posts.
+
+    ``history`` is a list of (role, content) turns, most recent last.
+    ``contexts`` is a list of (title, body) excerpts numbered in order,
+    which the model is expected to cite as [1], [2], ...
+    """
+    parts: list[str] = []
+
+    if history:
+        transcript = "\n".join(
+            f"{role.capitalize()}: {content}" for role, content in history
+        )
+        parts.append(f"Conversation so far:\n{transcript}")
+
+    if contexts:
+        excerpts = "\n\n".join(
+            f"[{index}] {title}\n{body}"
+            for index, (title, body) in enumerate(contexts, start=1)
+        )
+        parts.append(f"Relevant blog posts:\n{excerpts}")
+
+    parts.append(f"Question: {query}")
+    return "\n\n".join(parts)

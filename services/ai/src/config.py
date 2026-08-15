@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # surfacing as "best matches"; tune per embedding model.
     SEARCH_DENSE_SCORE_THRESHOLD: float = 0.3
 
+    # Grounded chat: how many posts to retrieve, how much conversation to
+    # consider, and the total excerpt budget fed to the LLM per turn.
+    CHAT_TOP_K_DEFAULT: int = 5
+    CHAT_MAX_TOP_K: int = 10
+    CHAT_MAX_HISTORY_TURNS: int = 6
+    CHAT_MAX_CONTEXT_CHARS: int = 12000
+
     EMBEDDING_MODE: Literal["fake", "ollama"] = "fake"
     EMBEDDING_URL: str = "http://embedding-service:11434"
     EMBEDDING_MODEL: str = "snowflake-arctic-embed2:568m"

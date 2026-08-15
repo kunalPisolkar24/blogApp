@@ -127,6 +127,7 @@ type MockAIService struct {
 	DeletePostFn      func(ctx context.Context, postID string) error
 	SearchPostsFn     func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
 	RelatedPostsFn    func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
+	ChatAnswerFn      func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
 }
 
 func (m *MockAIService) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -178,6 +179,13 @@ func (m *MockAIService) RelatedPosts(ctx context.Context, postID string, limit i
 	return &domain.SearchResult{}, nil
 }
 
+func (m *MockAIService) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+	if m.ChatAnswerFn != nil {
+		return m.ChatAnswerFn(ctx, query, history, topK)
+	}
+	return &domain.ChatAnswer{Content: "answer"}, nil
+}
+
 func (m *MockAIService) Close() error { return nil }
 
 // MockEventPublisher records every event it is asked to publish.
@@ -221,6 +229,72 @@ func (m *MockEventPublisher) PublishDeadLetter(ctx context.Context, originalTopi
 		Cause:         cause,
 	})
 	return m.Err
+}
+
+// MockChatRepository fakes the chat store for service tests.
+type MockChatRepository struct {
+	CreateFn      func(ctx context.Context, chat *domain.Chat) (*domain.Chat, error)
+	FindByIDFn    func(ctx context.Context, id string) (*domain.Chat, error)
+	ListByUserFn  func(ctx context.Context, userID string) ([]*domain.Chat, error)
+	RenameFn      func(ctx context.Context, id, title string) (*domain.Chat, error)
+	DeleteFn      func(ctx context.Context, id string) error
+	AddMessageFn  func(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error)
+	MessagesFn    func(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error)
+	MessagesCalls int
+	ChatID        string
+	UserID        string
+}
+
+func (m *MockChatRepository) Create(ctx context.Context, chat *domain.Chat) (*domain.Chat, error) {
+	if m.CreateFn != nil {
+		return m.CreateFn(ctx, chat)
+	}
+	chat.ID = "chat-created"
+	return chat, nil
+}
+
+func (m *MockChatRepository) FindByID(ctx context.Context, id string) (*domain.Chat, error) {
+	if m.FindByIDFn != nil {
+		return m.FindByIDFn(ctx, id)
+	}
+	return &domain.Chat{ID: id, UserID: m.UserID}, nil
+}
+
+func (m *MockChatRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Chat, error) {
+	if m.ListByUserFn != nil {
+		return m.ListByUserFn(ctx, userID)
+	}
+	return []*domain.Chat{{ID: m.ChatID, UserID: userID}}, nil
+}
+
+func (m *MockChatRepository) Rename(ctx context.Context, id, title string) (*domain.Chat, error) {
+	if m.RenameFn != nil {
+		return m.RenameFn(ctx, id, title)
+	}
+	return &domain.Chat{ID: id, Title: title, UserID: m.UserID}, nil
+}
+
+func (m *MockChatRepository) Delete(ctx context.Context, id string) error {
+	if m.DeleteFn != nil {
+		return m.DeleteFn(ctx, id)
+	}
+	return nil
+}
+
+func (m *MockChatRepository) AddMessage(ctx context.Context, msg *domain.ChatMessage) (*domain.ChatMessage, error) {
+	if m.AddMessageFn != nil {
+		return m.AddMessageFn(ctx, msg)
+	}
+	msg.ID = "msg-created"
+	return msg, nil
+}
+
+func (m *MockChatRepository) Messages(ctx context.Context, chatID string, page, limit int) (*domain.PaginatedMessages, error) {
+	m.MessagesCalls++
+	if m.MessagesFn != nil {
+		return m.MessagesFn(ctx, chatID, page, limit)
+	}
+	return &domain.PaginatedMessages{Page: page}, nil
 }
 
 // MockSummaryProcessor fakes the worker's post store.

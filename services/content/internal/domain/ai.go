@@ -25,5 +25,6 @@ type AIService interface {
 	DeletePost(ctx context.Context, postID string) error
 	SearchPosts(ctx context.Context, query string, offset, limit int) (*SearchResult, error)
 	RelatedPosts(ctx context.Context, postID string, limit int) (*SearchResult, error)
+	ChatAnswer(ctx context.Context, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
 	Close() error
 }
