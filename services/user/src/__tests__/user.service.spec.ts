@@ -3,7 +3,7 @@ import { UserService } from '../user.service.js';
 import { toUserResponse } from '../domain/user.js';
 import { CacheManager } from '../lib/cache.js';
 import { UserRepository } from '../repositories/user.repository.js';
-import { InvalidCredentialsError } from '../errors.js';
+import { InvalidCredentialsError, UserAlreadyExistsError } from '../errors.js';
 import type { User } from '../generated/prisma/client.js';
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +37,7 @@ const makeUser = (overrides: Partial<User> = {}): User => ({
 const createUserMocks = () => ({
   create: vi.fn(),
   findByEmail: vi.fn(),
+  findByEmailOrUsername: vi.fn(),
   findById: vi.fn(),
   findAll: vi.fn(),
   update: vi.fn(),
@@ -77,6 +78,7 @@ describe('UserService', () => {
     beforeEach(() => {
       mocks.hashPassword.mockResolvedValue('hashed-password');
       mocks.signToken.mockResolvedValue('token');
+      users.findByEmailOrUsername.mockResolvedValue(null);
       users.create.mockResolvedValue(makeUser());
     });
 
@@ -90,6 +92,14 @@ describe('UserService', () => {
         password: 'hashed-password',
         name: input.username,
       });
+    });
+
+    it('rejects duplicates without hashing the password', async () => {
+      users.findByEmailOrUsername.mockResolvedValue(makeUser());
+
+      await expect(service.signup(input)).rejects.toBeInstanceOf(UserAlreadyExistsError);
+      expect(mocks.hashPassword).not.toHaveBeenCalled();
+      expect(users.create).not.toHaveBeenCalled();
     });
 
     it('returns a token and the new user', async () => {
