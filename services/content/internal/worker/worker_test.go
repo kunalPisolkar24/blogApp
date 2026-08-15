@@ -262,12 +262,22 @@ func TestSendToDLQ(t *testing.T) {
 	producer := &testutil.MockEventPublisher{}
 	w := newTestWorker(t, nil, nil, producer)
 
-	w.sendToDLQ(context.Background(), &kafka.Reader{}, kafka.Message{Topic: "posts", Key: []byte("p_1"), Value: []byte("v")}, errors.New("boom"))
+	err := w.sendToDLQ(context.Background(), &kafka.Reader{}, kafka.Message{Topic: "posts", Key: []byte("p_1"), Value: []byte("v")}, errors.New("boom"))
+	require.NoError(t, err)
 	require.Len(t, producer.DeadLetters, 1)
 	assert.Equal(t, "posts", producer.DeadLetters[0].OriginalTopic)
 	assert.Equal(t, "dlq", producer.DeadLetters[0].DLQTopic)
 	assert.Equal(t, []byte("p_1"), producer.DeadLetters[0].Key)
 	assert.Equal(t, "boom", producer.DeadLetters[0].Cause.Error())
+}
+
+func TestSendToDLQPublishFailureReturnsError(t *testing.T) {
+	producer := &testutil.MockEventPublisher{Err: errors.New("kafka down")}
+	w := newTestWorker(t, nil, nil, producer)
+
+	err := w.sendToDLQ(context.Background(), &kafka.Reader{}, kafka.Message{Topic: "posts", Key: []byte("p_1"), Value: []byte("v")}, errors.New("boom"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kafka down")
 }
 
 func TestSendToDLQNilProducer(t *testing.T) {

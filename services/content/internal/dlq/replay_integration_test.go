@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReplayRoundTripAgainstRealKafka(t *testing.T) {
+func TestReplayRepublishesDeadLetters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
@@ -23,31 +23,29 @@ func TestReplayRoundTripAgainstRealKafka(t *testing.T) {
 	testutil.EnsureTopic(t, ctx, brokers, "posts")
 	testutil.EnsureTopic(t, ctx, brokers, "posts-dlq")
 
-	key := []byte("p_replay")
-	original := []byte(`{"postId":"p_replay","title":"Lost in the outage"}`)
-
 	producer := messaging.NewKafkaProducer(brokers, "posts")
 	t.Cleanup(func() { _ = producer.Close() })
-	require.NoError(t, producer.PublishDeadLetter(ctx, "posts", "posts-dlq", key, original, errors.New("boom")))
+	require.NoError(t, producer.PublishDeadLetter(ctx, "posts", "posts-dlq", []byte("p_r1"), []byte(`{"postId":"p_r1"}`), errors.New("boom")))
 
-	replayer := New(brokers, "posts-dlq", "dlq-replay-test")
+	replayer := New(brokers, "posts-dlq", "content-dlq-replay-test")
 	t.Cleanup(func() { _ = replayer.Close() })
 
-	count, err := replayer.Run(ctx)
+	replayed, err := replayer.Run(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count, "the single dead letter must be replayed")
+	assert.Equal(t, 1, replayed, "the dead letter must be replayed onto the posts topic")
 
-	// The event is back on its original topic, unchanged.
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     brokers,
 		Topic:       "posts",
-		GroupID:     "replay-verify",
+		GroupID:     "content-dlq-replay-verify",
 		StartOffset: kafka.FirstOffset,
 	})
-	defer reader.Close()
+	t.Cleanup(func() { _ = reader.Close() })
 
-	msg, err := reader.FetchMessage(ctx)
+	fetchCtx, stop := context.WithTimeout(ctx, 30*time.Second)
+	defer stop()
+	msg, err := reader.FetchMessage(fetchCtx)
 	require.NoError(t, err)
-	assert.Equal(t, key, msg.Key)
-	assert.JSONEq(t, string(original), string(msg.Value))
+	assert.Equal(t, []byte("p_r1"), msg.Key, "the replayed event must preserve its key")
+	assert.Equal(t, `{"postId":"p_r1"}`, string(msg.Value))
 }
