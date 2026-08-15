@@ -201,6 +201,15 @@ func (c *resilientClient) RelatedPosts(ctx context.Context, postID string, limit
 	)
 }
 
+func (c *resilientClient) RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+	return degraded(c.breaker(domainSearch), "related_batch",
+		func() (map[string]*domain.SearchResult, error) {
+			return c.primary.RelatedPostsBatch(ctx, postIDs, limit)
+		},
+		func() (map[string]*domain.SearchResult, error) { return map[string]*domain.SearchResult{}, nil },
+	)
+}
+
 func (c *resilientClient) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 	return degraded(c.breaker(domainChat), "chat",
 		func() (*domain.ChatAnswer, error) { return c.primary.ChatAnswer(ctx, query, history, topK) },
@@ -327,8 +336,32 @@ func (c *grpcClient) RelatedPosts(ctx context.Context, postID string, limit int)
 	}
 	return &domain.SearchResult{
 		PostIDs: resp.PostIds,
-		Total:   len(resp.PostIds),
+		Total:   int(resp.Total),
 	}, nil
+}
+
+// RelatedPostsBatch resolves related posts for several ids in a single
+// RPC. Results are keyed by the requested post id.
+func (c *grpcClient) RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, relatedTimeout)
+	defer cancel()
+
+	resp, err := c.client.RelatedPostsBatch(ctx, &pb.RelatedBatchRequest{
+		PostIds: postIDs,
+		Limit:   uint32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(map[string]*domain.SearchResult, len(resp.Results))
+	for _, item := range resp.Results {
+		results[item.PostId] = &domain.SearchResult{
+			PostIDs: item.RelatedPostIds,
+			Total:   int(item.Total),
+		}
+	}
+	return results, nil
 }
 
 // ChatAnswer streams the AI response over gRPC and collects the full

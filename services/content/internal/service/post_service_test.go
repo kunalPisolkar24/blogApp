@@ -813,3 +813,117 @@ func TestUpdatePostInvalidatesSearchCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, calls, "a write must invalidate the search cache")
 }
+
+func TestRelatedPostsBatchOneAICallOneHydration(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsBatchFn: func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+		assert.Equal(t, []string{"p_1", "p_2"}, postIDs)
+		assert.Equal(t, 5, limit)
+		return map[string]*domain.SearchResult{
+			"p_1": {PostIDs: []string{"p_3", "p_4"}, Total: 10},
+			"p_2": {PostIDs: []string{"p_4"}, Total: 10},
+		}, nil
+	}}
+	hydrations := 0
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		hydrations++
+		posts := make([]*domain.Post, 0, len(ids))
+		for _, id := range ids {
+			posts = append(posts, &domain.Post{ID: id})
+		}
+		return posts, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	results, err := s.RelatedPostsBatch(context.Background(), []string{"p_1", "p_2"}, 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_3", "p_4"}, idsOf(results["p_1"]))
+	assert.Equal(t, []string{"p_4"}, idsOf(results["p_2"]))
+	assert.Equal(t, 1, hydrations, "one hydration pass for the whole batch")
+}
+
+func TestRelatedPostsBatchDedupesAndSkipsEmpty(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsBatchFn: func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+		assert.Equal(t, []string{"p_1"}, postIDs, "duplicate and empty ids must be collapsed")
+		return map[string]*domain.SearchResult{"p_1": {PostIDs: []string{"p_2"}, Total: 1}}, nil
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	results, err := s.RelatedPostsBatch(context.Background(), []string{"p_1", "p_1", ""}, 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_2"}, idsOf(results["p_1"]))
+}
+
+func TestRelatedPostsBatchServesCacheWithoutAICall(t *testing.T) {
+	calls := 0
+	ai := &testutil.MockAIService{RelatedPostsBatchFn: func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+		calls++
+		return map[string]*domain.SearchResult{"p_1": {PostIDs: []string{"p_2"}, Total: 1}}, nil
+	}}
+	s := newSearchService(t, ai, nil, newMemCache(t))
+
+	_, err := s.RelatedPostsBatch(context.Background(), []string{"p_1"}, 5)
+	require.NoError(t, err)
+
+	results, err := s.RelatedPostsBatch(context.Background(), []string{"p_1"}, 5)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_2"}, idsOf(results["p_1"]))
+	assert.Equal(t, 1, calls, "a cached id must not touch the AI service")
+}
+
+func TestRelatedPostsBatchDropsUnhydrated(t *testing.T) {
+	ai := &testutil.MockAIService{RelatedPostsBatchFn: func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+		return map[string]*domain.SearchResult{"p_1": {PostIDs: []string{"p_2", "ghost"}, Total: 2}}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_2"}}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	results, err := s.RelatedPostsBatch(context.Background(), []string{"p_1"}, 5)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_2"}, idsOf(results["p_1"]), "ids without a stored post must be dropped")
+}
+
+func TestRelatedPostsBatchAIError(t *testing.T) {
+	wantErr := errors.New("ai down")
+	ai := &testutil.MockAIService{RelatedPostsBatchFn: func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+		return nil, wantErr
+	}}
+	s := newSearchService(t, ai, nil, nil)
+
+	_, err := s.RelatedPostsBatch(context.Background(), []string{"p_1"}, 5)
+	assert.ErrorIs(t, err, wantErr)
+}
+
+func idsOf(posts []*domain.Post) []string {
+	ids := make([]string, 0, len(posts))
+	for _, post := range posts {
+		ids = append(ids, post.ID)
+	}
+	return ids
+}
+
+func TestGetPostsByIDs(t *testing.T) {
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		assert.Equal(t, []string{"p_1", "p_2"}, ids)
+		return []*domain.Post{{ID: "p_1"}, {ID: "p_2"}}, nil
+	}}
+	s := newSearchService(t, nil, repo, nil)
+
+	posts, err := s.GetPostsByIDs(context.Background(), []string{"p_1", "p_2"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p_1", "p_2"}, idsOf(posts))
+}
+
+func TestGetPostsByIDsEmptyInput(t *testing.T) {
+	s := newSearchService(t, nil, nil, nil)
+
+	posts, err := s.GetPostsByIDs(context.Background(), nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, posts)
+}

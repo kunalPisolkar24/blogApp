@@ -11,9 +11,15 @@ import (
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 )
 
-// FindPostByID is the resolver for the findPostByID field.
+// FindPostByID is the resolver for the findPostByID field. In a
+// request with batching enabled (WithBatching), all entities of the
+// request share one repository lookup.
 func (r *entityResolver) FindPostByID(ctx context.Context, id string) (*model.Post, error) {
-	return r.Query().Post(ctx, id)
+	post, err := postByIDFrom(ctx, r.PostService, id)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPostToModel(post), nil
 }
 
 // FindUserByID is the resolver for the findUserByID field.

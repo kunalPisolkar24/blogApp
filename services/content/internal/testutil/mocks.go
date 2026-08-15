@@ -128,15 +128,16 @@ func (m *MockTagRepository) Search(ctx context.Context, query string, limit int)
 }
 
 type MockAIService struct {
-	GenerateSummaryFn func(ctx context.Context, text string) (string, error)
-	GenerateTagsFn    func(ctx context.Context, title, body string) ([]string, error)
-	GeneratePostFn    func(ctx context.Context, prompt string) (*domain.GeneratedPost, error)
-	IndexPostFn       func(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
-	DeletePostFn      func(ctx context.Context, postID string) error
-	SearchPostsFn     func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
-	RelatedPostsFn    func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
-	ChatAnswerFn      func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
-	HealthyFn         func(ctx context.Context) error
+	GenerateSummaryFn   func(ctx context.Context, text string) (string, error)
+	GenerateTagsFn      func(ctx context.Context, title, body string) ([]string, error)
+	GeneratePostFn      func(ctx context.Context, prompt string) (*domain.GeneratedPost, error)
+	IndexPostFn         func(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
+	DeletePostFn        func(ctx context.Context, postID string) error
+	SearchPostsFn       func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
+	RelatedPostsFn      func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
+	RelatedPostsBatchFn func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error)
+	ChatAnswerFn        func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
+	HealthyFn           func(ctx context.Context) error
 }
 
 func (m *MockAIService) GenerateSummary(ctx context.Context, text string) (string, error) {
@@ -186,6 +187,13 @@ func (m *MockAIService) RelatedPosts(ctx context.Context, postID string, limit i
 		return m.RelatedPostsFn(ctx, postID, limit)
 	}
 	return &domain.SearchResult{}, nil
+}
+
+func (m *MockAIService) RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+	if m.RelatedPostsBatchFn != nil {
+		return m.RelatedPostsBatchFn(ctx, postIDs, limit)
+	}
+	return map[string]*domain.SearchResult{}, nil
 }
 
 func (m *MockAIService) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {

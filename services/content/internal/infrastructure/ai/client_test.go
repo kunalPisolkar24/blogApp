@@ -56,6 +56,17 @@ func (s *stubAI) RelatedPosts(ctx context.Context, postID string, limit int) (*d
 	return &domain.SearchResult{PostIDs: s.related, Total: len(s.related)}, nil
 }
 
+func (s *stubAI) RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	results := make(map[string]*domain.SearchResult, len(postIDs))
+	for _, postID := range postIDs {
+		results[postID] = &domain.SearchResult{PostIDs: s.related, Total: len(s.related)}
+	}
+	return results, nil
+}
+
 func (s *stubAI) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 	if s.err != nil {
 		return nil, s.err

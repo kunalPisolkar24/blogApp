@@ -110,10 +110,36 @@ class RelatedRequest(_message.Message):
     def __init__(self, post_id: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
 
 class RelatedResponse(_message.Message):
-    __slots__ = ("post_ids",)
+    __slots__ = ("post_ids", "total")
     POST_IDS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_FIELD_NUMBER: _ClassVar[int]
     post_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, post_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    total: int
+    def __init__(self, post_ids: _Optional[_Iterable[str]] = ..., total: _Optional[int] = ...) -> None: ...
+
+class RelatedBatchRequest(_message.Message):
+    __slots__ = ("post_ids", "limit")
+    POST_IDS_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    post_ids: _containers.RepeatedScalarFieldContainer[str]
+    limit: int
+    def __init__(self, post_ids: _Optional[_Iterable[str]] = ..., limit: _Optional[int] = ...) -> None: ...
+
+class RelatedBatchItem(_message.Message):
+    __slots__ = ("post_id", "related_post_ids", "total")
+    POST_ID_FIELD_NUMBER: _ClassVar[int]
+    RELATED_POST_IDS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_FIELD_NUMBER: _ClassVar[int]
+    post_id: str
+    related_post_ids: _containers.RepeatedScalarFieldContainer[str]
+    total: int
+    def __init__(self, post_id: _Optional[str] = ..., related_post_ids: _Optional[_Iterable[str]] = ..., total: _Optional[int] = ...) -> None: ...
+
+class RelatedBatchResponse(_message.Message):
+    __slots__ = ("results",)
+    RESULTS_FIELD_NUMBER: _ClassVar[int]
+    results: _containers.RepeatedCompositeFieldContainer[RelatedBatchItem]
+    def __init__(self, results: _Optional[_Iterable[_Union[RelatedBatchItem, _Mapping]]] = ...) -> None: ...
 
 class EmbedRequest(_message.Message):
     __slots__ = ("text",)

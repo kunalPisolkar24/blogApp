@@ -331,7 +331,39 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             raise ValidationError(f"limit must be <= {settings.SEARCH_MAX_LIMIT}")
 
         post_ids = await self._search.related(request.post_id, limit)
-        return ai_service_pb2.RelatedResponse(post_ids=post_ids)
+        total = await self._search.count()
+        return ai_service_pb2.RelatedResponse(post_ids=post_ids, total=total)
+
+    @rpc_metrics("/ai.AIService/RelatedPostsBatch")
+    async def RelatedPostsBatch(
+        self,
+        request: ai_service_pb2.RelatedBatchRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.RelatedBatchResponse:
+        if not request.post_ids:
+            raise ValidationError("post_ids must not be empty")
+        limit = request.limit or settings.RELATED_DEFAULT_LIMIT
+        if limit > settings.SEARCH_MAX_LIMIT:
+            raise ValidationError(f"limit must be <= {settings.SEARCH_MAX_LIMIT}")
+
+        post_ids = [post_id for post_id in dict.fromkeys(request.post_ids)]
+        if any(not post_id for post_id in post_ids):
+            raise ValidationError("post_ids must not contain empty strings")
+
+        results = await asyncio.gather(
+            *(self._search.related(post_id, limit) for post_id in post_ids)
+        )
+        total = await self._search.count()
+        return ai_service_pb2.RelatedBatchResponse(
+            results=[
+                ai_service_pb2.RelatedBatchItem(
+                    post_id=post_id,
+                    related_post_ids=post_ids_for,
+                    total=total,
+                )
+                for post_id, post_ids_for in zip(post_ids, results)
+            ]
+        )
 
     @rpc_metrics("/ai.AIService/Embed")
     async def Embed(

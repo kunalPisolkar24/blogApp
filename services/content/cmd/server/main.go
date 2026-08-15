@@ -90,9 +90,14 @@ func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.
 	gql.SetErrorPresenter(graph.PresentError)
 	gql.SetRecoverFunc(graph.RecoverError)
 
+	var gqlHandler http.Handler = gql
+	if resolver != nil && resolver.PostService != nil {
+		gqlHandler = graph.WithBatching(resolver.PostService, gql)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle(queryPath, otelhttp.NewHandler(
-		middleware.RecoverMiddleware(middleware.MetricsMiddleware(middleware.AuthMiddleware(cfg)(gql))),
+		middleware.RecoverMiddleware(middleware.MetricsMiddleware(middleware.AuthMiddleware(cfg)(gqlHandler))),
 		"graphql",
 	))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))

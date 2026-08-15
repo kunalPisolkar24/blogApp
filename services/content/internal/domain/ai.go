@@ -25,6 +25,10 @@ type AIService interface {
 	DeletePost(ctx context.Context, postID string) error
 	SearchPosts(ctx context.Context, query string, offset, limit int) (*SearchResult, error)
 	RelatedPosts(ctx context.Context, postID string, limit int) (*SearchResult, error)
+	// RelatedPostsBatch resolves related posts for several post ids in
+	// one RPC, keyed by the requested post id, so list pages do not
+	// fire one AI call per post.
+	RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*SearchResult, error)
 	ChatAnswer(ctx context.Context, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
 	// Health reports whether the AI service can do real work: the
 	// connection is ready and no circuit breaker is open. It must not
