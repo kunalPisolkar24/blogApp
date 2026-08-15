@@ -41,9 +41,49 @@ docker compose -f compose.local.yml up -d --build
 ```
 
 Starts a single Postgres + Redis + migrator + the service on `:4001` with
-defaults — no env file needed. For bare-metal dev: `npm ci`, copy the user
-block from `infrastructure/docker/prod/.env.example` into `.env`, then
-`npm run dev`.
+defaults — no env file needed (equivalent to `make local-up`). For bare-metal
+dev: `npm ci`, copy the user block from
+`infrastructure/docker/prod/.env.example` into `.env`, then `npm run dev`.
+
+## Running the stacks
+
+The service can run in three standalone modes, all scoped to `services/user`:
+
+### 1. Local stack (single Postgres + Redis + service) — `compose.local.yml`
+
+```bash
+make local-up     # builds and starts postgres + redis + migrator + service
+make local-logs   # tail the logs
+make local-down   # stop (keeps volumes)
+make local-clean  # stop and delete volumes
+```
+
+No env file needed — defaults come from `compose.local.yml`. The service is on
+`:4001`; Postgres `:5432` (external port `USER_POSTGRES_EXT_PORT`), Redis
+`:6380`.
+
+### 2. Standalone HA stack (Postgres tripod + Pgpool-II + Redis sentinels) — `compose.yml`
+
+```bash
+cp .env.ha.example .env.ha   # then fill in the <password> placeholders
+make ha-up                   # creates the network, builds, starts, migrates
+make ha-logs
+make ha-down                 # stops and deletes volumes + network
+make ha-clean                # alias for ha-down
+```
+
+Prod-identical topology with prod host ports (`4001`, `5432`): the app talks
+only to the pool, migrations run against the primary directly. Uses the
+dedicated `topos-user-ha` network and `userha-*` container names so it never
+clashes with a root-level prod stack.
+
+### 3. HA failover drill (semi-manual) — `.env.ha-test`
+
+`make ha-test-up` / `ha-test-stop` exercise the failover/rejoin flow against
+the same compose files (see `.env.ha-test.example`).
+
+> Local and HA stacks are exclusive by design (same host ports) — run only
+> one at a time.
 
 ## Docker
 

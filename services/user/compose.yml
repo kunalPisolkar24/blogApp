@@ -44,6 +44,8 @@ services:
         condition: service_healthy
       user-redis-sentinel-3:
         condition: service_healthy
+      user-migrator:
+        condition: service_completed_successfully
     networks:
       - app-network
 
