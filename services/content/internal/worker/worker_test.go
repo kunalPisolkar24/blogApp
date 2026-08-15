@@ -339,3 +339,30 @@ func TestWorkerCloseWithoutReaders(t *testing.T) {
 	w := newTestWorker(t, nil, nil, nil)
 	require.NoError(t, w.Close())
 }
+
+func TestWorkerHealthyWhenRunningAndAIUp(t *testing.T) {
+	ai := &testutil.MockAIService{}
+	w := newTestWorker(t, nil, ai, nil)
+	w.running.Store(true)
+
+	require.NoError(t, w.Healthy(context.Background()))
+}
+
+func TestWorkerUnhealthyWhenAIUnavailable(t *testing.T) {
+	aiErr := errors.New("ai breaker open: index")
+	ai := &testutil.MockAIService{
+		HealthyFn: func(ctx context.Context) error { return aiErr },
+	}
+	w := newTestWorker(t, nil, ai, nil)
+	w.running.Store(true)
+
+	assert.ErrorIs(t, w.Healthy(context.Background()), aiErr)
+}
+
+func TestWorkerUnhealthyWhenNotRunning(t *testing.T) {
+	w := newTestWorker(t, nil, &testutil.MockAIService{}, nil)
+
+	err := w.Healthy(context.Background())
+
+	assert.ErrorContains(t, err, "not running")
+}

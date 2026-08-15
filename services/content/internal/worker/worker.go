@@ -358,6 +358,17 @@ func (w *Worker) Running() error {
 	return errors.New("worker is not running")
 }
 
+// Healthy reports whether the worker can do real work: the consume
+// loops are running and the AI service is available (no open breaker,
+// ready connection). A worker whose messages are being dead-lettered
+// because the AI service is down must not report ready.
+func (w *Worker) Healthy(ctx context.Context) error {
+	if err := w.Running(); err != nil {
+		return err
+	}
+	return w.aiService.Health(ctx)
+}
+
 func stripHTML(input string) string {
 	if strings.TrimSpace(input) == "" {
 		return ""

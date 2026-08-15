@@ -80,6 +80,16 @@ docker run --network topos_local_network --env-file ../../infrastructure/docker/
   content-content-worker ./content-dlq-replay
 ```
 
+### Worker health
+
+Both workers expose `/health` (HTTP 200 only when mongo, kafka, the
+consume loops **and** the AI service are healthy). The AI check is
+free of RPCs: it fails when any circuit breaker is open or the gRPC
+connection is not ready, so a worker that is alive but dead-lettering
+everything no longer reports ready. The search worker emits the same
+OTel spans as the summary worker (`index post`, `delete from index`
+with post id, partition and offset).
+
 ### Mongo startup retry
 
 `db.Connect` fails fast on a malformed URI, but a transient ping failure

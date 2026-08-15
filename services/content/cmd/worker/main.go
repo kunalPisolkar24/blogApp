@@ -102,8 +102,8 @@ func run() error {
 	return server.Shutdown(shutdownCtx)
 }
 
-// newHealthHandler reports 200 when mongo, kafka and the worker are
-// healthy, and serves Prometheus metrics on /metrics.
+// newHealthHandler reports 200 when mongo, kafka, the worker loop and
+// the AI service are healthy, and serves Prometheus metrics on /metrics.
 func newHealthHandler(mongoClient *mongo.Client, producer domain.EventProducer, w *worker.Worker) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -118,6 +118,7 @@ func newHealthHandler(mongoClient *mongo.Client, producer domain.EventProducer, 
 			{"mongo", mongoClient.Ping(ctx, readpref.Primary())},
 			{"kafka", producer.Ping(ctx)},
 			{"worker", w.Running()},
+			{"ai", w.Healthy(ctx)},
 		}
 
 		status := http.StatusOK
