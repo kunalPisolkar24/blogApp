@@ -161,6 +161,21 @@ func TestSearchProcessWithRetriesFailsFastOnPermanentError(t *testing.T) {
 	assert.Equal(t, 1, attempts, "permanent errors must not be retried")
 }
 
+func TestSearchProcessWithRetriesFailsFastOnCircuitOpen(t *testing.T) {
+	attempts := 0
+	ai := &testutil.MockAIService{IndexPostFn: func(ctx context.Context, postID, title, body, summary string, tags []string, ts time.Time) error {
+		attempts++
+		return domain.ErrAICircuitOpen
+	}}
+	w := newTestSearchWorker(t, ai)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), searchEventMessage(t, domain.PostEventPayload{PostID: "p_1"}))
+
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
+	assert.Equal(t, 1, attempts, "an open circuit must not burn the retry backoff")
+}
+
 func TestNewSearchWorkerRetryDefaults(t *testing.T) {
 	w, err := NewSearchWorker([]string{"localhost:9092"}, "g", []string{"posts"}, "dlq", 1, nil, nil)
 	require.NoError(t, err)

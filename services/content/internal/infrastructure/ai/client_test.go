@@ -11,8 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var errUnavailable = errors.New("unavailable")
+
 type stubAI struct {
 	summary string
+	search  []string
 	related []string
 	err     error
 	closed  bool
@@ -39,7 +42,10 @@ func (s *stubAI) DeletePost(ctx context.Context, postID string) error {
 }
 
 func (s *stubAI) SearchPosts(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error) {
-	return nil, s.err
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &domain.SearchResult{PostIDs: s.search, Total: len(s.search)}, nil
 }
 
 func (s *stubAI) RelatedPosts(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
@@ -61,8 +67,21 @@ func (s *stubAI) Close() error {
 	return nil
 }
 
+func newTestResilientClient(primary, fallback domain.AIService) *resilientClient {
+	return &resilientClient{
+		primary:  primary,
+		fallback: fallback,
+		breakers: map[breakerDomain]*circuitBreaker{
+			domainGeneration: newCircuitBreaker("test-gen"),
+			domainSearch:     newCircuitBreaker("test-search"),
+			domainChat:       newCircuitBreaker("test-chat"),
+			domainIndex:      newCircuitBreaker("test-index"),
+		},
+	}
+}
+
 func TestBreakerStaysClosedOnSuccess(t *testing.T) {
-	b := newCircuitBreaker()
+	b := newCircuitBreaker("test")
 
 	for i := 0; i < failureThreshold+1; i++ {
 		b.recordSuccess()
@@ -72,7 +91,7 @@ func TestBreakerStaysClosedOnSuccess(t *testing.T) {
 }
 
 func TestBreakerOpensAfterThreshold(t *testing.T) {
-	b := newCircuitBreaker()
+	b := newCircuitBreaker("test")
 
 	for i := 0; i < failureThreshold; i++ {
 		b.recordFailure()
@@ -82,7 +101,7 @@ func TestBreakerOpensAfterThreshold(t *testing.T) {
 }
 
 func TestBreakerHalfOpenSuccessCloses(t *testing.T) {
-	b := newCircuitBreaker()
+	b := newCircuitBreaker("test")
 	for i := 0; i < failureThreshold; i++ {
 		b.recordFailure()
 	}
@@ -98,7 +117,7 @@ func TestBreakerHalfOpenSuccessCloses(t *testing.T) {
 }
 
 func TestBreakerHalfOpenFailureReopens(t *testing.T) {
-	b := newCircuitBreaker()
+	b := newCircuitBreaker("test")
 	for i := 0; i < failureThreshold; i++ {
 		b.recordFailure()
 	}
@@ -109,94 +128,143 @@ func TestBreakerHalfOpenFailureReopens(t *testing.T) {
 	assert.Equal(t, stateOpen, b.state)
 }
 
-func TestResilientClientFallsBackOnError(t *testing.T) {
-	primary := &stubAI{err: errors.New("unavailable")}
-	fallback := &stubAI{summary: "fallback summary"}
-	client := &resilientClient{primary: primary, fallback: fallback, breaker: newCircuitBreaker()}
+func TestBreakerHalfOpenAllowsSingleProbe(t *testing.T) {
+	b := newCircuitBreaker("test")
+	for i := 0; i < failureThreshold; i++ {
+		b.recordFailure()
+	}
+	b.lastFailureTime = time.Now().Add(-resetWindow - time.Second)
 
-	summary, err := client.GenerateSummary(context.Background(), "text")
-	require.NoError(t, err)
-	assert.Equal(t, "fallback summary", summary)
+	require.True(t, b.canProceed(), "first probe must pass")
+	assert.False(t, b.canProceed(), "only one probe may be in flight at a time")
+	assert.Equal(t, 1, b.inFlight)
+
+	b.recordSuccess()
+	require.True(t, b.canProceed(), "next probe must pass after the first settles")
+}
+
+func TestResilientClientSummaryPropagatesPrimaryError(t *testing.T) {
+	primary := &stubAI{err: errUnavailable}
+	fallback := &stubAI{summary: "fallback summary"}
+	client := newTestResilientClient(primary, fallback)
+
+	_, err := client.GenerateSummary(context.Background(), "text")
+	require.ErrorIs(t, err, errUnavailable)
 }
 
 func TestResilientClientUsesPrimaryOnSuccess(t *testing.T) {
 	primary := &stubAI{summary: "primary summary"}
-	client := &resilientClient{primary: primary, fallback: &stubAI{summary: "fallback"}, breaker: newCircuitBreaker()}
+	client := newTestResilientClient(primary, &stubAI{summary: "fallback"})
 
 	summary, err := client.GenerateSummary(context.Background(), "text")
 	require.NoError(t, err)
 	assert.Equal(t, "primary summary", summary)
 }
 
-func TestResilientClientOpenBreakerSkipsPrimary(t *testing.T) {
+func TestResilientClientOpenBreakerNeverFabricates(t *testing.T) {
 	primary := &stubAI{summary: "primary"}
-	client := &resilientClient{primary: primary, fallback: &stubAI{summary: "fallback summary"}, breaker: newCircuitBreaker()}
+	client := newTestResilientClient(primary, &stubAI{summary: "fallback summary"})
 	for i := 0; i < failureThreshold; i++ {
-		client.breaker.recordFailure()
+		client.breaker(domainGeneration).recordFailure()
 	}
 
 	summary, err := client.GenerateSummary(context.Background(), "text")
-	require.NoError(t, err)
-	assert.Equal(t, "fallback summary", summary)
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
+	assert.Empty(t, summary, "generation must not fall back to fabricated content")
 }
 
-func TestResilientClientTagsAndPost(t *testing.T) {
-	primary := &stubAI{summary: "x"}
-	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+func TestResilientClientBreakersArePerDomain(t *testing.T) {
+	primary := &stubAI{summary: "s"}
+	client := newTestResilientClient(primary, &stubAI{summary: "fallback"})
+	for i := 0; i < failureThreshold; i++ {
+		client.breaker(domainGeneration).recordFailure()
+	}
+
+	_, err := client.ChatAnswer(context.Background(), "q", nil, 5)
+	require.NoError(t, err, "an open generation breaker must not block chat")
+
+	_, err = client.GenerateTags(context.Background(), "t", "b")
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
+}
+
+func TestResilientClientTagsAndPostPropagateErrors(t *testing.T) {
+	primary := &stubAI{err: errUnavailable}
+	client := newTestResilientClient(primary, &stubAI{})
 
 	_, err := client.GenerateTags(context.Background(), "t", "b")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errUnavailable)
 	_, err = client.GeneratePost(context.Background(), "p")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errUnavailable)
 }
 
 func TestResilientClientClose(t *testing.T) {
 	primary := &stubAI{}
-	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	client := newTestResilientClient(primary, &stubAI{})
 
 	require.NoError(t, client.Close())
 	assert.True(t, primary.closed)
 }
 
 func TestResilientClientIndexPostPropagatesError(t *testing.T) {
-	primary := &stubAI{err: errors.New("unavailable")}
-	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	primary := &stubAI{err: errUnavailable}
+	client := newTestResilientClient(primary, &stubAI{})
 
 	err := client.IndexPost(context.Background(), "p1", "t", "b", "", nil, time.Now())
-	require.Error(t, err)
+	require.ErrorIs(t, err, errUnavailable)
 }
 
 func TestResilientClientIndexPostOpenBreaker(t *testing.T) {
-	client := &resilientClient{primary: &stubAI{}, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	client := newTestResilientClient(&stubAI{}, &stubAI{})
 	for i := 0; i < failureThreshold; i++ {
-		client.breaker.recordFailure()
+		client.breaker(domainIndex).recordFailure()
 	}
 
 	err := client.IndexPost(context.Background(), "p1", "t", "b", "", nil, time.Now())
-	require.ErrorIs(t, err, errCircuitOpen)
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
 }
 
 func TestResilientClientDeletePostPropagatesError(t *testing.T) {
-	primary := &stubAI{err: errors.New("unavailable")}
-	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	primary := &stubAI{err: errUnavailable}
+	client := newTestResilientClient(primary, &stubAI{})
 
 	err := client.DeletePost(context.Background(), "p1")
-	require.Error(t, err)
+	require.ErrorIs(t, err, errUnavailable)
 }
 
 func TestResilientClientDeletePostOpenBreaker(t *testing.T) {
-	client := &resilientClient{primary: &stubAI{}, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	client := newTestResilientClient(&stubAI{}, &stubAI{})
 	for i := 0; i < failureThreshold; i++ {
-		client.breaker.recordFailure()
+		client.breaker(domainIndex).recordFailure()
 	}
 
 	err := client.DeletePost(context.Background(), "p1")
-	require.ErrorIs(t, err, errCircuitOpen)
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
+}
+
+func TestResilientClientSearchFallsBackOnError(t *testing.T) {
+	primary := &stubAI{err: errUnavailable}
+	fallback := &stubAI{search: []string{"p9"}}
+	client := newTestResilientClient(primary, fallback)
+
+	result, err := client.SearchPosts(context.Background(), "q", 0, 10)
+	require.NoError(t, err, "search must degrade instead of failing the request")
+	assert.Equal(t, []string{"p9"}, result.PostIDs)
+}
+
+func TestResilientClientSearchFallsBackOnOpenBreaker(t *testing.T) {
+	client := newTestResilientClient(&stubAI{search: []string{"p1"}}, &stubAI{search: []string{"p9"}})
+	for i := 0; i < failureThreshold; i++ {
+		client.breaker(domainSearch).recordFailure()
+	}
+
+	result, err := client.SearchPosts(context.Background(), "q", 0, 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p9"}, result.PostIDs, "fallback result must be used while the breaker is open")
 }
 
 func TestResilientClientRelatedPostsUsesPrimaryOnSuccess(t *testing.T) {
 	primary := &stubAI{related: []string{"p2", "p3"}}
-	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	client := newTestResilientClient(primary, &stubAI{})
 
 	result, err := client.RelatedPosts(context.Background(), "p1", 5)
 	require.NoError(t, err)
@@ -204,10 +272,21 @@ func TestResilientClientRelatedPostsUsesPrimaryOnSuccess(t *testing.T) {
 }
 
 func TestResilientClientRelatedPostsFallsBackOnError(t *testing.T) {
-	primary := &stubAI{err: errors.New("unavailable")}
-	client := &resilientClient{primary: primary, fallback: &stubAI{}, breaker: newCircuitBreaker()}
+	primary := &stubAI{err: errUnavailable}
+	client := newTestResilientClient(primary, &stubAI{})
 
 	result, err := client.RelatedPosts(context.Background(), "p1", 5)
 	require.NoError(t, err)
 	assert.Empty(t, result.PostIDs)
+}
+
+func TestResilientClientChatFallsBackOnOpenBreaker(t *testing.T) {
+	client := newTestResilientClient(&stubAI{}, &stubAI{})
+	for i := 0; i < failureThreshold; i++ {
+		client.breaker(domainChat).recordFailure()
+	}
+
+	answer, err := client.ChatAnswer(context.Background(), "q", nil, 5)
+	require.NoError(t, err)
+	assert.Equal(t, "answer", answer.Content)
 }

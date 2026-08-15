@@ -136,7 +136,7 @@ func TestProcessMessageAIErrorMarksFailed(t *testing.T) {
 	assert.Equal(t, domain.PostStatusFailed, processor.SummaryStatus)
 }
 
-func TestProcessMessageEmptyAISummaryUsesFallback(t *testing.T) {
+func TestProcessMessageEmptyAISummaryMarksFailed(t *testing.T) {
 	processor := &testutil.MockSummaryProcessor{GetPostFn: func(ctx context.Context, id string) (*domain.Post, error) {
 		return &domain.Post{ID: id, Body: "body text"}, nil
 	}}
@@ -145,8 +145,24 @@ func TestProcessMessageEmptyAISummaryUsesFallback(t *testing.T) {
 	}}
 	w := newTestWorker(t, processor, ai, nil)
 
-	require.NoError(t, w.processMessage(context.Background(), eventMessage(t, "p_1")))
-	assert.Equal(t, domain.PostStatusCompleted, processor.SummaryStatus)
+	err := w.processMessage(context.Background(), eventMessage(t, "p_1"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty summary")
+	assert.Equal(t, domain.PostStatusFailed, processor.SummaryStatus, "an empty summary must not be fabricated")
+}
+
+func TestProcessMessageCircuitOpenMarksFailed(t *testing.T) {
+	processor := &testutil.MockSummaryProcessor{GetPostFn: func(ctx context.Context, id string) (*domain.Post, error) {
+		return &domain.Post{ID: id, Body: "body text"}, nil
+	}}
+	ai := &testutil.MockAIService{GenerateSummaryFn: func(ctx context.Context, text string) (string, error) {
+		return "", domain.ErrAICircuitOpen
+	}}
+	w := newTestWorker(t, processor, ai, nil)
+
+	err := w.processMessage(context.Background(), eventMessage(t, "p_1"))
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
+	assert.Equal(t, domain.PostStatusFailed, processor.SummaryStatus)
 }
 
 func TestProcessMessageSetSummaryError(t *testing.T) {
@@ -169,7 +185,13 @@ func TestProcessMessageSetSummaryError(t *testing.T) {
 }
 
 func TestProcessWithRetriesSucceedsFirstAttempt(t *testing.T) {
-	w := newTestWorker(t, &testutil.MockSummaryProcessor{}, &testutil.MockAIService{}, nil)
+	processor := &testutil.MockSummaryProcessor{GetPostFn: func(ctx context.Context, id string) (*domain.Post, error) {
+		return &domain.Post{ID: id, Body: "body text"}, nil
+	}}
+	ai := &testutil.MockAIService{GenerateSummaryFn: func(ctx context.Context, text string) (string, error) {
+		return "A summary", nil
+	}}
+	w := newTestWorker(t, processor, ai, nil)
 	require.NoError(t, w.processWithRetries(context.Background(), &kafka.Reader{}, eventMessage(t, "p_1")))
 }
 
@@ -201,6 +223,21 @@ func TestProcessWithRetriesFailsFastOnPermanentError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, 1, attempts, "permanent errors must not be retried")
+}
+
+func TestProcessWithRetriesFailsFastOnCircuitOpen(t *testing.T) {
+	attempts := 0
+	processor := &testutil.MockSummaryProcessor{GetPostFn: func(ctx context.Context, id string) (*domain.Post, error) {
+		attempts++
+		return nil, domain.ErrAICircuitOpen
+	}}
+	w := newTestWorker(t, processor, nil, nil)
+	w.retryBase = time.Millisecond
+
+	err := w.processWithRetries(context.Background(), &kafka.Reader{}, eventMessage(t, "p_1"))
+
+	require.ErrorIs(t, err, domain.ErrAICircuitOpen)
+	assert.Equal(t, 1, attempts, "an open circuit must not burn the retry backoff")
 }
 
 func TestProcessMessagePermanentUnmarshalError(t *testing.T) {
@@ -261,13 +298,6 @@ func TestStripHTML(t *testing.T) {
 	assert.Equal(t, "a & b", stripHTML("a &amp; b"))
 	assert.Equal(t, "", stripHTML(""))
 	assert.Equal(t, "", stripHTML("<div>  </div>"))
-}
-
-func TestFallbackSummary(t *testing.T) {
-	assert.Equal(t, "Summary is currently unavailable.", fallbackSummary("  "))
-	text := fallbackSummary(string(make([]rune, 300)))
-	assert.Contains(t, text, "...")
-	assert.LessOrEqual(t, len([]rune(text)), 244)
 }
 
 func TestWorkerLifecycle(t *testing.T) {

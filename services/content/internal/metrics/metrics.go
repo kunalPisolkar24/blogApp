@@ -41,6 +41,25 @@ var (
 		Help:      "Cache reads that missed and hit the database.",
 	})
 
+	// AIFallbackEngaged counts AI calls served from the degraded path:
+	// fallback results returned, or errors surfaced because the primary
+	// failed or its circuit breaker was open, by operation.
+	AIFallbackEngaged = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "content",
+		Subsystem: "ai",
+		Name:      "fallback_engaged_total",
+		Help:      "AI calls served from the degraded path, by operation.",
+	}, []string{"operation"})
+
+	// AIBreakerState reports the circuit breaker state per failure
+	// domain: 0 = closed, 1 = open, 2 = half-open.
+	AIBreakerState = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "content",
+		Subsystem: "ai",
+		Name:      "breaker_state",
+		Help:      "AI circuit breaker state per domain (0 closed, 1 open, 2 half-open).",
+	}, []string{"domain"})
+
 	// PostsCreated, PostsUpdated, PostsDeleted count post mutations.
 	PostsCreated = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "content",
