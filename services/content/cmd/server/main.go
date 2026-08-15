@@ -87,10 +87,12 @@ func newResolver(cfg config.Config, deps *bootstrap.Dependencies) *graph.Resolve
 // outbound calls); every request carries a request id in its context.
 func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.Client, producer domain.EventProducer) http.Handler {
 	gql := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: resolver}))
+	gql.SetErrorPresenter(graph.PresentError)
+	gql.SetRecoverFunc(graph.RecoverError)
 
 	mux := http.NewServeMux()
 	mux.Handle(queryPath, otelhttp.NewHandler(
-		middleware.MetricsMiddleware(middleware.AuthMiddleware(cfg)(gql)),
+		middleware.RecoverMiddleware(middleware.MetricsMiddleware(middleware.AuthMiddleware(cfg)(gql))),
 		"graphql",
 	))
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))

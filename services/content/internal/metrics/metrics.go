@@ -27,6 +27,25 @@ var (
 		Buckets:   prometheus.DefBuckets,
 	}, []string{"route"})
 
+	// HTTPPanicsTotal counts panics recovered by RecoverMiddleware.
+	HTTPPanicsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "content",
+		Subsystem: "http",
+		Name:      "panics_total",
+		Help:      "Panics recovered in the HTTP handler chain.",
+	})
+
+	// GraphQLErrorsTotal counts GraphQL operation failures by operation
+	// and error kind (unauthorized, forbidden, not_found, validation,
+	// client, internal). HTTP-level alerting on 5xx cannot see these,
+	// because GraphQL responses ride on HTTP 200.
+	GraphQLErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "content",
+		Subsystem: "graphql",
+		Name:      "errors_total",
+		Help:      "GraphQL operation failures, by operation and error kind.",
+	}, []string{"operation", "kind"})
+
 	// CacheHits counts reads served from redis.
 	CacheHits = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "content",

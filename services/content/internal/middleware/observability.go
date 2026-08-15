@@ -32,12 +32,17 @@ func LoggerFromContext(ctx context.Context) *slog.Logger {
 	return slog.Default()
 }
 
+// maxRequestIDLen bounds client-supplied request ids so logs and
+// response headers can never be bloated or forged by request input.
+const maxRequestIDLen = 64
+
 // RequestIDMiddleware accepts an incoming X-Request-ID or generates one,
 // then makes it available on the request context and on every log line
-// produced from that context.
+// produced from that context. Client-supplied ids outside the safe
+// charset are ignored in favour of a server-generated id.
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Request-ID")
+		id := sanitizeRequestID(r.Header.Get("X-Request-ID"))
 		if id == "" {
 			id = newRequestID()
 		}
@@ -47,6 +52,23 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// sanitizeRequestID accepts short ids of letters, digits and the safe
+// separators -._; anything longer or containing other characters is
+// rejected so a client can never inject log lines or unbounded ids.
+func sanitizeRequestID(id string) string {
+	if id == "" || len(id) > maxRequestIDLen {
+		return ""
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		default:
+			return ""
+		}
+	}
+	return id
 }
 
 func newRequestID() string {
