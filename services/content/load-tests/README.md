@@ -21,6 +21,8 @@ the noop path when the AI service is down.
   - `mixed.js` — weighted mix of reads, writes and chat (`WEIGHTS` variable)
   - `reads.js` — posts list, post by id, tags, author posts
   - `writes.js` — create/update/delete; writers only modify posts they created
+  - `interactions.js` — recordPostView, likePost and savePost against the
+    seeded posts; each VU cycles through the three kinds
   - `chat.js` — chat CRUD plus grounded `askChat` traffic; every 10th ask
     is gibberish to verify irrelevant queries get no citations
 - **JWT** — minted in k6 with `k6/crypto` HMAC-SHA256 using `JWT_SECRET`,
@@ -52,6 +54,7 @@ make load-test            # service profile, default script (mixed)
 make load-test-reads      # service profile, reads only
 make load-test-writes     # service profile, writes only
 make load-test-chat       # service profile, chat only
+make load-test-interactions  # service profile, interactions only
 make load-test-worker     # worker profile (producer + worker + k6)
 ```
 

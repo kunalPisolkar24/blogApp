@@ -48,6 +48,9 @@ type PaginatedPostInteractions struct {
 type PostInteractionRepository interface {
 	Record(ctx context.Context, interaction *PostInteraction) (*PostInteraction, error)
 	FindByID(ctx context.Context, id string) (*PostInteraction, error)
+	// FindByUserPostAndKind returns the interaction of a user with a
+	// post, or ErrNotFound when the user has not interacted that way.
+	FindByUserPostAndKind(ctx context.Context, userID, postID string, kind PostInteractionKind) (*PostInteraction, error)
 	Delete(ctx context.Context, id string) error
 	ListByUser(ctx context.Context, userID string, page, limit int) (*PaginatedPostInteractions, error)
 }

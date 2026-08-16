@@ -106,6 +106,26 @@ func TestPostInteractionRepositoryFindByIDAndDelete(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrNotFound)
 }
 
+func TestPostInteractionRepositoryFindByUserPostAndKind(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	repo := newInteractionRepo(t, ctx)
+
+	created, err := repo.Record(ctx, newTestInteraction("u_1", "p_1", domain.PostInteractionLike))
+	require.NoError(t, err)
+
+	found, err := repo.FindByUserPostAndKind(ctx, "u_1", "p_1", domain.PostInteractionLike)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, found.ID)
+
+	_, err = repo.FindByUserPostAndKind(ctx, "u_1", "p_1", domain.PostInteractionSave)
+	require.ErrorIs(t, err, domain.ErrNotFound, "a different kind is not the same interaction")
+
+	_, err = repo.FindByUserPostAndKind(ctx, "u_2", "p_1", domain.PostInteractionLike)
+	require.ErrorIs(t, err, domain.ErrNotFound, "another user's interaction is not ours")
+}
+
 func TestPostInteractionRepositoryListByUser(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
