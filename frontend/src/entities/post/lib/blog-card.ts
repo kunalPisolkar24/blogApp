@@ -26,6 +26,8 @@ type PostLike = {
   body: string;
   imageUrl?: string | null;
   createdAt: string;
+  likedByMe: boolean;
+  savedByMe: boolean;
   author: AuthorLike;
   tags: TagLike[];
 };
@@ -40,6 +42,8 @@ export interface BlogCardItem {
   tags: string[];
   imageUrl: string | null;
   publishedAt: string | null;
+  likedByMe: boolean;
+  savedByMe: boolean;
 }
 
 export function stripHtml(html: string) {
@@ -100,6 +104,8 @@ export function mapPostToBlogCardItem(post: PostLike): BlogCardItem {
     tags: post.tags.map((tag) => tag.name),
     imageUrl: post.imageUrl || DEFAULT_BLOG_CARD_IMAGE,
     publishedAt: post.createdAt,
+    likedByMe: post.likedByMe,
+    savedByMe: post.savedByMe,
   };
 }
 

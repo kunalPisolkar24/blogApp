@@ -77,6 +77,8 @@ type Post struct {
 	CreatedAt     string         `json:"createdAt"`
 	UpdatedAt     string         `json:"updatedAt"`
 	Related       []*Post        `json:"related"`
+	LikedByMe     bool           `json:"likedByMe"`
+	SavedByMe     bool           `json:"savedByMe"`
 }
 
 func (Post) IsEntity() {}

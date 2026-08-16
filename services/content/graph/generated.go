@@ -121,7 +121,9 @@ type ComplexityRoot struct {
 		CreatedAt     func(childComplexity int) int
 		ID            func(childComplexity int) int
 		ImageURL      func(childComplexity int) int
+		LikedByMe     func(childComplexity int) int
 		Related       func(childComplexity int, limit *int) int
+		SavedByMe     func(childComplexity int) int
 		Slug          func(childComplexity int) int
 		Summary       func(childComplexity int) int
 		SummaryStatus func(childComplexity int) int
@@ -183,6 +185,8 @@ type MutationResolver interface {
 }
 type PostResolver interface {
 	Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error)
+	LikedByMe(ctx context.Context, obj *model.Post) (bool, error)
+	SavedByMe(ctx context.Context, obj *model.Post) (bool, error)
 }
 type QueryResolver interface {
 	Posts(ctx context.Context, page *int, limit *int) (*model.PaginatedPosts, error)
@@ -565,6 +569,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Post.ImageURL(childComplexity), true
+	case "Post.likedByMe":
+		if e.complexity.Post.LikedByMe == nil {
+			break
+		}
+
+		return e.complexity.Post.LikedByMe(childComplexity), true
 	case "Post.related":
 		if e.complexity.Post.Related == nil {
 			break
@@ -576,6 +586,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Post.Related(childComplexity, args["limit"].(*int)), true
+	case "Post.savedByMe":
+		if e.complexity.Post.SavedByMe == nil {
+			break
+		}
+
+		return e.complexity.Post.SavedByMe(childComplexity), true
 	case "Post.slug":
 		if e.complexity.Post.Slug == nil {
 			break
@@ -1713,6 +1729,10 @@ func (ec *executionContext) fieldContext_Entity_findPostByID(ctx context.Context
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -1943,6 +1963,10 @@ func (ec *executionContext) fieldContext_Mutation_createPost(ctx context.Context
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -2010,6 +2034,10 @@ func (ec *executionContext) fieldContext_Mutation_updatePost(ctx context.Context
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -2786,6 +2814,10 @@ func (ec *executionContext) fieldContext_PaginatedPosts_posts(_ context.Context,
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -3260,6 +3292,10 @@ func (ec *executionContext) fieldContext_Post_related(ctx context.Context, field
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -3274,6 +3310,64 @@ func (ec *executionContext) fieldContext_Post_related(ctx context.Context, field
 	if fc.Args, err = ec.field_Post_related_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Post_likedByMe(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Post_likedByMe,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Post().LikedByMe(ctx, obj)
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Post_likedByMe(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Post",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Post_savedByMe(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Post_savedByMe,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Post().SavedByMe(ctx, obj)
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Post_savedByMe(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Post",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
 	}
 	return fc, nil
 }
@@ -3378,6 +3472,10 @@ func (ec *executionContext) fieldContext_Query_post(ctx context.Context, field g
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -3924,6 +4022,10 @@ func (ec *executionContext) fieldContext_SearchResult_hits(_ context.Context, fi
 				return ec.fieldContext_Post_updatedAt(ctx, field)
 			case "related":
 				return ec.fieldContext_Post_related(ctx, field)
+			case "likedByMe":
+				return ec.fieldContext_Post_likedByMe(ctx, field)
+			case "savedByMe":
+				return ec.fieldContext_Post_savedByMe(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Post", field.Name)
 		},
@@ -6324,6 +6426,78 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Post_related(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "likedByMe":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_likedByMe(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "savedByMe":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Post_savedByMe(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

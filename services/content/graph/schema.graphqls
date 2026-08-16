@@ -20,6 +20,8 @@ type Post @key(fields: "id") {
   createdAt: String!
   updatedAt: String!
   related(limit: Int = 5): [Post!]!
+  likedByMe: Boolean!
+  savedByMe: Boolean!
 }
 
 type Tag {

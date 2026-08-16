@@ -34,3 +34,7 @@ models:
     fields:
       related:
         resolver: true
+      likedByMe:
+        resolver: true
+      savedByMe:
+        resolver: true

@@ -113,6 +113,8 @@ describe("mapPostToBlogCardItem", () => {
       body: `<p>${longBody}</p>`,
       imageUrl: "https://cdn/img.jpg",
       createdAt: "2024-05-12T00:00:00Z",
+      likedByMe: false,
+      savedByMe: false,
       author: { username: "kunal", name: "Kunal" },
       tags: [{ name: "react" }, { name: "type" }],
     });
@@ -136,6 +138,8 @@ describe("mapPostToBlogCardItem", () => {
       body: `<p>${shortBody}</p>`,
       imageUrl: "https://cdn/img.jpg",
       createdAt: "2024-05-12T00:00:00Z",
+      likedByMe: false,
+      savedByMe: false,
       author: { username: "u", name: "U" },
       tags: [],
     });
@@ -150,6 +154,8 @@ describe("mapPostToBlogCardItem", () => {
       body: "b",
       imageUrl: null,
       createdAt: "2024-05-12T00:00:00Z",
+      likedByMe: false,
+      savedByMe: false,
       author: { username: "u" },
       tags: [],
     });

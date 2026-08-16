@@ -29,6 +29,8 @@ export interface ContentPostCard {
   body: string;
   imageUrl?: string | null;
   createdAt: string;
+  likedByMe: boolean;
+  savedByMe: boolean;
   author: ContentPostAuthorPreview;
   tags: ContentTag[];
 }
@@ -145,6 +147,33 @@ export interface DeletePostMutation {
   deletePost: boolean;
 }
 
+export interface RecordPostViewMutationVariables {
+  postId: string;
+}
+
+export interface RecordPostViewMutation {
+  __typename?: "Mutation";
+  recordPostView: boolean;
+}
+
+export interface LikePostMutationVariables {
+  postId: string;
+}
+
+export interface LikePostMutation {
+  __typename?: "Mutation";
+  likePost: boolean;
+}
+
+export interface SavePostMutationVariables {
+  postId: string;
+}
+
+export interface SavePostMutation {
+  __typename?: "Mutation";
+  savePost: boolean;
+}
+
 export interface GenerateTagsMutationVariables {
   title: string;
   body: string;
@@ -200,6 +229,8 @@ const POST_CARD_FIELDS = gql`
     body
     imageUrl
     createdAt
+    likedByMe
+    savedByMe
     author {
       id
       username
@@ -224,6 +255,8 @@ const POST_DETAIL_FIELDS = gql`
     summaryStatus
     createdAt
     updatedAt
+    likedByMe
+    savedByMe
     author {
       id
       username
@@ -313,6 +346,24 @@ export const DeletePostDocument = gql`
     deletePost(id: $id)
   }
 ` as DocumentNode<DeletePostMutation, DeletePostMutationVariables>;
+
+export const RecordPostViewDocument = gql`
+  mutation RecordPostView($postId: ID!) {
+    recordPostView(postId: $postId)
+  }
+` as DocumentNode<RecordPostViewMutation, RecordPostViewMutationVariables>;
+
+export const LikePostDocument = gql`
+  mutation LikePost($postId: ID!) {
+    likePost(postId: $postId)
+  }
+` as DocumentNode<LikePostMutation, LikePostMutationVariables>;
+
+export const SavePostDocument = gql`
+  mutation SavePost($postId: ID!) {
+    savePost(postId: $postId)
+  }
+` as DocumentNode<SavePostMutation, SavePostMutationVariables>;
 
 export const GenerateTagsDocument = gql`
   mutation GenerateTags($title: String!, $body: String!) {

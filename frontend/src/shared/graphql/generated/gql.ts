@@ -15,8 +15,8 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  */
 type Documents = {
     "\n  query ForceNetwork {\n    __typename\n    posts {\n      posts {\n        id\n      }\n    }\n  }\n": typeof types.ForceNetworkDocument,
-    "\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n": typeof types.PostCardFieldsFragmentDoc,
-    "\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n": typeof types.PostDetailFieldsFragmentDoc,
+    "\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n": typeof types.PostCardFieldsFragmentDoc,
+    "\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n": typeof types.PostDetailFieldsFragmentDoc,
     "\n  fragment PaginatedPostFields on PaginatedPosts {\n    posts {\n      ...PostCardFields\n    }\n    totalPages\n    currentPage\n    totalPosts\n  }\n  \n": typeof types.PaginatedPostFieldsFragmentDoc,
     "\n  query Posts($page: Int, $limit: Int) {\n    posts(page: $page, limit: $limit) {\n      ...PaginatedPostFields\n    }\n  }\n  \n": typeof types.PostsDocument,
     "\n  query PostsByTag($tag: String!, $page: Int, $limit: Int) {\n    postsByTag(tag: $tag, page: $page, limit: $limit) {\n      ...PaginatedPostFields\n    }\n  }\n  \n": typeof types.PostsByTagDocument,
@@ -25,6 +25,9 @@ type Documents = {
     "\n  mutation CreatePost($input: CreatePostInput!) {\n    createPost(input: $input) {\n      id\n    }\n  }\n": typeof types.CreatePostDocument,
     "\n  mutation UpdatePost($id: ID!, $input: UpdatePostInput!) {\n    updatePost(id: $id, input: $input) {\n      ...PostDetailFields\n    }\n  }\n  \n": typeof types.UpdatePostDocument,
     "\n  mutation DeletePost($id: ID!) {\n    deletePost(id: $id)\n  }\n": typeof types.DeletePostDocument,
+    "\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n": typeof types.RecordPostViewDocument,
+    "\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n": typeof types.LikePostDocument,
+    "\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n": typeof types.SavePostDocument,
     "\n  mutation GenerateTags($title: String!, $body: String!) {\n    generateTags(title: $title, body: $body)\n  }\n": typeof types.GenerateTagsDocument,
     "\n  mutation GeneratePostContent($prompt: String!) {\n    generatePostContent(prompt: $prompt) {\n      title\n      body\n      summary\n      tags\n    }\n  }\n": typeof types.GeneratePostContentDocument,
     "\n  query MyPosts($page: Int, $limit: Int) {\n    me {\n      id\n      posts(page: $page, limit: $limit) {\n        ...PaginatedPostFields\n      }\n    }\n  }\n  \n": typeof types.MyPostsDocument,
@@ -37,8 +40,8 @@ type Documents = {
 };
 const documents: Documents = {
     "\n  query ForceNetwork {\n    __typename\n    posts {\n      posts {\n        id\n      }\n    }\n  }\n": types.ForceNetworkDocument,
-    "\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n": types.PostCardFieldsFragmentDoc,
-    "\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n": types.PostDetailFieldsFragmentDoc,
+    "\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n": types.PostCardFieldsFragmentDoc,
+    "\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n": types.PostDetailFieldsFragmentDoc,
     "\n  fragment PaginatedPostFields on PaginatedPosts {\n    posts {\n      ...PostCardFields\n    }\n    totalPages\n    currentPage\n    totalPosts\n  }\n  \n": types.PaginatedPostFieldsFragmentDoc,
     "\n  query Posts($page: Int, $limit: Int) {\n    posts(page: $page, limit: $limit) {\n      ...PaginatedPostFields\n    }\n  }\n  \n": types.PostsDocument,
     "\n  query PostsByTag($tag: String!, $page: Int, $limit: Int) {\n    postsByTag(tag: $tag, page: $page, limit: $limit) {\n      ...PaginatedPostFields\n    }\n  }\n  \n": types.PostsByTagDocument,
@@ -47,6 +50,9 @@ const documents: Documents = {
     "\n  mutation CreatePost($input: CreatePostInput!) {\n    createPost(input: $input) {\n      id\n    }\n  }\n": types.CreatePostDocument,
     "\n  mutation UpdatePost($id: ID!, $input: UpdatePostInput!) {\n    updatePost(id: $id, input: $input) {\n      ...PostDetailFields\n    }\n  }\n  \n": types.UpdatePostDocument,
     "\n  mutation DeletePost($id: ID!) {\n    deletePost(id: $id)\n  }\n": types.DeletePostDocument,
+    "\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n": types.RecordPostViewDocument,
+    "\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n": types.LikePostDocument,
+    "\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n": types.SavePostDocument,
     "\n  mutation GenerateTags($title: String!, $body: String!) {\n    generateTags(title: $title, body: $body)\n  }\n": types.GenerateTagsDocument,
     "\n  mutation GeneratePostContent($prompt: String!) {\n    generatePostContent(prompt: $prompt) {\n      title\n      body\n      summary\n      tags\n    }\n  }\n": types.GeneratePostContentDocument,
     "\n  query MyPosts($page: Int, $limit: Int) {\n    me {\n      id\n      posts(page: $page, limit: $limit) {\n        ...PaginatedPostFields\n      }\n    }\n  }\n  \n": types.MyPostsDocument,
@@ -79,11 +85,11 @@ export function graphql(source: "\n  query ForceNetwork {\n    __typename\n    p
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n"];
+export function graphql(source: "\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  fragment PostCardFields on Post {\n    id\n    title\n    body\n    imageUrl\n    createdAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      name\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n"): (typeof documents)["\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n"];
+export function graphql(source: "\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n"): (typeof documents)["\n  fragment PostDetailFields on Post {\n    id\n    title\n    body\n    slug\n    imageUrl\n    summary\n    summaryStatus\n    createdAt\n    updatedAt\n    likedByMe\n    savedByMe\n    author {\n      id\n      username\n      email\n      name\n      bio\n      avatarUrl\n    }\n    tags {\n      id\n      name\n    }\n    related {\n      ...PostCardFields\n    }\n  }\n  \n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -116,6 +122,18 @@ export function graphql(source: "\n  mutation UpdatePost($id: ID!, $input: Updat
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeletePost($id: ID!) {\n    deletePost(id: $id)\n  }\n"): (typeof documents)["\n  mutation DeletePost($id: ID!) {\n    deletePost(id: $id)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n"): (typeof documents)["\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n"): (typeof documents)["\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n"): (typeof documents)["\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

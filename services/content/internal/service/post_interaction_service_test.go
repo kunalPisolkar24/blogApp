@@ -171,3 +171,36 @@ func TestToggleLikeUnaffectedBySeenKey(t *testing.T) {
 	require.Len(t, publisher.Interacted, 2, "likes publish even when the post was already seen")
 	assert.Equal(t, domain.PostInteractionLike, publisher.Interacted[1].Kind)
 }
+
+func TestStatesDelegatesToRepository(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			assert.Equal(t, "u_1", userID)
+			assert.ElementsMatch(t, []string{"p_1", "p_2"}, postIDs)
+			return map[string]domain.PostInteractionState{
+				"p_1": {Liked: true},
+				"p_2": {Saved: true},
+			}, nil
+		},
+	}
+	svc, _, _ := newInteractionService(t, repo, nil, nil)
+
+	states, err := svc.States(context.Background(), "u_1", []string{"p_1", "p_2"})
+	require.NoError(t, err)
+	assert.True(t, states["p_1"].Liked)
+	assert.False(t, states["p_1"].Saved)
+	assert.True(t, states["p_2"].Saved)
+	assert.False(t, states["p_2"].Liked)
+}
+
+func TestStatesPropagatesRepoErrors(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			return nil, errors.New("mongo down")
+		},
+	}
+	svc, _, _ := newInteractionService(t, repo, nil, nil)
+
+	_, err := svc.States(context.Background(), "u_1", []string{"p_1"})
+	require.Error(t, err)
+}

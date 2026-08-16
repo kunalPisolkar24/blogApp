@@ -349,6 +349,7 @@ type MockPostInteractionRepository struct {
 	FindByUserPostAndKindFn func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error)
 	DeleteFn                func(ctx context.Context, id string) error
 	ListByUserFn            func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedPostInteractions, error)
+	ListStatesFn            func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error)
 
 	RecordCalls        int
 	FindByUserPostKind domain.PostInteractionKind
@@ -394,6 +395,13 @@ func (m *MockPostInteractionRepository) ListByUser(ctx context.Context, userID s
 		return m.ListByUserFn(ctx, userID, page, limit)
 	}
 	return &domain.PaginatedPostInteractions{Page: page}, nil
+}
+
+func (m *MockPostInteractionRepository) ListStates(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+	if m.ListStatesFn != nil {
+		return m.ListStatesFn(ctx, userID, postIDs)
+	}
+	return map[string]domain.PostInteractionState{}, nil
 }
 
 // MockSummaryProcessor fakes the worker's post store.

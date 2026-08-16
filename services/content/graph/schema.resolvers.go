@@ -163,21 +163,6 @@ func (r *mutationResolver) SavePost(ctx context.Context, postID string) (bool, e
 	return r.toggleInteraction(ctx, postID, r.InteractionService.ToggleSave)
 }
 
-// toggleInteraction runs an interaction toggle for the authenticated
-// user and maps its result to the client.
-func (r *mutationResolver) toggleInteraction(ctx context.Context, postID string, toggle func(ctx context.Context, userID, postID string) (bool, error)) (bool, error) {
-	userID, ok := middleware.UserIDFromContext(ctx)
-	if !ok {
-		return false, mapDomainError(domain.ErrUnauthorized)
-	}
-
-	state, err := toggle(ctx, userID, postID)
-	if err != nil {
-		return false, mapDomainError(err)
-	}
-	return state, nil
-}
-
 // Related is the resolver for the related field.
 func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error) {
 	posts, err := relatedPostsFrom(ctx, r.PostService, obj.ID, deref(limit))
@@ -185,6 +170,24 @@ func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int)
 		return nil, mapDomainError(err)
 	}
 	return mapDomainPostsToModel(posts), nil
+}
+
+// LikedByMe is the resolver for the likedByMe field.
+func (r *postResolver) LikedByMe(ctx context.Context, obj *model.Post) (bool, error) {
+	state, err := r.interactionState(ctx, obj.ID)
+	if err != nil {
+		return false, mapDomainError(err)
+	}
+	return state.Liked, nil
+}
+
+// SavedByMe is the resolver for the savedByMe field.
+func (r *postResolver) SavedByMe(ctx context.Context, obj *model.Post) (bool, error) {
+	state, err := r.interactionState(ctx, obj.ID)
+	if err != nil {
+		return false, mapDomainError(err)
+	}
+	return state.Saved, nil
 }
 
 // Posts is the resolver for the posts field.

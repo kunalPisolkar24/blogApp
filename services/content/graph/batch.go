@@ -112,10 +112,12 @@ func (b *batcher[T]) flush() {
 // entity batcher, shared by every resolver of one request. It is
 // injected per request by WithBatching.
 type batchRegistry struct {
-	mu       sync.Mutex
-	svc      *service.PostService
-	related  map[int]*batcher[[]*domain.Post]
-	entities *batcher[*domain.Post]
+	mu             sync.Mutex
+	svc            *service.PostService
+	interactionSvc *service.PostInteractionService
+	related        map[int]*batcher[[]*domain.Post]
+	entities       *batcher[*domain.Post]
+	states         map[string]*batcher[domain.PostInteractionState]
 }
 
 type batchRegistryKey struct{}
@@ -178,14 +180,42 @@ func (r *batchRegistry) entityBatcher() *batcher[*domain.Post] {
 	return b
 }
 
-// WithBatching injects a per-request batch registry so related-posts
-// and federation entity lookups share one underlying call per request
-// instead of firing one AI RPC or Mongo query per object.
-func WithBatching(svc *service.PostService, next http.Handler) http.Handler {
+// statesBatcher returns the interaction-state batcher for a user,
+// sharing one repository call across every likedByMe/savedByMe resolver
+// of the same request. A post with no state simply fans out its zero
+// value, so missing entries are not treated as errors.
+func (r *batchRegistry) statesBatcher(userID string) *batcher[domain.PostInteractionState] {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if b, ok := r.states[userID]; ok {
+		return b
+	}
+	b := newBatcher(context.Background(), func(ctx context.Context, postIDs []string) (map[string]domain.PostInteractionState, map[string]error) {
+		states, err := r.interactionSvc.States(ctx, userID, postIDs)
+		if err != nil {
+			idErrs := make(map[string]error, len(postIDs))
+			for _, id := range postIDs {
+				idErrs[id] = err
+			}
+			return nil, idErrs
+		}
+		return states, nil
+	})
+	r.states[userID] = b
+	return b
+}
+
+// WithBatching injects a per-request batch registry so related-posts,
+// federation entity and interaction-state lookups share one underlying
+// call per request instead of firing one AI RPC or Mongo query per
+// object.
+func WithBatching(svc *service.PostService, interactionSvc *service.PostInteractionService, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reg := &batchRegistry{
-			svc:     svc,
-			related: make(map[int]*batcher[[]*domain.Post]),
+			svc:            svc,
+			interactionSvc: interactionSvc,
+			related:        make(map[int]*batcher[[]*domain.Post]),
+			states:         make(map[string]*batcher[domain.PostInteractionState]),
 		}
 		ctx := context.WithValue(r.Context(), batchRegistryKey{}, reg)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -210,4 +240,18 @@ func postByIDFrom(ctx context.Context, svc *service.PostService, id string) (*do
 		return reg.entityBatcher().get(ctx, id)
 	}
 	return svc.GetPost(ctx, id)
+}
+
+// interactionStatesFrom resolves the like/save state of a user for one
+// post, sharing a single repository call across every interaction
+// resolver of the same request when batching is enabled.
+func interactionStatesFrom(ctx context.Context, svc *service.PostInteractionService, userID, postID string) (domain.PostInteractionState, error) {
+	if reg := registryFrom(ctx); reg != nil {
+		return reg.statesBatcher(userID).get(ctx, postID)
+	}
+	states, err := svc.States(ctx, userID, []string{postID})
+	if err != nil {
+		return domain.PostInteractionState{}, err
+	}
+	return states[postID], nil
 }
