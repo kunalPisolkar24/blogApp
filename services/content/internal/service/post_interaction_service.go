@@ -62,6 +62,12 @@ func (s *PostInteractionService) ToggleSave(ctx context.Context, userID, postID 
 	return s.toggle(ctx, userID, postID, domain.PostInteractionSave)
 }
 
+// States returns the like/save state of a user for every given post.
+// A post the user never interacted with simply has no entry.
+func (s *PostInteractionService) States(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+	return s.repo.ListStates(ctx, userID, postIDs)
+}
+
 // toggle switches the interaction off when it exists (deleting it,
 // without publishing - there is no negative kind), and on otherwise.
 // The user id from the caller always keys the lookup, so a user can

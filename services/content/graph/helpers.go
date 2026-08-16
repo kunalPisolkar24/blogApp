@@ -1,9 +1,38 @@
 package graph
 
 import (
+	"context"
+
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 )
+
+// toggleInteraction runs an interaction toggle for the authenticated
+// user and maps its result to the client.
+func (r *mutationResolver) toggleInteraction(ctx context.Context, postID string, toggle func(ctx context.Context, userID, postID string) (bool, error)) (bool, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return false, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	state, err := toggle(ctx, userID, postID)
+	if err != nil {
+		return false, mapDomainError(err)
+	}
+	return state, nil
+}
+
+// interactionState resolves the like/save state of the requesting user
+// for a post. Anonymous callers get the empty state, so public post
+// listings keep working without authentication.
+func (r *postResolver) interactionState(ctx context.Context, postID string) (domain.PostInteractionState, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return domain.PostInteractionState{}, nil
+	}
+	return interactionStatesFrom(ctx, r.InteractionService, userID, postID)
+}
 
 func mapTags(tagNames []string) []*model.Tag {
 	var tags []*model.Tag

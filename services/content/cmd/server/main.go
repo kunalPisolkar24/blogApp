@@ -93,7 +93,7 @@ func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.
 
 	var gqlHandler http.Handler = gql
 	if resolver != nil && resolver.PostService != nil {
-		gqlHandler = graph.WithBatching(resolver.PostService, gql)
+		gqlHandler = graph.WithBatching(resolver.PostService, resolver.InteractionService, gql)
 	}
 
 	mux := http.NewServeMux()

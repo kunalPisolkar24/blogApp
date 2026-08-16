@@ -118,3 +118,40 @@ func (r *MongoPostInteractionRepository) Delete(ctx context.Context, id string) 
 	_, err = r.collection.DeleteOne(ctx, bson.M{"_id": oid})
 	return err
 }
+
+// ListStates returns the like/save state of a user for every given
+// post in one query. Posts the user never interacted with are absent
+// from the map, so callers can treat a missing post as fully unmarked.
+func (r *MongoPostInteractionRepository) ListStates(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+	if len(postIDs) == 0 {
+		return map[string]domain.PostInteractionState{}, nil
+	}
+
+	filter := bson.M{
+		"userId": userID,
+		"postId": bson.M{"$in": postIDs},
+	}
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	interactions := make([]domain.PostInteraction, 0)
+	if err := cursor.All(ctx, &interactions); err != nil {
+		return nil, err
+	}
+
+	states := make(map[string]domain.PostInteractionState, len(interactions))
+	for _, interaction := range interactions {
+		state := states[interaction.PostID]
+		switch interaction.Kind {
+		case domain.PostInteractionLike:
+			state.Liked = true
+		case domain.PostInteractionSave:
+			state.Saved = true
+		}
+		states[interaction.PostID] = state
+	}
+	return states, nil
+}

@@ -556,3 +556,78 @@ func TestMutationResolverToggleUnauthorized(t *testing.T) {
 		})
 	}
 }
+
+func TestPostResolverLikedByMeReflectsUserState(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			assert.Equal(t, "u_1", userID)
+			return map[string]domain.PostInteractionState{
+				"p_1": {Liked: true},
+				"p_2": {Saved: true},
+			}, nil
+		},
+	}
+	resolver, _, _ := newTestInteractionResolver(t, repo, nil)
+
+	liked, err := resolver.Post().LikedByMe(authenticatedContext("u_1"), &model.Post{ID: "p_1"})
+	require.NoError(t, err)
+	assert.True(t, liked, "the requesting user liked p_1")
+
+	liked, err = resolver.Post().LikedByMe(authenticatedContext("u_1"), &model.Post{ID: "p_2"})
+	require.NoError(t, err)
+	assert.False(t, liked, "p_2 was only saved, never liked")
+
+	liked, err = resolver.Post().LikedByMe(authenticatedContext("u_1"), &model.Post{ID: "p_unknown"})
+	require.NoError(t, err)
+	assert.False(t, liked, "a post with no interactions is not liked")
+}
+
+func TestPostResolverSavedByMeReflectsUserState(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			return map[string]domain.PostInteractionState{
+				"p_1": {Liked: true},
+				"p_2": {Saved: true},
+			}, nil
+		},
+	}
+	resolver, _, _ := newTestInteractionResolver(t, repo, nil)
+
+	saved, err := resolver.Post().SavedByMe(authenticatedContext("u_1"), &model.Post{ID: "p_2"})
+	require.NoError(t, err)
+	assert.True(t, saved, "the requesting user saved p_2")
+
+	saved, err = resolver.Post().SavedByMe(authenticatedContext("u_1"), &model.Post{ID: "p_1"})
+	require.NoError(t, err)
+	assert.False(t, saved, "p_1 was only liked, never saved")
+}
+
+func TestPostResolverInteractionStateAnonymous(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			t.Fatal("anonymous callers must not trigger state lookups")
+			return nil, nil
+		},
+	}
+	resolver, _, _ := newTestInteractionResolver(t, repo, nil)
+
+	liked, err := resolver.Post().LikedByMe(context.Background(), &model.Post{ID: "p_1"})
+	require.NoError(t, err)
+	assert.False(t, liked, "anonymous callers are never shown as liking a post")
+
+	saved, err := resolver.Post().SavedByMe(context.Background(), &model.Post{ID: "p_1"})
+	require.NoError(t, err)
+	assert.False(t, saved, "anonymous callers are never shown as saving a post")
+}
+
+func TestPostResolverInteractionStatePropagatesErrors(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			return nil, errors.New("mongo down")
+		},
+	}
+	resolver, _, _ := newTestInteractionResolver(t, repo, nil)
+
+	_, err := resolver.Post().LikedByMe(authenticatedContext("u_1"), &model.Post{ID: "p_1"})
+	require.Error(t, err)
+}

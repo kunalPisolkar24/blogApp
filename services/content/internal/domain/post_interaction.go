@@ -45,6 +45,13 @@ type PaginatedPostInteractions struct {
 	Page              int
 }
 
+// PostInteractionState is the like/save state of a user with a post.
+// It is what the likedByMe/savedByMe Post fields are resolved from.
+type PostInteractionState struct {
+	Liked bool
+	Saved bool
+}
+
 type PostInteractionRepository interface {
 	Record(ctx context.Context, interaction *PostInteraction) (*PostInteraction, error)
 	FindByID(ctx context.Context, id string) (*PostInteraction, error)
@@ -53,4 +60,7 @@ type PostInteractionRepository interface {
 	FindByUserPostAndKind(ctx context.Context, userID, postID string, kind PostInteractionKind) (*PostInteraction, error)
 	Delete(ctx context.Context, id string) error
 	ListByUser(ctx context.Context, userID string, page, limit int) (*PaginatedPostInteractions, error)
+	// ListStates returns the like/save state of a user for every given
+	// post. Posts the user never interacted with are absent from the map.
+	ListStates(ctx context.Context, userID string, postIDs []string) (map[string]PostInteractionState, error)
 }

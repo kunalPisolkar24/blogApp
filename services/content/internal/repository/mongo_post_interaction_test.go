@@ -168,3 +168,47 @@ func TestPostInteractionRepositoryListByUser(t *testing.T) {
 	assert.Empty(t, page.Interactions)
 	assert.Zero(t, page.TotalInteractions)
 }
+
+func TestPostInteractionRepositoryListStates(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	repo := newInteractionRepo(t, ctx)
+
+	for _, interaction := range []*domain.PostInteraction{
+		{UserID: "u_1", PostID: "p_1", Kind: domain.PostInteractionLike, CreatedAt: time.Now().UTC()},
+		{UserID: "u_1", PostID: "p_2", Kind: domain.PostInteractionSave, CreatedAt: time.Now().UTC()},
+		{UserID: "u_1", PostID: "p_2", Kind: domain.PostInteractionLike, CreatedAt: time.Now().UTC()},
+		{UserID: "u_1", PostID: "p_3", Kind: domain.PostInteractionView, CreatedAt: time.Now().UTC()},
+		{UserID: "u_2", PostID: "p_1", Kind: domain.PostInteractionLike, CreatedAt: time.Now().UTC()},
+	} {
+		_, err := repo.Record(ctx, interaction)
+		require.NoError(t, err)
+	}
+
+	states, err := repo.ListStates(ctx, "u_1", []string{"p_1", "p_2", "p_3", "p_missing"})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PostInteractionState{Liked: true}, states["p_1"], "liked posts surface Liked")
+	assert.Equal(t, domain.PostInteractionState{Liked: true, Saved: true}, states["p_2"], "a post can be liked and saved at once")
+	assert.Equal(t, domain.PostInteractionState{}, states["p_3"], "views do not count as like or save")
+	assert.Zero(t, states["p_missing"], "posts the user never interacted with have no entry")
+
+	otherStates, err := repo.ListStates(ctx, "u_2", []string{"p_1"})
+	require.NoError(t, err)
+	assert.Equal(t, domain.PostInteractionState{Liked: true}, otherStates["p_1"], "states are scoped to the requesting user")
+}
+
+func TestPostInteractionRepositoryListStatesEmptyAndNoPosts(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	repo := newInteractionRepo(t, ctx)
+
+	states, err := repo.ListStates(ctx, "nobody", []string{"p_1"})
+	require.NoError(t, err)
+	assert.Empty(t, states)
+
+	states, err = repo.ListStates(ctx, "nobody", nil)
+	require.NoError(t, err)
+	assert.Empty(t, states, "no post ids is a no-op, not an error")
+}

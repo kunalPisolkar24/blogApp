@@ -180,3 +180,56 @@ func TestPostByIDFromReturnsNotFoundForMissing(t *testing.T) {
 	_, err = postByIDFrom(context.Background(), svc, "missing")
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
+
+func TestInteractionStatesFromSharesOneLookupPerRequest(t *testing.T) {
+	var calls atomic.Int32
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			calls.Add(1)
+			states := make(map[string]domain.PostInteractionState, len(postIDs))
+			for _, id := range postIDs {
+				states[id] = domain.PostInteractionState{Liked: true}
+			}
+			return states, nil
+		},
+	}
+	interactionSvc := service.NewPostInteractionService(repo, &testutil.MockEventPublisher{}, nil)
+	reg := &batchRegistry{
+		interactionSvc: interactionSvc,
+		states:         make(map[string]*batcher[domain.PostInteractionState]),
+	}
+	ctx := context.WithValue(context.Background(), batchRegistryKey{}, reg)
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for _, postID := range []string{"p_1", "p_2"} {
+		go func(postID string) {
+			<-start
+			state, err := interactionStatesFrom(ctx, interactionSvc, "u_1", postID)
+			if err == nil && !state.Liked {
+				err = errors.New("unexpected state")
+			}
+			errs <- err
+		}(postID)
+	}
+	close(start)
+
+	for i := 0; i < 2; i++ {
+		require.NoError(t, <-errs)
+	}
+	assert.Equal(t, int32(1), calls.Load(), "all posts of a request share a single state lookup")
+}
+
+func TestInteractionStatesFromFallsBackWithoutRegistry(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		ListStatesFn: func(ctx context.Context, userID string, postIDs []string) (map[string]domain.PostInteractionState, error) {
+			assert.Equal(t, []string{"p_1"}, postIDs)
+			return map[string]domain.PostInteractionState{"p_1": {Saved: true}}, nil
+		},
+	}
+	interactionSvc := service.NewPostInteractionService(repo, &testutil.MockEventPublisher{}, nil)
+
+	state, err := interactionStatesFrom(context.Background(), interactionSvc, "u_1", "p_1")
+	require.NoError(t, err)
+	assert.True(t, state.Saved)
+}
