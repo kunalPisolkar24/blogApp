@@ -34,7 +34,12 @@ func (w *fakeWriter) Close() error {
 
 func newTestProducer(t *testing.T, w messageWriter) *kafkaProducer {
 	t.Helper()
-	return &kafkaProducer{writer: w, topic: "posts", brokers: []string{"localhost:9092"}}
+	return &kafkaProducer{
+		writer:          w,
+		topic:           "posts",
+		interactedTopic: "user-interacted",
+		brokers:         []string{"localhost:9092"},
+	}
 }
 
 func ptr(s string) *string { return &s }
@@ -73,6 +78,44 @@ func TestPublishPostTombstone(t *testing.T) {
 	require.Len(t, w.messages, 1)
 	assert.Equal(t, []byte("p_42"), w.messages[0].Key)
 	assert.Nil(t, w.messages[0].Value, "tombstones carry no value")
+}
+
+func TestPublishUserInteracted(t *testing.T) {
+	tests := []struct {
+		name   string
+		kind   domain.PostInteractionKind
+		weight int
+	}{
+		{name: "view", kind: domain.PostInteractionView, weight: 1},
+		{name: "like", kind: domain.PostInteractionLike, weight: 3},
+		{name: "save", kind: domain.PostInteractionSave, weight: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &fakeWriter{}
+			producer := newTestProducer(t, w)
+
+			interaction := &domain.PostInteraction{
+				UserID: "u_1",
+				PostID: "p_1",
+				Kind:   tt.kind,
+			}
+			require.NoError(t, producer.PublishUserInteracted(context.Background(), interaction))
+			require.Len(t, w.messages, 1)
+
+			msg := w.messages[0]
+			assert.Equal(t, "user-interacted", msg.Topic)
+			assert.Equal(t, []byte("u_1"), msg.Key, "interactions are keyed by user id")
+
+			var payload domain.UserInteractedPayload
+			require.NoError(t, json.Unmarshal(msg.Value, &payload))
+			assert.Equal(t, "u_1", payload.UserID)
+			assert.Equal(t, "p_1", payload.PostID)
+			assert.Equal(t, tt.kind, payload.Kind)
+			assert.Equal(t, tt.weight, payload.Weight)
+		})
+	}
 }
 
 func TestPublishDeadLetter(t *testing.T) {

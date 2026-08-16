@@ -26,7 +26,7 @@ func TestWorkerConsumesAndSummarises(t *testing.T) {
 	testutil.EnsureTopic(t, ctx, brokers, "posts")
 	testutil.EnsureTopic(t, ctx, brokers, "dlq")
 
-	producer := messaging.NewKafkaProducer(brokers, "posts")
+	producer := messaging.NewKafkaProducer(brokers, "posts", "user-interacted")
 	t.Cleanup(func() { _ = producer.Close() })
 
 	post := &domain.Post{ID: "p_e2e", Title: "Hello", Body: "<p>Some body content</p>", SummaryStatus: domain.PostStatusPending}
@@ -59,7 +59,7 @@ func TestWorkerSkipsTombstone(t *testing.T) {
 	testutil.EnsureTopic(t, ctx, brokers, "posts")
 	testutil.EnsureTopic(t, ctx, brokers, "dlq")
 
-	producer := messaging.NewKafkaProducer(brokers, "posts")
+	producer := messaging.NewKafkaProducer(brokers, "posts", "user-interacted")
 	t.Cleanup(func() { _ = producer.Close() })
 
 	require.NoError(t, producer.PublishPostDeleted(ctx, "p_gone"))
@@ -86,7 +86,7 @@ func TestWorkerSendsPoisonToDLQ(t *testing.T) {
 	testutil.EnsureTopic(t, ctx, brokers, "posts")
 	testutil.EnsureTopic(t, ctx, brokers, "dlq")
 
-	producer := messaging.NewKafkaProducer(brokers, "posts")
+	producer := messaging.NewKafkaProducer(brokers, "posts", "user-interacted")
 	t.Cleanup(func() { _ = producer.Close() })
 
 	writer := &kafka.Writer{Addr: kafka.TCP(brokers...), Balancer: &kafka.Hash{}}
@@ -119,7 +119,7 @@ func TestSearchWorkerRetriesThenDeadLetters(t *testing.T) {
 	testutil.EnsureTopic(t, ctx, brokers, "posts")
 	testutil.EnsureTopic(t, ctx, brokers, "posts-dlq")
 
-	producer := messaging.NewKafkaProducer(brokers, "posts")
+	producer := messaging.NewKafkaProducer(brokers, "posts", "user-interacted")
 	t.Cleanup(func() { _ = producer.Close() })
 
 	require.NoError(t, producer.PublishPostCreated(ctx, &domain.Post{ID: "p_retry", Title: "T", Body: "<p>b</p>"}))

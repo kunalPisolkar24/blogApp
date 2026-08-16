@@ -92,7 +92,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command: |
       "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:${KAFKA_INT_PORT:-9092} --create --if-not-exists --topic ${KAFKA_TOPIC:-posts} --replication-factor 1 --partitions 3
-       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:${KAFKA_INT_PORT:-9092} --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 1 --partitions 1"
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:${KAFKA_INT_PORT:-9092} --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 1 --partitions 1
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:${KAFKA_INT_PORT:-9092} --create --if-not-exists --topic ${KAFKA_USER_INTERACTED_TOPIC:-user-interacted} --replication-factor 1 --partitions 3"
     networks:
       - app-network
 
@@ -113,6 +114,7 @@ services:
       - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
       - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-posts}
+      - KAFKA_USER_INTERACTED_TOPIC=${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
       - KAFKA_DLQ_TOPIC=${KAFKA_DLQ_TOPIC:-posts-dlq}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_SERVICE_INT_PORT:-4002}/health || exit 1"]
@@ -145,6 +147,7 @@ services:
       - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
       - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-posts}
+      - KAFKA_USER_INTERACTED_TOPIC=${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
       - KAFKA_DLQ_TOPIC=${KAFKA_DLQ_TOPIC:-posts-dlq}
       - KAFKA_CONSUMER_GROUP_ID=${KAFKA_CONSUMER_GROUP_ID:-content-summary-worker-group}
       - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-3}
@@ -178,6 +181,7 @@ services:
       - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
       - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-posts}
+      - KAFKA_USER_INTERACTED_TOPIC=${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
       - KAFKA_DLQ_TOPIC=${KAFKA_DLQ_TOPIC:-posts-dlq}
       - KAFKA_SEARCH_CONSUMER_GROUP_ID=${KAFKA_SEARCH_CONSUMER_GROUP_ID:-content-search-worker-group}
       - WORKER_CONCURRENCY=${SEARCH_WORKER_CONCURRENCY:-3}

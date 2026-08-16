@@ -21,16 +21,17 @@ type messageWriter interface {
 }
 
 type kafkaProducer struct {
-	writer  messageWriter
-	brokers []string
-	topic   string
+	writer          messageWriter
+	brokers         []string
+	topic           string
+	interactedTopic string
 }
 
-// NewKafkaProducer returns a producer for the given topic. The hash
-// balancer keys messages by post id so every event for a post lands on
-// the same partition, in order. The writer is topic-less; each message
+// NewKafkaProducer returns a producer for the given topics. The hash
+// balancer keys messages so every event for the same key lands on the
+// same partition, in order. The writer is topic-less; each message
 // carries its own topic so the same writer can serve the DLQ.
-func NewKafkaProducer(brokers []string, topic string) domain.EventProducer {
+func NewKafkaProducer(brokers []string, topic string, interactedTopic string) domain.EventProducer {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
 		Balancer:     &kafka.Hash{},
@@ -42,7 +43,12 @@ func NewKafkaProducer(brokers []string, topic string) domain.EventProducer {
 		RequiredAcks: kafka.RequireAll,
 		Compression:  compress.Gzip,
 	}
-	return &kafkaProducer{writer: writer, brokers: append([]string(nil), brokers...), topic: topic}
+	return &kafkaProducer{
+		writer:          writer,
+		brokers:         append([]string(nil), brokers...),
+		topic:           topic,
+		interactedTopic: interactedTopic,
+	}
 }
 
 func (k *kafkaProducer) PublishPostCreated(ctx context.Context, post *domain.Post) error {
@@ -57,6 +63,26 @@ func (k *kafkaProducer) PublishPostUpdated(ctx context.Context, post *domain.Pos
 // as key and a nil value, signalling deletion to consumers.
 func (k *kafkaProducer) PublishPostDeleted(ctx context.Context, id string) error {
 	return k.writeMessages(ctx, kafka.Message{Topic: k.topic, Key: []byte(id), Time: time.Now()})
+}
+
+// PublishUserInteracted publishes an interaction to the dedicated
+// user-interacted topic. The message is keyed by user id so all of a
+// user's interactions land on the same partition, in order — what the
+// personalizer consumer needs to update interest profiles online.
+func (k *kafkaProducer) PublishUserInteracted(ctx context.Context, interaction *domain.PostInteraction) error {
+	payload := domain.UserInteractedPayload{
+		UserID: interaction.UserID,
+		PostID: interaction.PostID,
+		Kind:   interaction.Kind,
+		Weight: interaction.Kind.Weight(),
+	}
+
+	value, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal kafka payload: %w", err)
+	}
+
+	return k.writeMessages(ctx, kafka.Message{Topic: k.interactedTopic, Key: []byte(interaction.UserID), Value: value, Time: time.Now()})
 }
 
 func (k *kafkaProducer) PublishDeadLetter(ctx context.Context, originalTopic, dlqTopic string, key, value []byte, cause error) error {

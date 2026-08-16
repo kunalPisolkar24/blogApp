@@ -14,6 +14,20 @@ const (
 	PostInteractionSave PostInteractionKind = "save"
 )
 
+// Weight is the signal strength of the interaction for personalization:
+// views are weak signals, likes stronger, saves the strongest. The
+// weights are fixed for now and configurable via env later.
+func (k PostInteractionKind) Weight() int {
+	switch k {
+	case PostInteractionLike:
+		return 3
+	case PostInteractionSave:
+		return 5
+	default:
+		return 1
+	}
+}
+
 // PostInteraction records a single user interaction (view, like or save)
 // with a post. It is the raw material feed personalization runs on.
 type PostInteraction struct {

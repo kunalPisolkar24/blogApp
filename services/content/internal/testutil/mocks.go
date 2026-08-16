@@ -218,6 +218,7 @@ type MockEventPublisher struct {
 	Created     []*domain.Post
 	Updated     []*domain.Post
 	Deleted     []string
+	Interacted  []*domain.PostInteraction
 	DeadLetters []DeadLetter
 }
 
@@ -241,6 +242,11 @@ func (m *MockEventPublisher) PublishPostUpdated(ctx context.Context, post *domai
 
 func (m *MockEventPublisher) PublishPostDeleted(ctx context.Context, id string) error {
 	m.Deleted = append(m.Deleted, id)
+	return m.Err
+}
+
+func (m *MockEventPublisher) PublishUserInteracted(ctx context.Context, interaction *domain.PostInteraction) error {
+	m.Interacted = append(m.Interacted, interaction)
 	return m.Err
 }
 

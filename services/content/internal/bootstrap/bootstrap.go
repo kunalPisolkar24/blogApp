@@ -72,7 +72,7 @@ func New(ctx context.Context, cfg config.Config, serviceName string) (*Dependenc
 	aiClient := ai.NewResilientClient(cfg.AIServiceURL)
 	slog.Info("ai client configured", "addr", cfg.AIServiceURL)
 
-	producer := messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
+	producer := messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaUserInteractedTopic)
 
 	return &Dependencies{
 		Mongo:           mongoClient,
@@ -121,7 +121,7 @@ func NewSearch(ctx context.Context, cfg config.Config, serviceName string) (*Sea
 
 	return &SearchDependencies{
 		AI:              ai.NewResilientClient(cfg.AIServiceURL),
-		Producer:        messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic),
+		Producer:        messaging.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaUserInteractedTopic),
 		ShutdownTracing: shutdownTracing,
 	}, nil
 }
