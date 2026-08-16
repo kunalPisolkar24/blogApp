@@ -22,7 +22,9 @@ the noop path when the AI service is down.
   - `reads.js` — posts list, post by id, tags, author posts
   - `writes.js` — create/update/delete; writers only modify posts they created
   - `interactions.js` — recordPostView, likePost and savePost against the
-    seeded posts; each VU cycles through the three kinds
+    seeded posts; each VU cycles through the three kinds, then reads the
+    page containing the post back and asserts the toggle is reflected in
+    `likedByMe`/`savedByMe` (exercising the batched state lookups)
   - `chat.js` — chat CRUD plus grounded `askChat` traffic; every 10th ask
     is gibberish to verify irrelevant queries get no citations
 - **JWT** — minted in k6 with `k6/crypto` HMAC-SHA256 using `JWT_SECRET`,
