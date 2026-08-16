@@ -30,6 +30,7 @@ x-content-env: &content-env
   AI_SERVICE_URL: ${AI_SERVICE_URL:-ai-service:50051}
   KAFKA_BROKERS: ${CONTENT_KAFKA_BROKERS:-kafka-1:9092,kafka-2:9092,kafka-3:9092}
   KAFKA_TOPIC: ${KAFKA_TOPIC:-posts}
+  KAFKA_USER_INTERACTED_TOPIC: ${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
   KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-posts-dlq}
 
 services:

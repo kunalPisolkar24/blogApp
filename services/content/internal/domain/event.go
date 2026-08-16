@@ -10,8 +10,9 @@ import (
 type EventType string
 
 const (
-	EventTypePostCreated EventType = "post.created"
-	EventTypePostUpdated EventType = "post.updated"
+	EventTypePostCreated    EventType = "post.created"
+	EventTypePostUpdated    EventType = "post.updated"
+	EventTypeUserInteracted EventType = "user.interacted"
 )
 
 type PostEventPayload struct {
@@ -26,10 +27,22 @@ type PostEventPayload struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// UserInteractedPayload is the event published on the dedicated
+// user-interacted topic whenever a user views, likes or saves a post.
+// Weight is the signal strength of the interaction (see
+// PostInteractionKind.Weight).
+type UserInteractedPayload struct {
+	UserID string              `json:"userId"`
+	PostID string              `json:"postId"`
+	Kind   PostInteractionKind `json:"kind"`
+	Weight int                 `json:"weight"`
+}
+
 type EventPublisher interface {
 	PublishPostCreated(ctx context.Context, post *Post) error
 	PublishPostUpdated(ctx context.Context, post *Post) error
 	PublishPostDeleted(ctx context.Context, id string) error
+	PublishUserInteracted(ctx context.Context, interaction *PostInteraction) error
 }
 
 type DLQPublisher interface {

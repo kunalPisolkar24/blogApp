@@ -23,7 +23,7 @@ func TestReplayRepublishesDeadLetters(t *testing.T) {
 	testutil.EnsureTopic(t, ctx, brokers, "posts")
 	testutil.EnsureTopic(t, ctx, brokers, "posts-dlq")
 
-	producer := messaging.NewKafkaProducer(brokers, "posts")
+	producer := messaging.NewKafkaProducer(brokers, "posts", "user-interacted")
 	t.Cleanup(func() { _ = producer.Close() })
 	require.NoError(t, producer.PublishDeadLetter(ctx, "posts", "posts-dlq", []byte("p_r1"), []byte(`{"postId":"p_r1"}`), errors.New("boom")))
 

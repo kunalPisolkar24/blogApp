@@ -24,6 +24,7 @@ type Config struct {
 	AIServiceURL               string
 	KafkaBrokers               []string
 	KafkaTopic                 string
+	KafkaUserInteractedTopic   string
 	KafkaConsumerGroupID       string
 	KafkaSearchConsumerGroupID string
 	KafkaDLQTopic              string
@@ -55,6 +56,7 @@ func LoadConfig() Config {
 		AIServiceURL:               getEnv("AI_SERVICE_URL", "ai-service:50051"),
 		KafkaBrokers:               splitAndTrim(getEnv("KAFKA_BROKERS", "kafka-1:9092")),
 		KafkaTopic:                 getEnv("KAFKA_TOPIC", "posts"),
+		KafkaUserInteractedTopic:   getEnv("KAFKA_USER_INTERACTED_TOPIC", "user-interacted"),
 		KafkaConsumerGroupID:       getEnv("KAFKA_CONSUMER_GROUP_ID", "content-summary-worker-group"),
 		KafkaSearchConsumerGroupID: getEnv("KAFKA_SEARCH_CONSUMER_GROUP_ID", "content-search-worker-group"),
 		KafkaDLQTopic:              getEnv("KAFKA_DLQ_TOPIC", "posts-dlq"),
