@@ -70,6 +70,8 @@ describe("ProfilePostsSection", () => {
       tags: ["tech"],
       imageUrl: "https://example.com/img.jpg",
       publishedAt: "2024-01-01",
+      likedByMe: false,
+      savedByMe: false,
     };
 
     renderWithProviders(

@@ -90,6 +90,11 @@ describe("ViewBlogPage - integration", () => {
 
   beforeEach(() => {
     sessionStoreActions.markAuthenticated("test-token");
+    server.use(
+      graphqlApi.mutation("RecordPostView", () =>
+        HttpResponse.json({ data: { recordPostView: true } }),
+      ),
+    );
   });
 
   it("loads and displays a blog post in reading view", async () => {
@@ -261,5 +266,53 @@ describe("ViewBlogPage - integration", () => {
     expect(
       await screen.findByText("Test Post Title"),
     ).toBeInTheDocument();
+  });
+
+  it("reports a post view once per session when the post loads", async () => {
+    let viewCalls = 0;
+    server.use(
+      graphqlApi.query("Post", () =>
+        HttpResponse.json({
+          data: {
+            post: buildPostDetail(),
+          },
+        }),
+      ),
+      graphqlApi.query("Me", () =>
+        HttpResponse.json({
+          data: { me: currentUser },
+        }),
+      ),
+      graphqlApi.mutation("RecordPostView", ({ variables }) => {
+        expect(variables).toEqual({ postId: "post-123" });
+        viewCalls += 1;
+        return HttpResponse.json({ data: { recordPostView: true } });
+      }),
+    );
+
+    const first = renderWithProviders(
+      <Routes>
+        <Route path="/blog/:id" element={<ViewBlogPage />} />
+      </Routes>,
+      { route: "/blog/post-123" },
+    );
+    await screen.findByText("Test Post Title");
+    await waitFor(
+      () => {
+        expect(viewCalls).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+
+    first.unmount();
+    renderWithProviders(
+      <Routes>
+        <Route path="/blog/:id" element={<ViewBlogPage />} />
+      </Routes>,
+      { route: "/blog/post-123" },
+    );
+    await screen.findByText("Test Post Title");
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(viewCalls).toBe(1);
   });
 });

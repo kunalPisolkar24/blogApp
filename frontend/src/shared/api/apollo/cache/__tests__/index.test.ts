@@ -44,6 +44,8 @@ const buildPostCard = (id: string): ContentPostCard => ({
   body: "<p>body</p>",
   imageUrl: "https://x/y.png",
   createdAt: "2024-01-01T00:00:00Z",
+  likedByMe: false,
+  savedByMe: false,
   author: {
     __typename: "User",
     id: "author-1",

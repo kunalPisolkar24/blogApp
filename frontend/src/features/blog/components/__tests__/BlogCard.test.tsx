@@ -1,6 +1,83 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { HttpResponse, graphql } from "msw";
+import { useQuery } from "@apollo/client/react";
 import { renderWithProviders } from "@/test/render-with-providers";
+import { server } from "@/test/server";
+import { sessionStoreActions } from "@/entities/session";
+import { mapPostToBlogCardItem } from "@/entities/post/lib";
+import { PostsDocument } from "@/shared/graphql/content-documents";
 import { BlogCard } from "../BlogCard";
+
+const graphqlApi = graphql.link("http://localhost:4000/graphql");
+
+const cardProps = {
+  id: "post-1",
+  title: "Optimizing Neural Network Throughput for Low-Latency Architectures",
+  snippet: "An exploration into kernel-level optimizations and strategic bypass patterns for inference workloads.",
+  author: { name: "Marcus Thorne" },
+  tags: ["Architecture", "Neural Nets", "Low Latency", "Inference"],
+  imageUrl: "https://res.cloudinary.com/demo/image/upload/v1700000000/blog/post-1.png",
+  publishedAt: "2023-10-24T12:00:00.000Z",
+  likedByMe: false,
+  savedByMe: false,
+};
+
+const queryPost = (overrides: Record<string, unknown> = {}) => ({
+  __typename: "Post" as const,
+  id: "post-1",
+  title: "Query Card",
+  body: "<p>body</p>",
+  imageUrl: null,
+  createdAt: "2024-01-01T00:00:00Z",
+  likedByMe: false,
+  savedByMe: false,
+  author: {
+    __typename: "User" as const,
+    id: "u1",
+    username: "alice",
+    name: "Alice",
+    avatarUrl: null,
+  },
+  tags: [],
+  ...overrides,
+});
+
+// QueryCard renders BlogCard exactly like BlogList does: from a Posts
+// query through mapPostToBlogCardItem, so cache updates propagate back
+// into the card props.
+const QueryCard = () => {
+  const { data } = useQuery(PostsDocument, {
+    variables: { page: 1, limit: 6 },
+  });
+  const items = (data?.posts.posts ?? []).map(mapPostToBlogCardItem);
+  return (
+    <>
+      {items.map((item) => (
+        <BlogCard key={item.id} {...item} />
+      ))}
+    </>
+  );
+};
+
+const renderCardFromQuery = (overrides: Record<string, unknown> = {}) => {
+  server.use(
+    graphqlApi.query("Posts", () =>
+      HttpResponse.json({
+        data: {
+          posts: {
+            __typename: "PaginatedPosts",
+            posts: [queryPost(overrides)],
+            totalPages: 1,
+            currentPage: 1,
+            totalPosts: 1,
+          },
+        },
+      }),
+    ),
+  );
+  return renderWithProviders(<QueryCard />);
+};
 
 describe("BlogCard", () => {
   it("renders transformed Cloudinary sources and the refreshed editorial layout", () => {
@@ -18,6 +95,8 @@ describe("BlogCard", () => {
         ]}
         imageUrl="https://res.cloudinary.com/demo/image/upload/v1700000000/blog/post-1.png"
         publishedAt="2023-10-24T12:00:00.000Z"
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
     const image = screen.getByRole("img", {
@@ -91,6 +170,8 @@ describe("BlogCard", () => {
         tags={["Algorithms"]}
         imageUrl="https://images.example.com/post-2.jpg"
         publishedAt="2026-03-25T12:00:00.000Z"
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -112,6 +193,8 @@ describe("BlogCard", () => {
         tags={[]}
         imageUrl="https://example.com/img.jpg"
         publishedAt={null}
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -129,6 +212,8 @@ describe("BlogCard", () => {
         tags={[]}
         imageUrl="https://example.com/img.jpg"
         publishedAt="2024-01-01T00:00:00.000Z"
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -147,6 +232,8 @@ describe("BlogCard", () => {
         tags={["Tag1", "Tag2", "Tag3"]}
         imageUrl={null}
         publishedAt="2024-01-01T00:00:00.000Z"
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -163,6 +250,8 @@ describe("BlogCard", () => {
         tags={[]}
         imageUrl="https://broken.example.com/image.jpg"
         publishedAt="2024-01-01T00:00:00.000Z"
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -185,6 +274,8 @@ describe("BlogCard", () => {
         tags={[]}
         imageUrl={null}
         publishedAt={null}
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -201,6 +292,8 @@ describe("BlogCard", () => {
         tags={[]}
         imageUrl="https://broken.example.com/image.jpg"
         publishedAt={null}
+        likedByMe={false}
+        savedByMe={false}
       />,
     );
 
@@ -214,5 +307,119 @@ describe("BlogCard", () => {
     const srcAfterSecond = img?.src;
 
     expect(srcAfterSecond).toBe(srcAfterFirst);
+  });
+
+  it("hides like and save buttons for anonymous readers", () => {
+    renderWithProviders(<BlogCard {...cardProps} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Like post" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save post" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("BlogCard interactions (authenticated)", () => {
+  beforeEach(() => {
+    sessionStoreActions.markAuthenticated("test-token");
+  });
+
+  it("shows the reader's current like and save state", async () => {
+    renderCardFromQuery({ likedByMe: true, savedByMe: true });
+
+    expect(
+      await screen.findByRole("button", { name: "Unlike post" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove save" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Liked")).toBeInTheDocument();
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("likes a post optimistically and sends the mutation", async () => {
+    let variables: Record<string, unknown> | null = null;
+    server.use(
+      graphqlApi.mutation("LikePost", ({ variables: vars }) => {
+        variables = vars;
+        return HttpResponse.json({ data: { likePost: true } });
+      }),
+    );
+    const user = userEvent.setup();
+    renderCardFromQuery();
+
+    const likeButton = await screen.findByRole("button", { name: "Like post" });
+    await user.click(likeButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Unlike post" }),
+      ).toBeInTheDocument();
+    });
+    expect(variables).toEqual({ postId: "post-1" });
+  });
+
+  it("saves a post optimistically and sends the mutation", async () => {
+    let variables: Record<string, unknown> | null = null;
+    server.use(
+      graphqlApi.mutation("SavePost", ({ variables: vars }) => {
+        variables = vars;
+        return HttpResponse.json({ data: { savePost: true } });
+      }),
+    );
+    const user = userEvent.setup();
+    renderCardFromQuery();
+
+    const saveButton = await screen.findByRole("button", { name: "Save post" });
+    await user.click(saveButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove save" }),
+      ).toBeInTheDocument();
+    });
+    expect(variables).toEqual({ postId: "post-1" });
+  });
+
+  it("rolls back the like when the mutation fails", async () => {
+    server.use(
+      graphqlApi.mutation("LikePost", () =>
+        HttpResponse.json({ errors: [{ message: "boom" }] }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderCardFromQuery();
+
+    const likeButton = await screen.findByRole("button", { name: "Like post" });
+    await user.click(likeButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Like post" }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Liked")).not.toBeInTheDocument();
+  });
+
+  it("rolls back the save when the mutation fails", async () => {
+    server.use(
+      graphqlApi.mutation("SavePost", () =>
+        HttpResponse.json({ errors: [{ message: "boom" }] }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderCardFromQuery();
+
+    const saveButton = await screen.findByRole("button", { name: "Save post" });
+    await user.click(saveButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Save post" }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
   });
 });
