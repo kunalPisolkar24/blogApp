@@ -7,7 +7,9 @@ import (
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/kunalPisolkar24/topos/services/content/internal/testutil"
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,4 +205,92 @@ func TestStatesPropagatesRepoErrors(t *testing.T) {
 
 	_, err := svc.States(context.Background(), "u_1", []string{"p_1"})
 	require.Error(t, err)
+}
+
+// --- interaction metrics -----------------------------------------------------
+
+// interactionCount reads the current value of interactions_total for a
+// kind and status. Counters are shared across tests in this package, so
+// assertions always compare deltas instead of absolute values.
+func interactionCount(kind domain.PostInteractionKind, status string) float64 {
+	return promtestutil.ToFloat64(metrics.InteractionsTotal.WithLabelValues(string(kind), status))
+}
+
+func assertInteractionCount(t *testing.T, kind domain.PostInteractionKind, status string, want float64) {
+	t.Helper()
+	got := interactionCount(kind, status)
+	assert.Equal(t, want, got, "interactions_total{kind=%q, status=%q}", kind, status)
+}
+
+func TestInteractionMetricsCountPublished(t *testing.T) {
+	svc, _, _ := newInteractionService(t, nil, nil, nil)
+	viewsBefore := interactionCount(domain.PostInteractionView, interactionStatusPublished)
+	likesBefore := interactionCount(domain.PostInteractionLike, interactionStatusPublished)
+
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
+	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	require.NoError(t, err)
+	assert.True(t, liked)
+
+	assertInteractionCount(t, domain.PostInteractionView, interactionStatusPublished, viewsBefore+1)
+	assertInteractionCount(t, domain.PostInteractionLike, interactionStatusPublished, likesBefore+1)
+}
+
+func TestInteractionMetricsCountPublishFailure(t *testing.T) {
+	publisher := &testutil.MockEventPublisher{Err: errors.New("kafka down")}
+	svc, _, _ := newInteractionService(t, nil, publisher, nil)
+	before := interactionCount(domain.PostInteractionView, interactionStatusPublishFailed)
+
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "publish failures are swallowed")
+
+	assertInteractionCount(t, domain.PostInteractionView, interactionStatusPublishFailed, before+1)
+}
+
+func TestInteractionMetricsCountDeduplicatedViews(t *testing.T) {
+	svc, repo, publisher := newInteractionService(t, nil, nil, newMemCache(t))
+	before := interactionCount(domain.PostInteractionView, interactionStatusDeduplicated)
+
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "the second view within 24h is deduped")
+
+	assert.Equal(t, 1, repo.RecordCalls, "the deduped view must not re-record")
+	require.Len(t, publisher.Interacted, 1, "the deduped view must not publish")
+	assertInteractionCount(t, domain.PostInteractionView, interactionStatusDeduplicated, before+1)
+}
+
+func TestInteractionMetricsCountRemovedToggles(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		FindByUserPostAndKindFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error) {
+			return &domain.PostInteraction{ID: "i_1", UserID: userID, PostID: postID, Kind: kind}, nil
+		},
+	}
+	svc, _, _ := newInteractionService(t, repo, nil, nil)
+	before := interactionCount(domain.PostInteractionSave, interactionStatusRemoved)
+
+	saved, err := svc.ToggleSave(context.Background(), "u_1", "p_1")
+	require.NoError(t, err)
+	assert.False(t, saved, "an existing save is removed")
+
+	assertInteractionCount(t, domain.PostInteractionSave, interactionStatusRemoved, before+1)
+}
+
+func TestInteractionMetricsCountErrors(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		RecordFn: func(ctx context.Context, interaction *domain.PostInteraction) (*domain.PostInteraction, error) {
+			return nil, errors.New("mongo down")
+		},
+		FindByUserPostAndKindFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error) {
+			return nil, errors.New("mongo down")
+		},
+	}
+	svc, _, _ := newInteractionService(t, repo, nil, nil)
+	viewsBefore := interactionCount(domain.PostInteractionView, interactionStatusError)
+	likesBefore := interactionCount(domain.PostInteractionLike, interactionStatusError)
+
+	require.Error(t, svc.RecordView(context.Background(), "u_1", "p_1"))
+	_, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	require.Error(t, err)
+
+	assertInteractionCount(t, domain.PostInteractionView, interactionStatusError, viewsBefore+1)
+	assertInteractionCount(t, domain.PostInteractionLike, interactionStatusError, likesBefore+1)
 }

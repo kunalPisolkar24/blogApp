@@ -105,6 +105,14 @@ var (
 		Help:      "Posts deleted.",
 	})
 
+	// InteractionsTotal counts user interactions by kind and outcome.
+	// Statuses: published, publish_failed, deduplicated, removed, error.
+	InteractionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "content",
+		Name:      "interactions_total",
+		Help:      "User interactions, by kind (view, like, save) and outcome.",
+	}, []string{"kind", "status"})
+
 	// WorkerMessagesTotal counts consumed events by outcome.
 	WorkerMessagesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "content",

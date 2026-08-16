@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/config"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/kunalPisolkar24/topos/services/content/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,4 +110,20 @@ func TestHandlerSetsRequestID(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	assert.NotEmpty(t, rec.Header().Get("X-Request-Id"))
+}
+
+func TestMetricsExposeInteractionCounter(t *testing.T) {
+	metrics.InteractionsTotal.WithLabelValues("view", "published").Inc()
+
+	cfg := config.Config{JwtSecret: "test-secret"}
+	h := newHandler(cfg, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "content_interactions_total")
+	assert.Contains(t, rec.Body.String(), `kind="view"`)
+	assert.Contains(t, rec.Body.String(), `status="published"`)
 }

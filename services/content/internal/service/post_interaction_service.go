@@ -8,6 +8,16 @@ import (
 
 	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
+)
+
+// Interaction outcome statuses for the interactions_total counter.
+const (
+	interactionStatusPublished     = "published"
+	interactionStatusPublishFailed = "publish_failed"
+	interactionStatusDeduplicated  = "deduplicated"
+	interactionStatusRemoved       = "removed"
+	interactionStatusError         = "error"
 )
 
 // PostInteractionService records user interactions (views, likes,
@@ -39,6 +49,7 @@ func NewPostInteractionService(repo domain.PostInteractionRepository, publisher 
 // re-record nor re-publish; likes and saves are unaffected.
 func (s *PostInteractionService) RecordView(ctx context.Context, userID, postID string) error {
 	if !cache.MarkSeen(s.cache, ctx, cache.KeySeenView(userID, postID), cache.SeenViewTTL) {
+		countInteraction(domain.PostInteractionView, interactionStatusDeduplicated)
 		return nil
 	}
 	_, err := s.recordAndPublish(ctx, &domain.PostInteraction{
@@ -76,11 +87,14 @@ func (s *PostInteractionService) toggle(ctx context.Context, userID, postID stri
 	existing, err := s.repo.FindByUserPostAndKind(ctx, userID, postID, kind)
 	if err == nil {
 		if err := s.repo.Delete(ctx, existing.ID); err != nil {
+			countInteraction(kind, interactionStatusError)
 			return false, err
 		}
+		countInteraction(kind, interactionStatusRemoved)
 		return false, nil
 	}
 	if !errors.Is(err, domain.ErrNotFound) {
+		countInteraction(kind, interactionStatusError)
 		return false, err
 	}
 
@@ -100,16 +114,26 @@ func (s *PostInteractionService) toggle(ctx context.Context, userID, postID stri
 func (s *PostInteractionService) recordAndPublish(ctx context.Context, interaction *domain.PostInteraction) (*domain.PostInteraction, error) {
 	created, err := s.repo.Record(ctx, interaction)
 	if err != nil {
+		countInteraction(interaction.Kind, interactionStatusError)
 		return nil, err
 	}
 
 	if err := s.publisher.PublishUserInteracted(ctx, created); err != nil {
+		countInteraction(created.Kind, interactionStatusPublishFailed)
 		slog.Warn("failed to publish user.interacted event",
 			"error", err,
 			"user_id", created.UserID,
 			"post_id", created.PostID,
 			"kind", created.Kind,
 		)
+		return created, nil
 	}
+	countInteraction(created.Kind, interactionStatusPublished)
 	return created, nil
+}
+
+// countInteraction records one interaction outcome on the shared
+// interactions_total counter.
+func countInteraction(kind domain.PostInteractionKind, status string) {
+	metrics.InteractionsTotal.WithLabelValues(string(kind), status).Inc()
 }
