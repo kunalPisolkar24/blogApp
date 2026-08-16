@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	PostsTTL   = time.Minute
-	PostTTL    = 5 * time.Minute
-	TagsTTL    = 5 * time.Minute
-	SearchTTL  = 2 * time.Minute
-	RelatedTTL = 2 * time.Minute
+	PostsTTL    = time.Minute
+	PostTTL     = 5 * time.Minute
+	TagsTTL     = 5 * time.Minute
+	SearchTTL   = 2 * time.Minute
+	RelatedTTL  = 2 * time.Minute
+	SeenViewTTL = 24 * time.Hour
 
 	PostsPattern   = "posts:*"
 	TagsPattern    = "tags:*"
@@ -170,6 +171,24 @@ func Del(c *Cache, ctx context.Context, key string) {
 	}
 }
 
+// MarkSeen atomically marks key as seen: it returns true when the key
+// was newly set (the caller is the first to see it) and false when the
+// key already exists. Redis failures fail open - the key is treated as
+// unseen so a dedupe outage degrades to publishing duplicates instead
+// of dropping signals. A nil cache never dedupes.
+func MarkSeen(c *Cache, ctx context.Context, key string, ttl time.Duration) bool {
+	if c == nil {
+		return true
+	}
+
+	ok, err := c.client.SetNX(ctx, key, "1", ttl).Result()
+	if err != nil {
+		cacheError("setnx", "key", key, err)
+		return true
+	}
+	return ok
+}
+
 // DelPattern removes every key matching the glob pattern.
 func DelPattern(c *Cache, ctx context.Context, pattern string) {
 	if c == nil {
@@ -275,4 +294,8 @@ func KeySearch(query string, page, limit int) string {
 
 func KeyRelated(postID string, limit int) string {
 	return fmt.Sprintf("related:%s:l:%d", postID, limit)
+}
+
+func KeySeenView(userID, postID string) string {
+	return fmt.Sprintf("seen:%s:%s", userID, postID)
 }

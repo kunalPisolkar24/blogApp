@@ -275,10 +275,42 @@ func TestCoalesceNilCacheRunsFill(t *testing.T) {
 	assert.Equal(t, 1, fills)
 }
 
+func TestMarkSeenSetsOnce(t *testing.T) {
+	c, _ := newTestCache(t)
+	ctx := context.Background()
+
+	require.True(t, MarkSeen(c, ctx, "seen:u:p", time.Minute), "first call claims the key")
+	assert.False(t, MarkSeen(c, ctx, "seen:u:p", time.Minute), "a second call finds the key already set")
+	assert.True(t, MarkSeen(c, ctx, "seen:u:other", time.Minute), "a different key is independent")
+}
+
+func TestMarkSeenAppliesTTL(t *testing.T) {
+	c, mr := newTestCache(t)
+
+	MarkSeen(c, context.Background(), "seen:u:p", 24*time.Hour)
+
+	assert.Equal(t, 24*time.Hour, mr.TTL("seen:u:p"))
+}
+
+func TestMarkSeenNilCacheNeverDedupes(t *testing.T) {
+	assert.True(t, MarkSeen(nil, context.Background(), "seen:u:p", time.Minute))
+}
+
+func TestMarkSeenRedisDownFailsOpen(t *testing.T) {
+	c, mr := newTestCache(t)
+
+	before := testutil.ToFloat64(metrics.CacheErrorsTotal)
+	mr.Close()
+
+	assert.True(t, MarkSeen(c, context.Background(), "seen:u:p", time.Minute), "an unreachable redis must not drop the view")
+	assert.Greater(t, testutil.ToFloat64(metrics.CacheErrorsTotal), before, "redis failures must be visible in content_cache_errors_total")
+}
+
 func TestKeys(t *testing.T) {
 	assert.Equal(t, "post:abc", KeyPost("abc"))
 	assert.Equal(t, "posts:page:2:limit:10", KeyPosts(2, 10))
 	assert.Equal(t, "posts:author:u:page:1:limit:5", KeyPostsByAuthor("u", 1, 5))
 	assert.Equal(t, "posts:tag:go:page:1:limit:5", KeyPostsByTag("go", 1, 5))
 	assert.Equal(t, "tags:q:go:limit:5", KeyTags("go", 5))
+	assert.Equal(t, "seen:u_1:p_1", KeySeenView("u_1", "p_1"))
 }
