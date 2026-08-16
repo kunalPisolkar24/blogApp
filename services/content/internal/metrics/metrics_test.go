@@ -13,6 +13,7 @@ import (
 func TestCollectorsRegistered(t *testing.T) {
 	HTTPRequestsTotal.WithLabelValues("/query", "2xx").Inc()
 	HTTPRequestDuration.WithLabelValues("/query").Observe(0.01)
+	InteractionsTotal.WithLabelValues("view", "published").Inc()
 	WorkerMessagesTotal.WithLabelValues("completed").Inc()
 	WorkerLag.WithLabelValues("0").Set(1)
 
@@ -33,6 +34,7 @@ func TestCollectorsRegistered(t *testing.T) {
 		"content_posts_created_total",
 		"content_posts_updated_total",
 		"content_posts_deleted_total",
+		"content_interactions_total",
 		"content_worker_messages_total",
 		"content_worker_retries_total",
 		"content_worker_consumer_lag",
@@ -49,4 +51,14 @@ func TestWorkerMetricsRecord(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(WorkerMessagesTotal.WithLabelValues("skipped")))
 	assert.Equal(t, float64(1), testutil.ToFloat64(WorkerRetriesTotal))
 	assert.Equal(t, float64(42), testutil.ToFloat64(WorkerLag.WithLabelValues("0")))
+}
+
+func TestInteractionMetricsRecord(t *testing.T) {
+	InteractionsTotal.WithLabelValues("save", "published").Inc()
+	InteractionsTotal.WithLabelValues("like", "removed").Inc()
+	InteractionsTotal.WithLabelValues("view", "publish_failed").Inc()
+
+	assert.Equal(t, float64(1), testutil.ToFloat64(InteractionsTotal.WithLabelValues("save", "published")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(InteractionsTotal.WithLabelValues("like", "removed")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(InteractionsTotal.WithLabelValues("view", "publish_failed")))
 }
