@@ -101,6 +101,9 @@ func RecoverError(ctx context.Context, recovered any) (userMessage error) {
 }
 
 func operationName(ctx context.Context) string {
+	if !graphql.HasOperationContext(ctx) {
+		return "anonymous"
+	}
 	if opCtx := graphql.GetOperationContext(ctx); opCtx != nil && opCtx.OperationName != "" {
 		return opCtx.OperationName
 	}

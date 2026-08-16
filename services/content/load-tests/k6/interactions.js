@@ -61,7 +61,12 @@ export default function (data) {
     const res = postGraphQL(mutation, { postId }, token, 'write');
     checkOk(res, `interact_${name}`);
 
-    const read = postGraphQL(stateQueryFor(data.ids.length, __ITER), {}, token, 'read');
+    const read = postGraphQL(
+        STATE_QUERY,
+        stateQueryFor(data.ids.length, __ITER),
+        token,
+        'read',
+    );
     checkState(read, postId, step);
     writeDuration.add(Date.now() - start);
 }
