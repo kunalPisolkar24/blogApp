@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
 )
 
@@ -18,21 +19,28 @@ import (
 type PostInteractionService struct {
 	repo      domain.PostInteractionRepository
 	publisher domain.EventPublisher
+	cache     *cache.Cache
 	clock     func() time.Time
 }
 
-func NewPostInteractionService(repo domain.PostInteractionRepository, publisher domain.EventPublisher) *PostInteractionService {
+func NewPostInteractionService(repo domain.PostInteractionRepository, publisher domain.EventPublisher, cacheClient *cache.Cache) *PostInteractionService {
 	return &PostInteractionService{
 		repo:      repo,
 		publisher: publisher,
+		cache:     cacheClient,
 		clock:     time.Now,
 	}
 }
 
 // RecordView records a view and publishes its event. The unique
 // (userId, postId, kind) index makes duplicates idempotent: a repeated
-// view returns the existing record and never errors the caller.
+// view returns the existing record and never errors the caller. Re-reads
+// within 24h are deduped in Redis (seen:{user}:{post}) so they neither
+// re-record nor re-publish; likes and saves are unaffected.
 func (s *PostInteractionService) RecordView(ctx context.Context, userID, postID string) error {
+	if !cache.MarkSeen(s.cache, ctx, cache.KeySeenView(userID, postID), cache.SeenViewTTL) {
+		return nil
+	}
 	_, err := s.recordAndPublish(ctx, &domain.PostInteraction{
 		UserID:    userID,
 		PostID:    postID,

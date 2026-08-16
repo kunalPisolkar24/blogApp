@@ -79,7 +79,7 @@ func newResolver(cfg config.Config, deps *bootstrap.Dependencies) *graph.Resolve
 		service.NewPostService(postRepo, tagRepo, deps.AI, deps.Producer, deps.Cache),
 		service.NewTagService(tagRepo, deps.Cache),
 		service.NewChatService(chatRepo, deps.AI),
-		service.NewPostInteractionService(repository.NewMongoPostInteractionRepository(database), deps.Producer),
+		service.NewPostInteractionService(repository.NewMongoPostInteractionRepository(database), deps.Producer, deps.Cache),
 	)
 }
 

@@ -21,6 +21,6 @@ func newResolverWithMocks(t *testing.T) *graph.Resolver {
 		service.NewPostService(postRepo, &testutil.MockTagRepository{}, nil, nil, nil),
 		service.NewTagService(&testutil.MockTagRepository{}, nil),
 		service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}),
-		service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}),
+		service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}, nil),
 	)
 }
