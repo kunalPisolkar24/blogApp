@@ -6,15 +6,17 @@ import (
 
 // Resolver holds the dependencies used by all resolvers.
 type Resolver struct {
-	PostService *service.PostService
-	TagService  *service.TagService
-	ChatService *service.ChatService
+	PostService        *service.PostService
+	TagService         *service.TagService
+	ChatService        *service.ChatService
+	InteractionService *service.PostInteractionService
 }
 
-func NewResolver(postService *service.PostService, tagService *service.TagService, chatService *service.ChatService) *Resolver {
+func NewResolver(postService *service.PostService, tagService *service.TagService, chatService *service.ChatService, interactionService *service.PostInteractionService) *Resolver {
 	return &Resolver{
-		PostService: postService,
-		TagService:  tagService,
-		ChatService: chatService,
+		PostService:        postService,
+		TagService:         tagService,
+		ChatService:        chatService,
+		InteractionService: interactionService,
 	}
 }

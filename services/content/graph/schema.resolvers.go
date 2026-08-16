@@ -140,6 +140,44 @@ func (r *mutationResolver) AskChat(ctx context.Context, chatID string, query str
 	return mapDomainChatMessageToModel(msg), nil
 }
 
+// RecordPostView is the resolver for the recordPostView field.
+func (r *mutationResolver) RecordPostView(ctx context.Context, postID string) (bool, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return false, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	if err := r.InteractionService.RecordView(ctx, userID, postID); err != nil {
+		return false, mapDomainError(err)
+	}
+	return true, nil
+}
+
+// LikePost is the resolver for the likePost field.
+func (r *mutationResolver) LikePost(ctx context.Context, postID string) (bool, error) {
+	return r.toggleInteraction(ctx, postID, r.InteractionService.ToggleLike)
+}
+
+// SavePost is the resolver for the savePost field.
+func (r *mutationResolver) SavePost(ctx context.Context, postID string) (bool, error) {
+	return r.toggleInteraction(ctx, postID, r.InteractionService.ToggleSave)
+}
+
+// toggleInteraction runs an interaction toggle for the authenticated
+// user and maps its result to the client.
+func (r *mutationResolver) toggleInteraction(ctx context.Context, postID string, toggle func(ctx context.Context, userID, postID string) (bool, error)) (bool, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return false, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	state, err := toggle(ctx, userID, postID)
+	if err != nil {
+		return false, mapDomainError(err)
+	}
+	return state, nil
+}
+
 // Related is the resolver for the related field.
 func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error) {
 	posts, err := relatedPostsFrom(ctx, r.PostService, obj.ID, deref(limit))

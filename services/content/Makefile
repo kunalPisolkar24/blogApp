@@ -80,7 +80,7 @@ LT_VARS = RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) SCRIPT=$(SCRIPT) \
 	EMBEDDING_MODEL=$(EMBEDDING_MODEL) OLLAMA_MEM=$(OLLAMA_MEM) \
 	CHAT_P95=$(CHAT_P95) CHAT_P99=$(CHAT_P99)
 
-VALID_SCRIPTS := mixed reads writes chat
+VALID_SCRIPTS := mixed reads writes chat interactions
 
 load-test: load-test-build
 	@if echo " $(VALID_SCRIPTS) " | grep -q " $(SCRIPT) "; then :; else \
@@ -121,6 +121,9 @@ load-test-writes:
 load-test-chat:
 	$(MAKE) load-test SCRIPT=chat RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
 		LLM_MODE=$(LLM_MODE) EMBEDDING_MODE=$(EMBEDDING_MODE)
+
+load-test-interactions:
+	$(MAKE) load-test SCRIPT=interactions RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION)
 
 load-test-build:
 	cd $(LOADTEST_DIR)/producer && go mod download

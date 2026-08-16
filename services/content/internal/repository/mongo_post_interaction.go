@@ -63,6 +63,17 @@ func (r *MongoPostInteractionRepository) FindByID(ctx context.Context, id string
 	return &interaction, nil
 }
 
+// FindByUserPostAndKind returns the interaction of a user with a post,
+// or domain.ErrNotFound when the user has not interacted that way.
+func (r *MongoPostInteractionRepository) FindByUserPostAndKind(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error) {
+	var interaction domain.PostInteraction
+	err := r.collection.FindOne(ctx, bson.M{"userId": userID, "postId": postID, "kind": kind}).Decode(&interaction)
+	if err != nil {
+		return nil, wrapNotFound(err)
+	}
+	return &interaction, nil
+}
+
 // ListByUser returns the interactions of a user, newest first, with the
 // given page/limit applied to the total count.
 func (r *MongoPostInteractionRepository) ListByUser(ctx context.Context, userID string, page, limit int) (*domain.PaginatedPostInteractions, error) {

@@ -33,7 +33,8 @@ func newTestResolver(t *testing.T, postRepo *testutil.MockPostRepository, tagRep
 	postSvc := service.NewPostService(postRepo, tagRepo, nil, nil, nil)
 	tagSvc := service.NewTagService(tagRepo, nil)
 	chatSvc := service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{})
-	return NewResolver(postSvc, tagSvc, chatSvc), postSvc, tagSvc
+	interactionSvc := service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{})
+	return NewResolver(postSvc, tagSvc, chatSvc, interactionSvc), postSvc, tagSvc
 }
 
 func authenticatedContext(userID string) context.Context {
@@ -93,7 +94,7 @@ func TestQueryResolverSearchPosts(t *testing.T) {
 		return []*domain.Post{{ID: "p_1", Title: "Hello"}}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	result, err := resolver.Query().SearchPosts(context.Background(), "go", intPtr(1), intPtr(10))
 
@@ -199,7 +200,7 @@ func TestMutationResolverGenerateTags(t *testing.T) {
 		return []string{"go", "web"}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, nil, aiSvc, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(nil, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
+	resolver := NewResolver(postSvc, service.NewTagService(nil, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	tags, err := resolver.Mutation().GenerateTags(authenticatedContext("u_1"), "Go", "web development")
 	require.NoError(t, err)
@@ -212,7 +213,7 @@ func TestMutationResolverGeneratePostContent(t *testing.T) {
 		return &domain.GeneratedPost{Title: "T", Body: "B", Summary: "S", Tags: []string{"go"}}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, nil, aiSvc, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(nil, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
+	resolver := NewResolver(postSvc, service.NewTagService(nil, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	post, err := resolver.Mutation().GeneratePostContent(authenticatedContext("u_1"), "prompt")
 	require.NoError(t, err)
@@ -243,7 +244,7 @@ func TestPostResolverRelated(t *testing.T) {
 		return []*domain.Post{{ID: "p_2", Title: "Similar"}}, nil
 	}}
 	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	posts, err := resolver.Post().Related(context.Background(), &model.Post{ID: "p_1"}, intPtr(5))
 
@@ -259,7 +260,7 @@ func TestPostResolverRelatedDefaultsLimit(t *testing.T) {
 		return &domain.SearchResult{}, nil
 	}}
 	postSvc := service.NewPostService(&testutil.MockPostRepository{}, &testutil.MockTagRepository{}, ai, nil, nil)
-	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}))
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	posts, err := resolver.Post().Related(context.Background(), &model.Post{ID: "p_1"}, nil)
 	require.NoError(t, err)
@@ -342,7 +343,7 @@ func TestDeref(t *testing.T) {
 func TestMutationResolverCreateChat(t *testing.T) {
 	repo := &testutil.MockChatRepository{}
 	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
-	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc, service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	chat, err := resolver.Mutation().CreateChat(authenticatedContext("u_1"), strPtr("My Chat"))
 
@@ -354,7 +355,7 @@ func TestMutationResolverCreateChat(t *testing.T) {
 func TestMutationResolverCreateChatUnauthorized(t *testing.T) {
 	repo := &testutil.MockChatRepository{}
 	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
-	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc, service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	_, err := resolver.Mutation().CreateChat(context.Background(), strPtr("My Chat"))
 
@@ -368,7 +369,7 @@ func TestMutationResolverAskChat(t *testing.T) {
 	}}
 	repo := &testutil.MockChatRepository{UserID: "u_1"}
 	chatSvc := service.NewChatService(repo, ai)
-	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc, service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	msg, err := resolver.Mutation().AskChat(authenticatedContext("u_1"), "c_1", "what is topos?")
 
@@ -395,7 +396,7 @@ func TestQueryResolverChats(t *testing.T) {
 		},
 	}
 	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
-	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc, service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	chats, err := resolver.Query().Chats(authenticatedContext("u_1"), nil, nil)
 
@@ -416,7 +417,7 @@ func TestQueryResolverChatsPaginated(t *testing.T) {
 		},
 	}
 	chatSvc := service.NewChatService(repo, &testutil.MockAIService{})
-	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc, service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	page, limit := 2, 5
 	chats, err := resolver.Query().Chats(authenticatedContext("u_1"), &page, &limit)
@@ -428,7 +429,7 @@ func TestQueryResolverChatsPaginated(t *testing.T) {
 
 func TestQueryResolverChatsUnauthorized(t *testing.T) {
 	chatSvc := service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{})
-	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc)
+	resolver := NewResolver(service.NewPostService(&testutil.MockPostRepository{}, nil, nil, nil, nil), service.NewTagService(nil, nil), chatSvc, service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}))
 
 	_, err := resolver.Query().Chats(context.Background(), nil, nil)
 
@@ -457,3 +458,101 @@ func TestMapDomainChatMessageToModel(t *testing.T) {
 
 func intPtr(v int) *int       { return &v }
 func strPtr(v string) *string { return &v }
+
+func newTestInteractionResolver(t *testing.T, repo *testutil.MockPostInteractionRepository, publisher *testutil.MockEventPublisher) (*Resolver, *testutil.MockPostInteractionRepository, *testutil.MockEventPublisher) {
+	t.Helper()
+	if repo == nil {
+		repo = &testutil.MockPostInteractionRepository{}
+	}
+	if publisher == nil {
+		publisher = &testutil.MockEventPublisher{}
+	}
+	interactionSvc := service.NewPostInteractionService(repo, publisher)
+	resolver := NewResolver(
+		service.NewPostService(&testutil.MockPostRepository{}, &testutil.MockTagRepository{}, nil, nil, nil),
+		service.NewTagService(&testutil.MockTagRepository{}, nil),
+		service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}),
+		interactionSvc,
+	)
+	return resolver, repo, publisher
+}
+
+func TestMutationResolverRecordPostView(t *testing.T) {
+	resolver, repo, publisher := newTestInteractionResolver(t, nil, nil)
+
+	ok, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, 1, repo.RecordCalls)
+	require.Len(t, publisher.Interacted, 1)
+	assert.Equal(t, "u_1", publisher.Interacted[0].UserID)
+	assert.Equal(t, "p_1", publisher.Interacted[0].PostID)
+}
+
+func TestMutationResolverRecordPostViewDuplicateNeverErrors(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{
+		RecordFn: func(ctx context.Context, interaction *domain.PostInteraction) (*domain.PostInteraction, error) {
+			interaction.ID = "existing"
+			return interaction, nil
+		},
+	}
+	resolver, _, _ := newTestInteractionResolver(t, repo, nil)
+
+	_, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1")
+	require.NoError(t, err)
+	_, err = resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1")
+	require.NoError(t, err, "duplicate views never error the UI")
+}
+
+func TestMutationResolverRecordPostViewUnauthorized(t *testing.T) {
+	resolver, _, _ := newTestInteractionResolver(t, nil, nil)
+
+	_, err := resolver.Mutation().RecordPostView(context.Background(), "p_1")
+	require.Error(t, err)
+	assert.Equal(t, "unauthorized", err.(*gqlerror.Error).Message)
+}
+
+func TestMutationResolverLikePostToggles(t *testing.T) {
+	repo := &testutil.MockPostInteractionRepository{}
+	resolver, repo, publisher := newTestInteractionResolver(t, repo, nil)
+
+	liked, err := resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1")
+	require.NoError(t, err)
+	assert.True(t, liked, "first toggle likes the post")
+	assert.Equal(t, 1, repo.RecordCalls)
+	require.Len(t, publisher.Interacted, 1)
+	assert.Equal(t, domain.PostInteractionLike, publisher.Interacted[0].Kind)
+
+	repo.FindByUserPostAndKindFn = func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error) {
+		return &domain.PostInteraction{ID: "i_1", UserID: userID, PostID: postID, Kind: kind}, nil
+	}
+
+	liked, err = resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1")
+	require.NoError(t, err)
+	assert.False(t, liked, "second toggle unlikes the post")
+	assert.Equal(t, 1, repo.DeleteCalls)
+}
+
+func TestMutationResolverSavePostToggles(t *testing.T) {
+	resolver, repo, _ := newTestInteractionResolver(t, nil, nil)
+
+	saved, err := resolver.Mutation().SavePost(authenticatedContext("u_1"), "p_1")
+	require.NoError(t, err)
+	assert.True(t, saved)
+	assert.Equal(t, domain.PostInteractionSave, repo.FindByUserPostKind)
+}
+
+func TestMutationResolverToggleUnauthorized(t *testing.T) {
+	for name, mutate := range map[string]func(resolver *Resolver) (bool, error){
+		"likePost": func(r *Resolver) (bool, error) { return r.Mutation().LikePost(context.Background(), "p_1") },
+		"savePost": func(r *Resolver) (bool, error) { return r.Mutation().SavePost(context.Background(), "p_1") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolver, _, _ := newTestInteractionResolver(t, nil, nil)
+
+			_, err := mutate(resolver)
+			require.Error(t, err)
+			assert.Equal(t, "unauthorized", err.(*gqlerror.Error).Message)
+		})
+	}
+}

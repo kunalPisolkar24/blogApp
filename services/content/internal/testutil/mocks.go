@@ -341,6 +341,61 @@ func (m *MockChatRepository) Messages(ctx context.Context, chatID string, page, 
 	return &domain.PaginatedMessages{Page: page}, nil
 }
 
+// MockPostInteractionRepository fakes the interaction store for
+// service and resolver tests.
+type MockPostInteractionRepository struct {
+	RecordFn                func(ctx context.Context, interaction *domain.PostInteraction) (*domain.PostInteraction, error)
+	FindByIDFn              func(ctx context.Context, id string) (*domain.PostInteraction, error)
+	FindByUserPostAndKindFn func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error)
+	DeleteFn                func(ctx context.Context, id string) error
+	ListByUserFn            func(ctx context.Context, userID string, page, limit int) (*domain.PaginatedPostInteractions, error)
+
+	RecordCalls        int
+	FindByUserPostKind domain.PostInteractionKind
+	FindByUserPostID   string
+	DeleteCalls        int
+}
+
+func (m *MockPostInteractionRepository) Record(ctx context.Context, interaction *domain.PostInteraction) (*domain.PostInteraction, error) {
+	m.RecordCalls++
+	if m.RecordFn != nil {
+		return m.RecordFn(ctx, interaction)
+	}
+	interaction.ID = "interaction-created"
+	return interaction, nil
+}
+
+func (m *MockPostInteractionRepository) FindByID(ctx context.Context, id string) (*domain.PostInteraction, error) {
+	if m.FindByIDFn != nil {
+		return m.FindByIDFn(ctx, id)
+	}
+	return &domain.PostInteraction{ID: id}, nil
+}
+
+func (m *MockPostInteractionRepository) FindByUserPostAndKind(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (*domain.PostInteraction, error) {
+	m.FindByUserPostKind = kind
+	m.FindByUserPostID = postID
+	if m.FindByUserPostAndKindFn != nil {
+		return m.FindByUserPostAndKindFn(ctx, userID, postID, kind)
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *MockPostInteractionRepository) Delete(ctx context.Context, id string) error {
+	m.DeleteCalls++
+	if m.DeleteFn != nil {
+		return m.DeleteFn(ctx, id)
+	}
+	return nil
+}
+
+func (m *MockPostInteractionRepository) ListByUser(ctx context.Context, userID string, page, limit int) (*domain.PaginatedPostInteractions, error) {
+	if m.ListByUserFn != nil {
+		return m.ListByUserFn(ctx, userID, page, limit)
+	}
+	return &domain.PaginatedPostInteractions{Page: page}, nil
+}
+
 // MockSummaryProcessor fakes the worker's post store.
 type MockSummaryProcessor struct {
 	GetPostFn func(ctx context.Context, id string) (*domain.Post, error)

@@ -88,7 +88,7 @@ services:
       retries: 20
       start_period: 10s
     volumes:
-      - ../ai/load-tests/healthcheck.py:/healthcheck.py:ro
+      - ../../ai/load-tests/healthcheck.py:/healthcheck.py:ro
     networks:
       - loadtest-net
     deploy:
