@@ -137,6 +137,9 @@ type MockAIService struct {
 	RelatedPostsFn      func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
 	RelatedPostsBatchFn func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error)
 	ChatAnswerFn        func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
+	UpdateUserProfileFn func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error
+	RecommendFeedFn     func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error)
+	DeleteUserProfileFn func(ctx context.Context, userID string) error
 	HealthyFn           func(ctx context.Context) error
 }
 
@@ -201,6 +204,27 @@ func (m *MockAIService) ChatAnswer(ctx context.Context, query string, history []
 		return m.ChatAnswerFn(ctx, query, history, topK)
 	}
 	return &domain.ChatAnswer{Content: "answer"}, nil
+}
+
+func (m *MockAIService) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	if m.UpdateUserProfileFn != nil {
+		return m.UpdateUserProfileFn(ctx, userID, postID, kind)
+	}
+	return nil
+}
+
+func (m *MockAIService) RecommendFeed(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+	if m.RecommendFeedFn != nil {
+		return m.RecommendFeedFn(ctx, userID, offset, limit, mode, seed)
+	}
+	return &domain.SearchResult{}, nil
+}
+
+func (m *MockAIService) DeleteUserProfile(ctx context.Context, userID string) error {
+	if m.DeleteUserProfileFn != nil {
+		return m.DeleteUserProfileFn(ctx, userID)
+	}
+	return nil
 }
 
 func (m *MockAIService) Health(ctx context.Context) error {

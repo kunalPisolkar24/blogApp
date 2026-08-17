@@ -2,12 +2,33 @@ import datetime
 
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
+
+class InteractionKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INTERACTION_KIND_UNSPECIFIED: _ClassVar[InteractionKind]
+    INTERACTION_KIND_VIEW: _ClassVar[InteractionKind]
+    INTERACTION_KIND_LIKE: _ClassVar[InteractionKind]
+    INTERACTION_KIND_SAVE: _ClassVar[InteractionKind]
+
+class RecommendMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    RECOMMEND_MODE_UNSPECIFIED: _ClassVar[RecommendMode]
+    RECOMMEND_MODE_DEFAULT: _ClassVar[RecommendMode]
+    RECOMMEND_MODE_SURPRISE: _ClassVar[RecommendMode]
+INTERACTION_KIND_UNSPECIFIED: InteractionKind
+INTERACTION_KIND_VIEW: InteractionKind
+INTERACTION_KIND_LIKE: InteractionKind
+INTERACTION_KIND_SAVE: InteractionKind
+RECOMMEND_MODE_UNSPECIFIED: RecommendMode
+RECOMMEND_MODE_DEFAULT: RecommendMode
+RECOMMEND_MODE_SURPRISE: RecommendMode
 
 class ContentRequest(_message.Message):
     __slots__ = ("text",)
@@ -182,3 +203,49 @@ class ChatChunk(_message.Message):
     cited_post_ids: _containers.RepeatedScalarFieldContainer[str]
     error: str
     def __init__(self, delta: _Optional[str] = ..., done: _Optional[bool] = ..., cited_post_ids: _Optional[_Iterable[str]] = ..., error: _Optional[str] = ...) -> None: ...
+
+class UserProfileUpdateRequest(_message.Message):
+    __slots__ = ("user_id", "post_id", "kind")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    POST_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    post_id: str
+    kind: InteractionKind
+    def __init__(self, user_id: _Optional[str] = ..., post_id: _Optional[str] = ..., kind: _Optional[_Union[InteractionKind, str]] = ...) -> None: ...
+
+class UserProfileUpdateResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class RecommendRequest(_message.Message):
+    __slots__ = ("user_id", "offset", "limit", "mode", "seed")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    OFFSET_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    MODE_FIELD_NUMBER: _ClassVar[int]
+    SEED_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    offset: int
+    limit: int
+    mode: RecommendMode
+    seed: int
+    def __init__(self, user_id: _Optional[str] = ..., offset: _Optional[int] = ..., limit: _Optional[int] = ..., mode: _Optional[_Union[RecommendMode, str]] = ..., seed: _Optional[int] = ...) -> None: ...
+
+class RecommendResponse(_message.Message):
+    __slots__ = ("post_ids", "total")
+    POST_IDS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_FIELD_NUMBER: _ClassVar[int]
+    post_ids: _containers.RepeatedScalarFieldContainer[str]
+    total: int
+    def __init__(self, post_ids: _Optional[_Iterable[str]] = ..., total: _Optional[int] = ...) -> None: ...
+
+class DeleteUserProfileRequest(_message.Message):
+    __slots__ = ("user_id",)
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    def __init__(self, user_id: _Optional[str] = ...) -> None: ...
+
+class DeleteUserProfileResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...

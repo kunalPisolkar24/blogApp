@@ -33,6 +33,29 @@ class AIServiceStub:
     SearchPosts: grpc.aio.UnaryUnaryMultiCallable[
         ai_service_pb2.SearchRequest, ai_service_pb2.SearchResponse
     ]
+    RelatedPosts: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.RelatedRequest, ai_service_pb2.RelatedResponse
+    ]
+    RelatedPostsBatch: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.RelatedBatchRequest, ai_service_pb2.RelatedBatchResponse
+    ]
+    Embed: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.EmbedRequest, ai_service_pb2.EmbedResponse
+    ]
+    ChatAnswer: grpc.aio.UnaryStreamMultiCallable[
+        ai_service_pb2.ChatAnswerRequest, ai_service_pb2.ChatChunk
+    ]
+    UpdateUserProfile: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.UserProfileUpdateRequest,
+        ai_service_pb2.UserProfileUpdateResponse,
+    ]
+    RecommendFeed: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.RecommendRequest, ai_service_pb2.RecommendResponse
+    ]
+    DeleteUserProfile: grpc.aio.UnaryUnaryMultiCallable[
+        ai_service_pb2.DeleteUserProfileRequest,
+        ai_service_pb2.DeleteUserProfileResponse,
+    ]
 
 
 class AIServiceServicer:
@@ -47,6 +70,20 @@ class AIServiceServicer:
     def DeletePost(self, request: Any, context: Any) -> Any: ...
 
     def SearchPosts(self, request: Any, context: Any) -> Any: ...
+
+    def RelatedPosts(self, request: Any, context: Any) -> Any: ...
+
+    def RelatedPostsBatch(self, request: Any, context: Any) -> Any: ...
+
+    def Embed(self, request: Any, context: Any) -> Any: ...
+
+    def ChatAnswer(self, request: Any, context: Any) -> Any: ...
+
+    def UpdateUserProfile(self, request: Any, context: Any) -> Any: ...
+
+    def RecommendFeed(self, request: Any, context: Any) -> Any: ...
+
+    def DeleteUserProfile(self, request: Any, context: Any) -> Any: ...
 
 
 def add_AIServiceServicer_to_server(
