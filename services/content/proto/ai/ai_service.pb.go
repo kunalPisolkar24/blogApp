@@ -22,6 +22,111 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// InteractionKind is the type of a user interaction with a post that
+// shapes the user's interest profile.
+type InteractionKind int32
+
+const (
+	InteractionKind_INTERACTION_KIND_UNSPECIFIED InteractionKind = 0
+	InteractionKind_INTERACTION_KIND_VIEW        InteractionKind = 1
+	InteractionKind_INTERACTION_KIND_LIKE        InteractionKind = 2
+	InteractionKind_INTERACTION_KIND_SAVE        InteractionKind = 3
+)
+
+// Enum value maps for InteractionKind.
+var (
+	InteractionKind_name = map[int32]string{
+		0: "INTERACTION_KIND_UNSPECIFIED",
+		1: "INTERACTION_KIND_VIEW",
+		2: "INTERACTION_KIND_LIKE",
+		3: "INTERACTION_KIND_SAVE",
+	}
+	InteractionKind_value = map[string]int32{
+		"INTERACTION_KIND_UNSPECIFIED": 0,
+		"INTERACTION_KIND_VIEW":        1,
+		"INTERACTION_KIND_LIKE":        2,
+		"INTERACTION_KIND_SAVE":        3,
+	}
+)
+
+func (x InteractionKind) Enum() *InteractionKind {
+	p := new(InteractionKind)
+	*p = x
+	return p
+}
+
+func (x InteractionKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InteractionKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ai_ai_service_proto_enumTypes[0].Descriptor()
+}
+
+func (InteractionKind) Type() protoreflect.EnumType {
+	return &file_proto_ai_ai_service_proto_enumTypes[0]
+}
+
+func (x InteractionKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InteractionKind.Descriptor instead.
+func (InteractionKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{0}
+}
+
+// RecommendMode selects how a feed is ranked for a user: DEFAULT follows
+// the user's learned taste, SURPRISE deliberately strays from it.
+type RecommendMode int32
+
+const (
+	RecommendMode_RECOMMEND_MODE_UNSPECIFIED RecommendMode = 0
+	RecommendMode_RECOMMEND_MODE_DEFAULT     RecommendMode = 1
+	RecommendMode_RECOMMEND_MODE_SURPRISE    RecommendMode = 2
+)
+
+// Enum value maps for RecommendMode.
+var (
+	RecommendMode_name = map[int32]string{
+		0: "RECOMMEND_MODE_UNSPECIFIED",
+		1: "RECOMMEND_MODE_DEFAULT",
+		2: "RECOMMEND_MODE_SURPRISE",
+	}
+	RecommendMode_value = map[string]int32{
+		"RECOMMEND_MODE_UNSPECIFIED": 0,
+		"RECOMMEND_MODE_DEFAULT":     1,
+		"RECOMMEND_MODE_SURPRISE":    2,
+	}
+)
+
+func (x RecommendMode) Enum() *RecommendMode {
+	p := new(RecommendMode)
+	*p = x
+	return p
+}
+
+func (x RecommendMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RecommendMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_ai_ai_service_proto_enumTypes[1].Descriptor()
+}
+
+func (RecommendMode) Type() protoreflect.EnumType {
+	return &file_proto_ai_ai_service_proto_enumTypes[1]
+}
+
+func (x RecommendMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RecommendMode.Descriptor instead.
+func (RecommendMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{1}
+}
+
 type ContentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
@@ -1162,6 +1267,314 @@ func (x *ChatChunk) GetError() string {
 	return ""
 }
 
+type UserProfileUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PostId        string                 `protobuf:"bytes,2,opt,name=post_id,json=postId,proto3" json:"post_id,omitempty"`
+	Kind          InteractionKind        `protobuf:"varint,3,opt,name=kind,proto3,enum=ai.InteractionKind" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserProfileUpdateRequest) Reset() {
+	*x = UserProfileUpdateRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserProfileUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserProfileUpdateRequest) ProtoMessage() {}
+
+func (x *UserProfileUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserProfileUpdateRequest.ProtoReflect.Descriptor instead.
+func (*UserProfileUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *UserProfileUpdateRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UserProfileUpdateRequest) GetPostId() string {
+	if x != nil {
+		return x.PostId
+	}
+	return ""
+}
+
+func (x *UserProfileUpdateRequest) GetKind() InteractionKind {
+	if x != nil {
+		return x.Kind
+	}
+	return InteractionKind_INTERACTION_KIND_UNSPECIFIED
+}
+
+type UserProfileUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserProfileUpdateResponse) Reset() {
+	*x = UserProfileUpdateResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserProfileUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserProfileUpdateResponse) ProtoMessage() {}
+
+func (x *UserProfileUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserProfileUpdateResponse.ProtoReflect.Descriptor instead.
+func (*UserProfileUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{23}
+}
+
+type RecommendRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Offset uint32                 `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	Limit  uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Mode   RecommendMode          `protobuf:"varint,4,opt,name=mode,proto3,enum=ai.RecommendMode" json:"mode,omitempty"`
+	// seed makes surprise ordering deterministic: the same seed and
+	// profile always yield the same feed.
+	Seed          uint32 `protobuf:"varint,5,opt,name=seed,proto3" json:"seed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecommendRequest) Reset() {
+	*x = RecommendRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecommendRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecommendRequest) ProtoMessage() {}
+
+func (x *RecommendRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecommendRequest.ProtoReflect.Descriptor instead.
+func (*RecommendRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RecommendRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *RecommendRequest) GetOffset() uint32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *RecommendRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *RecommendRequest) GetMode() RecommendMode {
+	if x != nil {
+		return x.Mode
+	}
+	return RecommendMode_RECOMMEND_MODE_UNSPECIFIED
+}
+
+func (x *RecommendRequest) GetSeed() uint32 {
+	if x != nil {
+		return x.Seed
+	}
+	return 0
+}
+
+type RecommendResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	PostIds []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
+	// total is the number of rankable posts for the user, not the size of
+	// this page.
+	Total         int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecommendResponse) Reset() {
+	*x = RecommendResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecommendResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecommendResponse) ProtoMessage() {}
+
+func (x *RecommendResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecommendResponse.ProtoReflect.Descriptor instead.
+func (*RecommendResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RecommendResponse) GetPostIds() []string {
+	if x != nil {
+		return x.PostIds
+	}
+	return nil
+}
+
+func (x *RecommendResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type DeleteUserProfileRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserProfileRequest) Reset() {
+	*x = DeleteUserProfileRequest{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserProfileRequest) ProtoMessage() {}
+
+func (x *DeleteUserProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserProfileRequest.ProtoReflect.Descriptor instead.
+func (*DeleteUserProfileRequest) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *DeleteUserProfileRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type DeleteUserProfileResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserProfileResponse) Reset() {
+	*x = DeleteUserProfileResponse{}
+	mi := &file_proto_ai_ai_service_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserProfileResponse) ProtoMessage() {}
+
+func (x *DeleteUserProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_ai_ai_service_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserProfileResponse.ProtoReflect.Descriptor instead.
+func (*DeleteUserProfileResponse) Descriptor() ([]byte, []int) {
+	return file_proto_ai_ai_service_proto_rawDescGZIP(), []int{27}
+}
+
 var File_proto_ai_ai_service_proto protoreflect.FileDescriptor
 
 const file_proto_ai_ai_service_proto_rawDesc = "" +
@@ -1232,7 +1645,33 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x05delta\x18\x01 \x01(\tR\x05delta\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12$\n" +
 	"\x0ecited_post_ids\x18\x03 \x03(\tR\fcitedPostIds\x12\x14\n" +
-	"\x05error\x18\x04 \x01(\tR\x05error2\xc6\x04\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"u\n" +
+	"\x18UserProfileUpdateRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x17\n" +
+	"\apost_id\x18\x02 \x01(\tR\x06postId\x12'\n" +
+	"\x04kind\x18\x03 \x01(\x0e2\x13.ai.InteractionKindR\x04kind\"\x1b\n" +
+	"\x19UserProfileUpdateResponse\"\x94\x01\n" +
+	"\x10RecommendRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
+	"\x06offset\x18\x02 \x01(\rR\x06offset\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\x12%\n" +
+	"\x04mode\x18\x04 \x01(\x0e2\x11.ai.RecommendModeR\x04mode\x12\x12\n" +
+	"\x04seed\x18\x05 \x01(\rR\x04seed\"D\n" +
+	"\x11RecommendResponse\x12\x19\n" +
+	"\bpost_ids\x18\x01 \x03(\tR\apostIds\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"3\n" +
+	"\x18DeleteUserProfileRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x1b\n" +
+	"\x19DeleteUserProfileResponse*\x84\x01\n" +
+	"\x0fInteractionKind\x12 \n" +
+	"\x1cINTERACTION_KIND_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15INTERACTION_KIND_VIEW\x10\x01\x12\x19\n" +
+	"\x15INTERACTION_KIND_LIKE\x10\x02\x12\x19\n" +
+	"\x15INTERACTION_KIND_SAVE\x10\x03*h\n" +
+	"\rRecommendMode\x12\x1e\n" +
+	"\x1aRECOMMEND_MODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16RECOMMEND_MODE_DEFAULT\x10\x01\x12\x1b\n" +
+	"\x17RECOMMEND_MODE_SURPRISE\x10\x022\xa8\x06\n" +
 	"\tAIService\x12:\n" +
 	"\x0fGenerateSummary\x12\x12.ai.ContentRequest\x1a\x13.ai.ContentResponse\x124\n" +
 	"\fGenerateTags\x12\x12.ai.ContextRequest\x1a\x10.ai.TagsResponse\x12E\n" +
@@ -1245,7 +1684,10 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x11RelatedPostsBatch\x12\x17.ai.RelatedBatchRequest\x1a\x18.ai.RelatedBatchResponse\x12,\n" +
 	"\x05Embed\x12\x10.ai.EmbedRequest\x1a\x11.ai.EmbedResponse\x124\n" +
 	"\n" +
-	"ChatAnswer\x12\x15.ai.ChatAnswerRequest\x1a\r.ai.ChatChunk0\x01B<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
+	"ChatAnswer\x12\x15.ai.ChatAnswerRequest\x1a\r.ai.ChatChunk0\x01\x12P\n" +
+	"\x11UpdateUserProfile\x12\x1c.ai.UserProfileUpdateRequest\x1a\x1d.ai.UserProfileUpdateResponse\x12<\n" +
+	"\rRecommendFeed\x12\x14.ai.RecommendRequest\x1a\x15.ai.RecommendResponse\x12P\n" +
+	"\x11DeleteUserProfile\x12\x1c.ai.DeleteUserProfileRequest\x1a\x1d.ai.DeleteUserProfileResponseB<Z:github.com/kunalPisolkar24/topos/services/content/proto/aib\x06proto3"
 
 var (
 	file_proto_ai_ai_service_proto_rawDescOnce sync.Once
@@ -1259,61 +1701,78 @@ func file_proto_ai_ai_service_proto_rawDescGZIP() []byte {
 	return file_proto_ai_ai_service_proto_rawDescData
 }
 
-var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_proto_ai_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_ai_ai_service_proto_goTypes = []any{
-	(*ContentRequest)(nil),         // 0: ai.ContentRequest
-	(*ContentResponse)(nil),        // 1: ai.ContentResponse
-	(*ContextRequest)(nil),         // 2: ai.ContextRequest
-	(*TagsResponse)(nil),           // 3: ai.TagsResponse
-	(*PostGenerationRequest)(nil),  // 4: ai.PostGenerationRequest
-	(*PostGenerationResponse)(nil), // 5: ai.PostGenerationResponse
-	(*IndexRequest)(nil),           // 6: ai.IndexRequest
-	(*IndexResponse)(nil),          // 7: ai.IndexResponse
-	(*DeleteRequest)(nil),          // 8: ai.DeleteRequest
-	(*DeleteResponse)(nil),         // 9: ai.DeleteResponse
-	(*SearchRequest)(nil),          // 10: ai.SearchRequest
-	(*SearchResponse)(nil),         // 11: ai.SearchResponse
-	(*RelatedRequest)(nil),         // 12: ai.RelatedRequest
-	(*RelatedResponse)(nil),        // 13: ai.RelatedResponse
-	(*RelatedBatchRequest)(nil),    // 14: ai.RelatedBatchRequest
-	(*RelatedBatchItem)(nil),       // 15: ai.RelatedBatchItem
-	(*RelatedBatchResponse)(nil),   // 16: ai.RelatedBatchResponse
-	(*EmbedRequest)(nil),           // 17: ai.EmbedRequest
-	(*EmbedResponse)(nil),          // 18: ai.EmbedResponse
-	(*ChatMessage)(nil),            // 19: ai.ChatMessage
-	(*ChatAnswerRequest)(nil),      // 20: ai.ChatAnswerRequest
-	(*ChatChunk)(nil),              // 21: ai.ChatChunk
-	(*timestamppb.Timestamp)(nil),  // 22: google.protobuf.Timestamp
+	(InteractionKind)(0),              // 0: ai.InteractionKind
+	(RecommendMode)(0),                // 1: ai.RecommendMode
+	(*ContentRequest)(nil),            // 2: ai.ContentRequest
+	(*ContentResponse)(nil),           // 3: ai.ContentResponse
+	(*ContextRequest)(nil),            // 4: ai.ContextRequest
+	(*TagsResponse)(nil),              // 5: ai.TagsResponse
+	(*PostGenerationRequest)(nil),     // 6: ai.PostGenerationRequest
+	(*PostGenerationResponse)(nil),    // 7: ai.PostGenerationResponse
+	(*IndexRequest)(nil),              // 8: ai.IndexRequest
+	(*IndexResponse)(nil),             // 9: ai.IndexResponse
+	(*DeleteRequest)(nil),             // 10: ai.DeleteRequest
+	(*DeleteResponse)(nil),            // 11: ai.DeleteResponse
+	(*SearchRequest)(nil),             // 12: ai.SearchRequest
+	(*SearchResponse)(nil),            // 13: ai.SearchResponse
+	(*RelatedRequest)(nil),            // 14: ai.RelatedRequest
+	(*RelatedResponse)(nil),           // 15: ai.RelatedResponse
+	(*RelatedBatchRequest)(nil),       // 16: ai.RelatedBatchRequest
+	(*RelatedBatchItem)(nil),          // 17: ai.RelatedBatchItem
+	(*RelatedBatchResponse)(nil),      // 18: ai.RelatedBatchResponse
+	(*EmbedRequest)(nil),              // 19: ai.EmbedRequest
+	(*EmbedResponse)(nil),             // 20: ai.EmbedResponse
+	(*ChatMessage)(nil),               // 21: ai.ChatMessage
+	(*ChatAnswerRequest)(nil),         // 22: ai.ChatAnswerRequest
+	(*ChatChunk)(nil),                 // 23: ai.ChatChunk
+	(*UserProfileUpdateRequest)(nil),  // 24: ai.UserProfileUpdateRequest
+	(*UserProfileUpdateResponse)(nil), // 25: ai.UserProfileUpdateResponse
+	(*RecommendRequest)(nil),          // 26: ai.RecommendRequest
+	(*RecommendResponse)(nil),         // 27: ai.RecommendResponse
+	(*DeleteUserProfileRequest)(nil),  // 28: ai.DeleteUserProfileRequest
+	(*DeleteUserProfileResponse)(nil), // 29: ai.DeleteUserProfileResponse
+	(*timestamppb.Timestamp)(nil),     // 30: google.protobuf.Timestamp
 }
 var file_proto_ai_ai_service_proto_depIdxs = []int32{
-	22, // 0: ai.IndexRequest.created_at:type_name -> google.protobuf.Timestamp
-	15, // 1: ai.RelatedBatchResponse.results:type_name -> ai.RelatedBatchItem
-	19, // 2: ai.ChatAnswerRequest.history:type_name -> ai.ChatMessage
-	0,  // 3: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
-	2,  // 4: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
-	4,  // 5: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
-	6,  // 6: ai.AIService.IndexPost:input_type -> ai.IndexRequest
-	8,  // 7: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
-	10, // 8: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
-	12, // 9: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
-	14, // 10: ai.AIService.RelatedPostsBatch:input_type -> ai.RelatedBatchRequest
-	17, // 11: ai.AIService.Embed:input_type -> ai.EmbedRequest
-	20, // 12: ai.AIService.ChatAnswer:input_type -> ai.ChatAnswerRequest
-	1,  // 13: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
-	3,  // 14: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
-	5,  // 15: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
-	7,  // 16: ai.AIService.IndexPost:output_type -> ai.IndexResponse
-	9,  // 17: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
-	11, // 18: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
-	13, // 19: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
-	16, // 20: ai.AIService.RelatedPostsBatch:output_type -> ai.RelatedBatchResponse
-	18, // 21: ai.AIService.Embed:output_type -> ai.EmbedResponse
-	21, // 22: ai.AIService.ChatAnswer:output_type -> ai.ChatChunk
-	13, // [13:23] is the sub-list for method output_type
-	3,  // [3:13] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	30, // 0: ai.IndexRequest.created_at:type_name -> google.protobuf.Timestamp
+	17, // 1: ai.RelatedBatchResponse.results:type_name -> ai.RelatedBatchItem
+	21, // 2: ai.ChatAnswerRequest.history:type_name -> ai.ChatMessage
+	0,  // 3: ai.UserProfileUpdateRequest.kind:type_name -> ai.InteractionKind
+	1,  // 4: ai.RecommendRequest.mode:type_name -> ai.RecommendMode
+	2,  // 5: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
+	4,  // 6: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
+	6,  // 7: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
+	8,  // 8: ai.AIService.IndexPost:input_type -> ai.IndexRequest
+	10, // 9: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
+	12, // 10: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
+	14, // 11: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
+	16, // 12: ai.AIService.RelatedPostsBatch:input_type -> ai.RelatedBatchRequest
+	19, // 13: ai.AIService.Embed:input_type -> ai.EmbedRequest
+	22, // 14: ai.AIService.ChatAnswer:input_type -> ai.ChatAnswerRequest
+	24, // 15: ai.AIService.UpdateUserProfile:input_type -> ai.UserProfileUpdateRequest
+	26, // 16: ai.AIService.RecommendFeed:input_type -> ai.RecommendRequest
+	28, // 17: ai.AIService.DeleteUserProfile:input_type -> ai.DeleteUserProfileRequest
+	3,  // 18: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
+	5,  // 19: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
+	7,  // 20: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
+	9,  // 21: ai.AIService.IndexPost:output_type -> ai.IndexResponse
+	11, // 22: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
+	13, // 23: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
+	15, // 24: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
+	18, // 25: ai.AIService.RelatedPostsBatch:output_type -> ai.RelatedBatchResponse
+	20, // 26: ai.AIService.Embed:output_type -> ai.EmbedResponse
+	23, // 27: ai.AIService.ChatAnswer:output_type -> ai.ChatChunk
+	25, // 28: ai.AIService.UpdateUserProfile:output_type -> ai.UserProfileUpdateResponse
+	27, // 29: ai.AIService.RecommendFeed:output_type -> ai.RecommendResponse
+	29, // 30: ai.AIService.DeleteUserProfile:output_type -> ai.DeleteUserProfileResponse
+	18, // [18:31] is the sub-list for method output_type
+	5,  // [5:18] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_ai_ai_service_proto_init() }
@@ -1326,13 +1785,14 @@ func file_proto_ai_ai_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ai_ai_service_proto_rawDesc), len(file_proto_ai_ai_service_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   22,
+			NumEnums:      2,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_ai_ai_service_proto_goTypes,
 		DependencyIndexes: file_proto_ai_ai_service_proto_depIdxs,
+		EnumInfos:         file_proto_ai_ai_service_proto_enumTypes,
 		MessageInfos:      file_proto_ai_ai_service_proto_msgTypes,
 	}.Build()
 	File_proto_ai_ai_service_proto = out.File

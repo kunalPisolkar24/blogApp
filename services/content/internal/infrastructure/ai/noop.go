@@ -69,6 +69,22 @@ func (a *NoopAI) ChatAnswer(_ context.Context, _ string, _ []domain.ChatTurn, _ 
 	}, nil
 }
 
+// UpdateUserProfile and DeleteUserProfile no-op in fallback mode: there
+// is no local profile store, so the profile simply stays absent.
+func (a *NoopAI) UpdateUserProfile(_ context.Context, _, _ string, _ domain.PostInteractionKind) error {
+	return nil
+}
+
+func (a *NoopAI) DeleteUserProfile(_ context.Context, _ string) error {
+	return nil
+}
+
+// RecommendFeed degrades to an empty result: a user without a profile
+// is served a recency-ranked feed by the content service.
+func (a *NoopAI) RecommendFeed(_ context.Context, _ string, _, _ int, _ domain.RecommendMode, _ uint32) (*domain.SearchResult, error) {
+	return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
+}
+
 // Health reports the fallback as always available: NoopAI itself never
 // fails, it is only selected when the primary is unavailable.
 func (a *NoopAI) Health(_ context.Context) error {

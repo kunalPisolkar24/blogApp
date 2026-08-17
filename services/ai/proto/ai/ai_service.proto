@@ -17,6 +17,9 @@ service AIService {
   rpc RelatedPostsBatch (RelatedBatchRequest) returns (RelatedBatchResponse);
   rpc Embed (EmbedRequest) returns (EmbedResponse);
   rpc ChatAnswer (ChatAnswerRequest) returns (stream ChatChunk);
+  rpc UpdateUserProfile (UserProfileUpdateRequest) returns (UserProfileUpdateResponse);
+  rpc RecommendFeed (RecommendRequest) returns (RecommendResponse);
+  rpc DeleteUserProfile (DeleteUserProfileRequest) returns (DeleteUserProfileResponse);
 }
 
 message ContentRequest {
@@ -129,3 +132,51 @@ message ChatChunk {
   repeated string cited_post_ids = 3;
   string error = 4;
 }
+
+// InteractionKind is the type of a user interaction with a post that
+// shapes the user's interest profile.
+enum InteractionKind {
+  INTERACTION_KIND_UNSPECIFIED = 0;
+  INTERACTION_KIND_VIEW = 1;
+  INTERACTION_KIND_LIKE = 2;
+  INTERACTION_KIND_SAVE = 3;
+}
+
+// RecommendMode selects how a feed is ranked for a user: DEFAULT follows
+// the user's learned taste, SURPRISE deliberately strays from it.
+enum RecommendMode {
+  RECOMMEND_MODE_UNSPECIFIED = 0;
+  RECOMMEND_MODE_DEFAULT = 1;
+  RECOMMEND_MODE_SURPRISE = 2;
+}
+
+message UserProfileUpdateRequest {
+  string user_id = 1;
+  string post_id = 2;
+  InteractionKind kind = 3;
+}
+
+message UserProfileUpdateResponse {}
+
+message RecommendRequest {
+  string user_id = 1;
+  uint32 offset = 2;
+  uint32 limit = 3;
+  RecommendMode mode = 4;
+  // seed makes surprise ordering deterministic: the same seed and
+  // profile always yield the same feed.
+  uint32 seed = 5;
+}
+
+message RecommendResponse {
+  repeated string post_ids = 1;
+  // total is the number of rankable posts for the user, not the size of
+  // this page.
+  int32 total = 2;
+}
+
+message DeleteUserProfileRequest {
+  string user_id = 1;
+}
+
+message DeleteUserProfileResponse {}

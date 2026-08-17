@@ -1,4 +1,4 @@
-.PHONY: test test-integration coverage vet lint fmt
+.PHONY: test test-integration coverage vet lint fmt generate
 .PHONY: verify-sharding
 .PHONY: load-test load-test-worker load-test-reads load-test-writes load-test-chat load-test-build load-test-stop load-test-clean load-test-tail
 
@@ -8,6 +8,16 @@
 #   - bootstrap, cmd: entrypoint wiring only
 #   - testutil: test doubles
 GENERATED_RE := 'graph/generated.go|graph/model/|proto/ai/|\.pb\.go|internal/db/|internal/repository/|internal/bootstrap/|internal/testutil/|cmd/'
+
+# Regenerates the AI proto stubs in proto/ai/. Requires protoc and the
+# matching Go plugins on PATH (install with:
+#   go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+#   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.0)
+generate:
+	PATH="$(HOME)/go/bin:$$PATH" protoc -I . \
+		--go_out=. --go_opt=module=github.com/kunalPisolkar24/topos/services/content \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/kunalPisolkar24/topos/services/content \
+		proto/ai/ai_service.proto
 
 test:
 	go test ./...

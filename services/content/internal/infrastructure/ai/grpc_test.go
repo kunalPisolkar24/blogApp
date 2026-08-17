@@ -54,6 +54,21 @@ func (f *fakeAIServiceServer) RelatedPostsBatch(ctx context.Context, req *pb.Rel
 	return &pb.RelatedBatchResponse{Results: items}, nil
 }
 
+func (f *fakeAIServiceServer) UpdateUserProfile(ctx context.Context, req *pb.UserProfileUpdateRequest) (*pb.UserProfileUpdateResponse, error) {
+	return &pb.UserProfileUpdateResponse{}, nil
+}
+
+func (f *fakeAIServiceServer) RecommendFeed(ctx context.Context, req *pb.RecommendRequest) (*pb.RecommendResponse, error) {
+	return &pb.RecommendResponse{
+		PostIds: []string{"r_1", "r_2"},
+		Total:   2,
+	}, nil
+}
+
+func (f *fakeAIServiceServer) DeleteUserProfile(ctx context.Context, req *pb.DeleteUserProfileRequest) (*pb.DeleteUserProfileResponse, error) {
+	return &pb.DeleteUserProfileResponse{}, nil
+}
+
 func newTestGRPCClient(t *testing.T, server pb.AIServiceServer) domain.AIService {
 	t.Helper()
 
@@ -134,4 +149,30 @@ func TestGRPCClientRelatedPostsBatch(t *testing.T) {
 	assert.Equal(t, []string{"p_1_b1"}, results["p_1"].PostIDs)
 	assert.Equal(t, []string{"p_2_b1"}, results["p_2"].PostIDs)
 	assert.Equal(t, 2, results["p_1"].Total)
+}
+
+func TestGRPCClientUpdateUserProfile(t *testing.T) {
+	client := newTestGRPCClient(t, &fakeAIServiceServer{})
+
+	err := client.UpdateUserProfile(context.Background(), "u_1", "p_1", domain.PostInteractionLike)
+
+	require.NoError(t, err)
+}
+
+func TestGRPCClientRecommendFeed(t *testing.T) {
+	client := newTestGRPCClient(t, &fakeAIServiceServer{})
+
+	result, err := client.RecommendFeed(context.Background(), "u_1", 0, 10, domain.RecommendModeDefault, 0)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"r_1", "r_2"}, result.PostIDs)
+	assert.Equal(t, 2, result.Total)
+}
+
+func TestGRPCClientDeleteUserProfile(t *testing.T) {
+	client := newTestGRPCClient(t, &fakeAIServiceServer{})
+
+	err := client.DeleteUserProfile(context.Background(), "u_1")
+
+	require.NoError(t, err)
 }

@@ -17,6 +17,15 @@ type SearchResult struct {
 	Total   int
 }
 
+// RecommendMode selects how a feed is ranked for a user: DEFAULT follows
+// the user's learned taste, SURPRISE deliberately strays from it.
+type RecommendMode string
+
+const (
+	RecommendModeDefault  RecommendMode = "default"
+	RecommendModeSurprise RecommendMode = "surprise"
+)
+
 type AIService interface {
 	GenerateSummary(ctx context.Context, text string) (string, error)
 	GenerateTags(ctx context.Context, title, body string) ([]string, error)
@@ -30,6 +39,13 @@ type AIService interface {
 	// fire one AI call per post.
 	RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*SearchResult, error)
 	ChatAnswer(ctx context.Context, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
+	// UpdateUserProfile folds an interaction into the user's interest
+	// profile so future feeds can be ranked by it.
+	UpdateUserProfile(ctx context.Context, userID, postID string, kind PostInteractionKind) error
+	// RecommendFeed ranks posts for a user by their learned taste.
+	// A user with no profile yet yields an empty result.
+	RecommendFeed(ctx context.Context, userID string, offset, limit int, mode RecommendMode, seed uint32) (*SearchResult, error)
+	DeleteUserProfile(ctx context.Context, userID string) error
 	// Health reports whether the AI service can do real work: the
 	// connection is ready and no circuit breaker is open. It must not
 	// make RPCs.

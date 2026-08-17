@@ -29,6 +29,7 @@ const (
 	searchTimeout  = 10 * time.Second
 	relatedTimeout = 5 * time.Second
 	chatTimeout    = 120 * time.Second
+	profileTimeout = 10 * time.Second
 )
 
 // breakerDomain groups AI RPCs into independent failure domains so a
@@ -40,6 +41,8 @@ const (
 	domainSearch     breakerDomain = "search"     // SearchPosts, RelatedPosts
 	domainChat       breakerDomain = "chat"       // ChatAnswer
 	domainIndex      breakerDomain = "index"      // IndexPost, DeletePost
+	domainProfile    breakerDomain = "profile"    // UpdateUserProfile, DeleteUserProfile
+	domainRecommend  breakerDomain = "recommend"  // RecommendFeed
 )
 
 // resilientClient talks to the AI service over gRPC. Read paths (search,
@@ -63,6 +66,8 @@ func NewResilientClient(addr string) domain.AIService {
 			domainSearch:     newCircuitBreaker(string(domainSearch)),
 			domainChat:       newCircuitBreaker(string(domainChat)),
 			domainIndex:      newCircuitBreaker(string(domainIndex)),
+			domainProfile:    newCircuitBreaker(string(domainProfile)),
+			domainRecommend:  newCircuitBreaker(string(domainRecommend)),
 		},
 	}
 	return c
@@ -131,7 +136,7 @@ func (c *resilientClient) Health(ctx context.Context) error {
 
 // openDomain returns the first breaker in the open state, if any.
 func (c *resilientClient) openDomain() breakerDomain {
-	for _, d := range []breakerDomain{domainGeneration, domainSearch, domainChat, domainIndex} {
+	for _, d := range []breakerDomain{domainGeneration, domainSearch, domainChat, domainIndex, domainProfile, domainRecommend} {
 		b := c.breaker(d)
 		b.mu.Lock()
 		state := b.state
@@ -214,6 +219,49 @@ func (c *resilientClient) ChatAnswer(ctx context.Context, query string, history 
 	return degraded(c.breaker(domainChat), "chat",
 		func() (*domain.ChatAnswer, error) { return c.primary.ChatAnswer(ctx, query, history, topK) },
 		func() (*domain.ChatAnswer, error) { return c.fallback.ChatAnswer(ctx, query, history, topK) },
+	)
+}
+
+// UpdateUserProfile and DeleteUserProfile mutate the AI service's user
+// profile store, so like the index write paths they never fabricate
+// success: an open breaker or a failed RPC surfaces an error.
+func (c *resilientClient) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	if !c.breaker(domainProfile).canProceed() {
+		metrics.AIFallbackEngaged.WithLabelValues("update_user_profile").Inc()
+		return domain.ErrAICircuitOpen
+	}
+	if err := c.primary.UpdateUserProfile(ctx, userID, postID, kind); err != nil {
+		c.breaker(domainProfile).recordFailure()
+		return err
+	}
+	c.breaker(domainProfile).recordSuccess()
+	return nil
+}
+
+func (c *resilientClient) DeleteUserProfile(ctx context.Context, userID string) error {
+	if !c.breaker(domainProfile).canProceed() {
+		metrics.AIFallbackEngaged.WithLabelValues("delete_user_profile").Inc()
+		return domain.ErrAICircuitOpen
+	}
+	if err := c.primary.DeleteUserProfile(ctx, userID); err != nil {
+		c.breaker(domainProfile).recordFailure()
+		return err
+	}
+	c.breaker(domainProfile).recordSuccess()
+	return nil
+}
+
+// RecommendFeed degrades to an empty result when the AI service is
+// unreachable: a user without a profile is served a recency-ranked feed
+// by the content service, so an empty page is a safe cold start.
+func (c *resilientClient) RecommendFeed(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+	return degraded(c.breaker(domainRecommend), "recommend",
+		func() (*domain.SearchResult, error) {
+			return c.primary.RecommendFeed(ctx, userID, offset, limit, mode, seed)
+		},
+		func() (*domain.SearchResult, error) {
+			return c.fallback.RecommendFeed(ctx, userID, offset, limit, mode, seed)
+		},
 	)
 }
 
@@ -416,6 +464,71 @@ func mapTurnsToProto(turns []domain.ChatTurn) []*pb.ChatMessage {
 		})
 	}
 	return msgs
+}
+
+// interactionKindToProto maps a domain interaction kind onto the proto
+// enum. Unknown kinds fall back to view, matching the domain's weight
+// semantics for unsupported kinds.
+func interactionKindToProto(kind domain.PostInteractionKind) pb.InteractionKind {
+	switch kind {
+	case domain.PostInteractionLike:
+		return pb.InteractionKind_INTERACTION_KIND_LIKE
+	case domain.PostInteractionSave:
+		return pb.InteractionKind_INTERACTION_KIND_SAVE
+	default:
+		return pb.InteractionKind_INTERACTION_KIND_VIEW
+	}
+}
+
+// recommendModeToProto maps a domain recommend mode onto the proto enum.
+// Unknown modes fall back to the default ranking.
+func recommendModeToProto(mode domain.RecommendMode) pb.RecommendMode {
+	switch mode {
+	case domain.RecommendModeSurprise:
+		return pb.RecommendMode_RECOMMEND_MODE_SURPRISE
+	default:
+		return pb.RecommendMode_RECOMMEND_MODE_DEFAULT
+	}
+}
+
+func (c *grpcClient) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ctx, cancel := context.WithTimeout(ctx, profileTimeout)
+	defer cancel()
+
+	_, err := c.client.UpdateUserProfile(ctx, &pb.UserProfileUpdateRequest{
+		UserId: userID,
+		PostId: postID,
+		Kind:   interactionKindToProto(kind),
+	})
+	return err
+}
+
+func (c *grpcClient) DeleteUserProfile(ctx context.Context, userID string) error {
+	ctx, cancel := context.WithTimeout(ctx, profileTimeout)
+	defer cancel()
+
+	_, err := c.client.DeleteUserProfile(ctx, &pb.DeleteUserProfileRequest{UserId: userID})
+	return err
+}
+
+func (c *grpcClient) RecommendFeed(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
+	defer cancel()
+
+	resp, err := c.client.RecommendFeed(ctx, &pb.RecommendRequest{
+		UserId: userID,
+		Offset: uint32(offset),
+		Limit:  uint32(limit),
+		Mode:   recommendModeToProto(mode),
+		Seed:   seed,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &domain.SearchResult{
+		PostIDs: resp.PostIds,
+		Total:   int(resp.Total),
+	}, nil
 }
 
 func (c *grpcClient) Close() error {

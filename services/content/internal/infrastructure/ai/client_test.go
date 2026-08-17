@@ -74,6 +74,21 @@ func (s *stubAI) ChatAnswer(ctx context.Context, query string, history []domain.
 	return &domain.ChatAnswer{Content: "answer"}, nil
 }
 
+func (s *stubAI) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	return s.err
+}
+
+func (s *stubAI) RecommendFeed(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &domain.SearchResult{PostIDs: s.search, Total: len(s.search)}, nil
+}
+
+func (s *stubAI) DeleteUserProfile(ctx context.Context, userID string) error {
+	return s.err
+}
+
 func (s *stubAI) Health(_ context.Context) error {
 	return s.healthErr
 }
@@ -92,6 +107,8 @@ func newTestResilientClient(primary, fallback domain.AIService) *resilientClient
 			domainSearch:     newCircuitBreaker("test-search"),
 			domainChat:       newCircuitBreaker("test-chat"),
 			domainIndex:      newCircuitBreaker("test-index"),
+			domainProfile:    newCircuitBreaker("test-profile"),
+			domainRecommend:  newCircuitBreaker("test-recommend"),
 		},
 	}
 }
