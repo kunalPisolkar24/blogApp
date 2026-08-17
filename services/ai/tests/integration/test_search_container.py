@@ -7,6 +7,7 @@ so exact text matches score ~1.0 and unrelated text ~0.0 — enough for
 the dense score threshold to behave like it does with a real model.
 """
 
+import httpx
 import pytest
 
 from src.generated import ai_service_pb2
@@ -109,3 +110,16 @@ def test_related_excludes_the_post_itself(service) -> None:
     )
 
     assert "6a75a41221a9752ec47bc609" not in response.post_ids
+
+
+def test_startup_creates_posts_and_users_collections(service, qdrant) -> None:
+    host = qdrant.get_container_host_ip()
+    port = qdrant.get_exposed_port(6333)
+
+    response = httpx.get(f"http://{host}:{port}/collections")
+
+    assert response.status_code == 200
+    names = {
+        collection["name"] for collection in response.json()["result"]["collections"]
+    }
+    assert {"posts", "users"} <= names
