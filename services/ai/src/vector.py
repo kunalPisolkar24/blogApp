@@ -97,10 +97,21 @@ class SearchIndex:
         )
 
     async def ensure_collection(self) -> None:
-        if await self._client.collection_exists(settings.QDRANT_COLLECTION):
+        """Create the collections backing search and recommendations.
+
+        Both the posts and users collections share the same vector config:
+        a dense COSINE channel sized to the embedding model plus a sparse
+        IDF channel. Existing collections are left untouched, so a
+        pre-existing posts collection keeps its data and configuration.
+        """
+        for name in (settings.QDRANT_COLLECTION, settings.QDRANT_USERS_COLLECTION):
+            await self._ensure_collection(name)
+
+    async def _ensure_collection(self, name: str) -> None:
+        if await self._client.collection_exists(name):
             return
         await self._client.create_collection(
-            collection_name=settings.QDRANT_COLLECTION,
+            collection_name=name,
             vectors_config={
                 DENSE_VECTOR: models.VectorParams(
                     size=settings.QDRANT_VECTOR_SIZE,
@@ -111,7 +122,7 @@ class SearchIndex:
                 SPARSE_VECTOR: models.SparseVectorParams(modifier=models.Modifier.IDF)
             },
         )
-        logger.info("created qdrant collection %s", settings.QDRANT_COLLECTION)
+        logger.info("created qdrant collection %s", name)
 
     async def upsert(
         self,

@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION: str = "posts"
+    # User interest profiles: one point per user with their dense taste
+    # vector and sparse tag weights. Same vector config as the posts
+    # collection.
+    QDRANT_USERS_COLLECTION: str = "users"
     QDRANT_VECTOR_SIZE: int = 1024
     QDRANT_TIMEOUT_SECONDS: int = 10
     # Attempts, 5s apart, before failing startup when Qdrant is unreachable.
