@@ -12,6 +12,7 @@ import math
 import struct
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from qdrant_client import AsyncQdrantClient, models
 
@@ -46,6 +47,16 @@ def _post_id_from_point(point_id) -> str:
     if len(hexed) == 32 and hexed.startswith("00000000"):
         return hexed[8:]
     return str(uuid.UUID(hex=hexed))
+
+
+def _user_point_id(user_id: str) -> uuid.UUID:
+    """Map an arbitrary user id to a deterministic Qdrant point id.
+
+    User ids come from the user service as PostgreSQL UUIDs (36 chars,
+    dashed), which _point_id's ObjectID zfill trick does not accept. A
+    namespaced UUID5 keeps any id format stable and collision-free.
+    """
+    return uuid.uuid5(uuid.NAMESPACE_URL, user_id)
 
 
 def _token_id(token: str) -> int:
@@ -270,6 +281,64 @@ class SearchIndex:
             )
         return posts
 
+    async def update_user_profile(
+        self, user_id: str, post_id: str, weight: float
+    ) -> None:
+        """Fold one interaction into a user's interest profile.
+
+        Reads the interacted post's stored dense vector and tags — no
+        embedding call — and blends them into the user's point in the
+        users collection. An unindexed post is a no-op, so interactions
+        racing the index worker are dropped rather than failed.
+        """
+        posts = await self._client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION,
+            ids=[_point_id(post_id)],
+            with_vectors=True,
+        )
+        if not posts:
+            logger.debug("profile update skipped: post %s not indexed", post_id)
+            return
+        post = posts[0]
+        post_dense = post.vector[DENSE_VECTOR]
+        post_tags = (post.payload or {}).get("tags", [])
+
+        profiles = await self._client.retrieve(
+            collection_name=settings.QDRANT_USERS_COLLECTION,
+            ids=[_user_point_id(user_id)],
+            with_vectors=True,
+        )
+        previous = None
+        if profiles:
+            payload = profiles[0].payload or {}
+            previous = _ProfileState(
+                total_weight=payload.get("total_weight", 0.0),
+                dense=profiles[0].vector[DENSE_VECTOR],
+                tag_weights=payload.get("tag_weights", {}),
+                seen_post_ids=payload.get("seen_post_ids", []),
+                updated_at=payload.get("updated_at", ""),
+            )
+
+        profile = _fold_profile(previous, post_id, post_dense, post_tags, weight)
+        await self._client.upsert(
+            collection_name=settings.QDRANT_USERS_COLLECTION,
+            points=[
+                models.PointStruct(
+                    id=_user_point_id(user_id),
+                    vector={
+                        DENSE_VECTOR: profile.dense,
+                        SPARSE_VECTOR: _sparse_vector(profile.tag_weights),
+                    },
+                    payload={
+                        "total_weight": profile.total_weight,
+                        "tag_weights": profile.tag_weights,
+                        "seen_post_ids": profile.seen_post_ids,
+                        "updated_at": profile.updated_at,
+                    },
+                )
+            ],
+        )
+
     async def close(self) -> None:
         await self._client.close()
 
@@ -291,6 +360,81 @@ def _sparse_overlap(query: dict[str, float], stored: dict[str, float]) -> float:
     )
 
 
+def _renormalize(vector: list[float]) -> list[float]:
+    """Scale a vector to unit length; a zero vector stays as-is."""
+    norm = math.sqrt(sum(component**2 for component in vector))
+    if norm == 0:
+        return vector
+    return [component / norm for component in vector]
+
+
+@dataclass
+class _ProfileState:
+    """The accumulated interest profile of a single user.
+
+    total_weight is the denominator of the running dense average,
+    tag_weights the sparse interest map, and seen_post_ids the
+    deduplicated interaction history recommends can exclude.
+    """
+
+    total_weight: float
+    dense: list[float]
+    tag_weights: dict[str, float]
+    seen_post_ids: list[str]
+    updated_at: str
+
+
+def _fold_profile(
+    profile: _ProfileState | None,
+    post_id: str,
+    post_dense: list[float],
+    post_tags: list[str],
+    weight: float,
+) -> _ProfileState:
+    """Fold one interaction into a user's interest profile.
+
+    The dense vector is a weighted running average: each interaction moves
+    the profile towards the interacted post by `weight`, renormalised to
+    unit length so cosine similarity stays comparable. Tags accumulate the
+    same weight, capped per tag and in total; when the tag map is full a
+    fresh tag replaces the weakest one. seen_post_ids keeps the latest
+    interactions, deduplicated and capped by PROFILE_SEEN_POSTS_CAP.
+    """
+    total = profile.total_weight if profile else 0.0
+    prev_dense = profile.dense if profile else [0.0] * len(post_dense)
+    dense = _renormalize(
+        [
+            (prev * total + post * weight) / (total + weight)
+            for prev, post in zip(prev_dense, post_dense)
+        ]
+    )
+
+    tag_weights = dict(profile.tag_weights) if profile else {}
+    for tag in post_tags:
+        if not tag:
+            continue
+        if tag not in tag_weights and len(tag_weights) >= settings.PROFILE_MAX_TAGS:
+            tag_weights.pop(min(tag_weights, key=tag_weights.get))
+        tag_weights[tag] = min(
+            tag_weights.get(tag, 0.0) + weight, settings.PROFILE_TAG_WEIGHT_CAP
+        )
+
+    seen = [
+        entry
+        for entry in (profile.seen_post_ids if profile else [])
+        if entry != post_id
+    ]
+    seen = (seen + [post_id])[-settings.PROFILE_SEEN_POSTS_CAP :]
+
+    return _ProfileState(
+        total_weight=total + weight,
+        dense=dense,
+        tag_weights=tag_weights,
+        seen_post_ids=seen,
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+
+
 def _rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[str]:
     """Reciprocal rank fusion over ranked post id lists, stable per post."""
     scores: dict[str, float] = {}
@@ -309,6 +453,7 @@ class _StoredPost:
     tokens: dict[str, float]
     title: str
     body: str
+    tags: list[str]
 
 
 class MemoryIndex:
@@ -328,6 +473,7 @@ class MemoryIndex:
     def __init__(self, embeddings: EmbeddingProvider) -> None:
         self._embeddings = embeddings
         self._posts: dict[str, _StoredPost] = {}
+        self._profiles: dict[str, _ProfileState] = {}
 
     async def ensure_collection(self) -> None:
         return None
@@ -349,6 +495,7 @@ class MemoryIndex:
             tokens=sparse_embed(text),
             title=title,
             body=clean_html(body)[: settings.EMBEDDING_MAX_CHARS],
+            tags=list(tags),
         )
 
     async def delete(self, post_id: str) -> None:
@@ -427,6 +574,17 @@ class MemoryIndex:
             for post, score in scored[:top_k]
             if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
         ]
+
+    async def update_user_profile(
+        self, user_id: str, post_id: str, weight: float
+    ) -> None:
+        """Mirror SearchIndex.update_user_profile over in-memory posts."""
+        post = self._posts.get(post_id)
+        if post is None:
+            return
+        self._profiles[user_id] = _fold_profile(
+            self._profiles.get(user_id), post.post_id, post.dense, post.tags, weight
+        )
 
     async def close(self) -> None:
         return None

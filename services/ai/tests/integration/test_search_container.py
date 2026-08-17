@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import NAMESPACE_URL, uuid5
 
 """Search tests against the real container: qdrant + gRPC end to end.
 
@@ -123,3 +124,33 @@ def test_startup_creates_posts_and_users_collections(service, qdrant) -> None:
         collection["name"] for collection in response.json()["result"]["collections"]
     }
     assert {"posts", "users"} <= names
+
+
+def test_update_user_profile_writes_a_user_point(service, qdrant) -> None:
+    post_id = "6a75a41221a9752ec47bc60a"
+    user_id = "11111111-1111-1111-1111-111111111111"
+    _index(service, post_id, "Kubernetes deployment guide")
+
+    service.stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id=user_id,
+            post_id=post_id,
+            kind=ai_service_pb2.INTERACTION_KIND_VIEW,
+        )
+    )
+
+    host = qdrant.get_container_host_ip()
+    port = qdrant.get_exposed_port(6333)
+    response = httpx.post(
+        f"http://{host}:{port}/collections/users/points/scroll",
+        json={"limit": 10},
+    )
+
+    assert response.status_code == 200
+    points = response.json()["result"]["points"]
+    assert len(points) == 1
+    assert points[0]["id"] == str(uuid5(NAMESPACE_URL, user_id))
+    payload = points[0]["payload"]
+    assert payload["total_weight"] == 1.0
+    assert payload["tag_weights"] == {}
+    assert payload["seen_post_ids"] == [post_id]

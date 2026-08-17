@@ -1,8 +1,13 @@
-"""Unit tests for SearchIndex collection bootstrapping.
+"""Unit tests for SearchIndex bootstrapping and user profiles.
 
 ensure_collection must create the posts and users collections on a fresh
 store, and must never touch a collection that already exists, so a
 pre-existing posts collection keeps its data and configuration.
+
+update_user_profile must fold interactions into the user's point using
+only the stored post vector and tags: the dense running average obeys
+the interaction weights, tag and seen lists respect their caps, unknown
+posts are no-ops, and no embedding call happens on this path.
 """
 
 import pytest
@@ -10,13 +15,29 @@ from qdrant_client import AsyncQdrantClient, models
 
 from src.config import settings
 from src.embeddings import FakeEmbeddingClient
-from src.vector import DENSE_VECTOR, SPARSE_VECTOR, SearchIndex
+from src.vector import DENSE_VECTOR, SPARSE_VECTOR, SearchIndex, _token_id
+from tests.scripted_embedding import ScriptedEmbedding
+
+POST_A = "6a75a41221a9752ec47bc60a"
+POST_B = "6a75a41221a9752ec47bc60b"
+POST_C = "6a75a41221a9752ec47bc60c"
+POST_D = "6a75a41221a9752ec47bc60d"
+UNKNOWN_POST = "6a75a41221a9752ec47bc6ff"
 
 
 @pytest.fixture
 async def index() -> tuple[SearchIndex, AsyncQdrantClient]:
     client = AsyncQdrantClient(location=":memory:")
     index = SearchIndex(FakeEmbeddingClient(), client)
+    yield index, client
+    await index.close()
+
+
+@pytest.fixture
+async def scripted_index() -> tuple[SearchIndex, AsyncQdrantClient]:
+    """Index backed by ScriptedEmbedding for exact cosine math."""
+    client = AsyncQdrantClient(location=":memory:")
+    index = SearchIndex(ScriptedEmbedding(), client)
     yield index, client
     await index.close()
 
@@ -68,3 +89,224 @@ async def test_ensure_collection_leaves_existing_posts_untouched(
         size=8, distance=models.Distance.DOT
     )
     assert await client.collection_exists(settings.QDRANT_USERS_COLLECTION)
+
+
+class _RaisesOnEmbed:
+    """Embedding provider that fails the test if it is ever called."""
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        raise AssertionError("update_user_profile must not embed anything")
+
+    async def close(self) -> None:
+        return None
+
+
+def _index_request(post_id: str, text: str, tags: list[str] | None = None):
+    return {
+        "post_id": post_id,
+        "title": text,
+        "body": f"<p>{text}</p>",
+        "summary": f"summary {text}",
+        "tags": tags or [],
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+
+
+async def _seed_post(
+    index: SearchIndex, post_id: str, text: str, tags: list[str] | None = None
+) -> None:
+    await index.upsert(**_index_request(post_id, text, tags))
+
+
+async def _user_points(client: AsyncQdrantClient) -> list[models.Record]:
+    response = await client.scroll(
+        collection_name=settings.QDRANT_USERS_COLLECTION, limit=10, with_vectors=True
+    )
+    return response[0]
+
+
+async def _fold(index: SearchIndex, user_id: str, post_id: str, weight: float) -> None:
+    await index.update_user_profile(user_id, post_id, weight)
+
+
+async def test_update_user_profile_creates_a_point_with_folded_state(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc", ["go", "grpc"])
+
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    points = await _user_points(client)
+    assert len(points) == 1
+    payload = points[0].payload
+    assert payload["total_weight"] == 1.0
+    assert payload["tag_weights"] == {"go": 1.0, "grpc": 1.0}
+    assert payload["seen_post_ids"] == [POST_A]
+    assert "updated_at" in payload
+
+
+async def test_update_user_profile_averages_across_posts(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = scripted_index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "alpha doc")
+    await _seed_post(search, POST_B, "beta doc")
+
+    await _fold(search, "user-1", POST_A, 1.0)
+    await _fold(search, "user-1", POST_B, 1.0)
+
+    points = await _user_points(client)
+    assert points[0].payload["total_weight"] == 2.0
+    dense = points[0].vector[DENSE_VECTOR]
+    # Two equally weighted unit vectors on different axes average to
+    # equal components on both axes, renormalised to unit length.
+    assert dense[0] == pytest.approx(dense[1], abs=1e-6)
+    assert sum(c**2 for c in dense) == pytest.approx(1.0)
+
+
+async def test_update_user_profile_weights_like_higher_than_view(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = scripted_index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "alpha doc")
+    await _seed_post(search, POST_B, "beta doc")
+
+    await _fold(search, "user-1", POST_A, 1.0)
+    await _fold(search, "user-1", POST_B, 3.0)
+
+    points = await _user_points(client)
+    assert points[0].payload["total_weight"] == 4.0
+    # The like on post-b (weight 3) pulls the average 3x harder than the
+    # view on post-a (weight 1), so the beta axis dominates the profile.
+    dense = points[0].vector[DENSE_VECTOR]
+    assert dense[1] == pytest.approx(3.0 * dense[0])
+
+
+async def test_update_user_profile_accumulates_tag_weights(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc", ["go"])
+
+    await _fold(search, "user-1", POST_A, 1.0)
+    await _fold(search, "user-1", POST_A, 3.0)
+
+    points = await _user_points(client)
+    assert points[0].payload["tag_weights"] == {"go": 4.0}
+
+
+async def test_update_user_profile_caps_tag_weight(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "PROFILE_TAG_WEIGHT_CAP", 4.0)
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc", ["go"])
+
+    for _ in range(5):
+        await _fold(search, "user-1", POST_A, 1.0)
+
+    points = await _user_points(client)
+    payload = points[0].payload
+    assert payload["tag_weights"] == {"go": 4.0}
+    assert payload["total_weight"] == 5.0, "the cap must not touch the average"
+
+
+async def test_update_user_profile_evicts_the_weakest_tag_when_full(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "PROFILE_MAX_TAGS", 2)
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc", ["one"])
+    await _seed_post(search, POST_B, "beta doc", ["two"])
+    await _seed_post(search, POST_C, "beta doc", ["three"])
+
+    await _fold(search, "user-1", POST_A, 1.0)
+    await _fold(search, "user-1", POST_B, 1.0)
+    await _fold(search, "user-1", POST_C, 1.0)
+
+    points = await _user_points(client)
+    assert points[0].payload["tag_weights"] == {"two": 1.0, "three": 1.0}
+
+
+async def test_update_user_profile_caps_seen_posts(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "PROFILE_SEEN_POSTS_CAP", 3)
+    search, client = index
+    await search.ensure_collection()
+    for post_id in (POST_A, POST_B, POST_C, POST_D):
+        await _seed_post(search, post_id, "beta doc")
+
+    for post_id in (POST_A, POST_B, POST_C, POST_D):
+        await _fold(search, "user-1", post_id, 1.0)
+
+    points = await _user_points(client)
+    assert points[0].payload["seen_post_ids"] == [POST_B, POST_C, POST_D]
+
+
+async def test_update_user_profile_dedupes_seen_posts(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc")
+    await _seed_post(search, POST_B, "beta doc")
+
+    await _fold(search, "user-1", POST_A, 1.0)
+    await _fold(search, "user-1", POST_B, 1.0)
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    points = await _user_points(client)
+    assert points[0].payload["seen_post_ids"] == [POST_B, POST_A]
+
+
+async def test_update_user_profile_unknown_post_is_a_noop(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc")
+
+    await _fold(search, "user-1", UNKNOWN_POST, 1.0)
+
+    assert await _user_points(client) == []
+
+
+async def test_update_user_profile_never_calls_the_embedding_provider(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    """The fold must read the stored post vector, not re-embed it."""
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc", ["go"])
+    guarded = SearchIndex(_RaisesOnEmbed(), client)
+
+    await _fold(guarded, "user-1", POST_A, 1.0)
+
+    points = await _user_points(client)
+    assert len(points) == 1
+
+
+async def test_update_user_profile_stores_sparse_vector_matching_tags(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_A, "beta doc", ["go", "grpc"])
+
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    points = await _user_points(client)
+    sparse = points[0].vector[SPARSE_VECTOR]
+    assert sorted(sparse.indices) == sorted([_token_id("go"), _token_id("grpc")])
+    assert sparse.values == [1.0, 1.0]

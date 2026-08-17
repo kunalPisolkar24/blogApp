@@ -78,6 +78,20 @@ def _cited_post_ids(answer: str, contexts: list[RetrievedPost]) -> list[str]:
     return cited
 
 
+def _interaction_weight(kind: int) -> float | None:
+    """Map an InteractionKind enum value to its profile fold weight.
+
+    Unspecified or unknown kinds yield None so handlers can reject them.
+    The weights mirror the content service's fixed view/like/save values
+    and stay configurable via settings.
+    """
+    return {
+        ai_service_pb2.INTERACTION_KIND_VIEW: settings.PROFILE_VIEW_WEIGHT,
+        ai_service_pb2.INTERACTION_KIND_LIKE: settings.PROFILE_LIKE_WEIGHT,
+        ai_service_pb2.INTERACTION_KIND_SAVE: settings.PROFILE_SAVE_WEIGHT,
+    }.get(kind)
+
+
 def _record_rpc(method: str, status: str, start: float) -> None:
     duration = time.perf_counter() - start
     metrics.GRPC_REQUESTS.labels(method=method, status=status).inc()
@@ -364,6 +378,29 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
                 for post_id, post_ids_for in zip(post_ids, results)
             ]
         )
+
+    @rpc_metrics("/ai.AIService/UpdateUserProfile")
+    async def UpdateUserProfile(
+        self,
+        request: ai_service_pb2.UserProfileUpdateRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.UserProfileUpdateResponse:
+        user_id = request.user_id.strip()
+        if not user_id:
+            raise ValidationError("user_id must be a non-empty string")
+        if len(user_id) > settings.PROFILE_MAX_ID_CHARS:
+            raise ValidationError(
+                f"user_id length must be <= {settings.PROFILE_MAX_ID_CHARS} characters"
+            )
+        post_id = request.post_id.strip()
+        if not post_id:
+            raise ValidationError("post_id must be a non-empty string")
+        weight = _interaction_weight(request.kind)
+        if weight is None:
+            raise ValidationError(f"unsupported interaction kind: {request.kind}")
+
+        await self._search.update_user_profile(user_id, post_id, weight)
+        return ai_service_pb2.UserProfileUpdateResponse()
 
     @rpc_metrics("/ai.AIService/Embed")
     async def Embed(
