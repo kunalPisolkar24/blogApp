@@ -2,9 +2,9 @@
 
 The index must reproduce the Qdrant path's semantics without a store:
 dense similarity gated by the score threshold, hybrid matching via the
-sparse channel, and related-posts behaviour (self excluded, ranked by
-similarity, unknown posts yield nothing). Fake embeddings keep every
-score deterministic.
+sparse channel, related-posts behaviour (self excluded, ranked by
+similarity, unknown posts yield nothing), and user profile folds that
+never re-embed. Fake embeddings keep every score deterministic.
 """
 
 import hashlib
@@ -12,6 +12,7 @@ import math
 
 import pytest
 
+from src.config import settings
 from src.embeddings import FakeEmbeddingClient
 from src.vector import MemoryIndex
 
@@ -174,3 +175,68 @@ async def test_delete_removes_the_post(index: MemoryIndex) -> None:
     result = await index.search("Redis Caching Patterns", 0, 10)
 
     assert "6a75a41221a9752ec47bc6e1" not in result.post_ids
+
+
+class _CountingEmbeddings(FakeEmbeddingClient):
+    """FakeEmbeddingClient that counts how many times it embeds."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls += 1
+        return await super().embed(texts)
+
+
+async def _seed_tagged(index: MemoryIndex, post_id: str, text: str) -> None:
+    await index.upsert(post_id, text, f"<p>{text}</p>", "", ["go"], "")
+
+
+async def test_update_user_profile_folds_into_the_profile() -> None:
+    index = MemoryIndex(_CountingEmbeddings())
+    await _seed_tagged(index, "post-a", "alpha doc")
+    await _seed_tagged(index, "post-b", "beta doc")
+
+    await index.update_user_profile("user-1", "post-a", 1.0)
+    await index.update_user_profile("user-1", "post-b", 3.0)
+
+    profile = index._profiles["user-1"]
+    assert profile.total_weight == 4.0
+    assert profile.tag_weights == {"go": 4.0}
+    assert profile.seen_post_ids == ["post-a", "post-b"]
+
+
+async def test_update_user_profile_unknown_post_is_a_noop(index: MemoryIndex) -> None:
+    await _seed_tagged(index, "post-a", "beta doc")
+
+    await index.update_user_profile("user-1", "unknown-post", 1.0)
+
+    assert index._profiles == {}
+
+
+async def test_update_user_profile_never_calls_the_embedding_provider() -> None:
+    embeddings = _CountingEmbeddings()
+    index = MemoryIndex(embeddings)
+    await _seed_tagged(index, "post-a", "beta doc")
+    await index.upsert("post-b", "alpha doc", "", "", [], "")
+
+    calls_before = embeddings.calls
+    await index.update_user_profile("user-1", "post-a", 1.0)
+    await index.update_user_profile("user-1", "post-b", 1.0)
+
+    assert embeddings.calls == calls_before
+
+
+async def test_update_user_profile_caps_seen_posts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "PROFILE_SEEN_POSTS_CAP", 3)
+    index = MemoryIndex(FakeEmbeddingClient())
+    for post_id in ("post-a", "post-b", "post-c", "post-d"):
+        await _seed_tagged(index, post_id, "beta doc")
+
+    for post_id in ("post-a", "post-b", "post-c", "post-d"):
+        await index.update_user_profile("user-1", post_id, 1.0)
+
+    assert index._profiles["user-1"].seen_post_ids == ["post-b", "post-c", "post-d"]

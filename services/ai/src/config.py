@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     QDRANT_USERS_COLLECTION: str = "users"
     QDRANT_VECTOR_SIZE: int = 1024
     QDRANT_TIMEOUT_SECONDS: int = 10
+    # Interaction weights folded into a user's interest profile; mirrors
+    # the content service's fixed view/like/save weights.
+    PROFILE_VIEW_WEIGHT: float = 1.0
+    PROFILE_LIKE_WEIGHT: float = 3.0
+    PROFILE_SAVE_WEIGHT: float = 5.0
+    # Caps keeping a single user's profile bounded: interaction history,
+    # distinct interest tags, and the weight any one tag can accumulate.
+    PROFILE_SEEN_POSTS_CAP: int = 200
+    PROFILE_MAX_TAGS: int = 64
+    PROFILE_TAG_WEIGHT_CAP: float = 10.0
+    # Validation limit for user ids accepted by the profile RPCs.
+    PROFILE_MAX_ID_CHARS: int = 128
     # Attempts, 5s apart, before failing startup when Qdrant is unreachable.
     QDRANT_STARTUP_RETRIES: int = 12
     SEARCH_MAX_RESULT_WINDOW: int = 1000
