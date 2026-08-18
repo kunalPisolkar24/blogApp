@@ -40,6 +40,7 @@ threshold failures cause the Make target to fail.
 | `generate-post` | `GeneratePost` | ~400-char prompt, full JSON parse + sanitize |
 | `generate-search` | `IndexPost` (seed) + `SearchPosts` | seeds 7 posts in `setup()`, then searches; every 10th iteration is a gibberish query that must return 0 results (score threshold — only asserted with fake embeddings; a real model may find weak similarity) |
 | `generate-related` | `IndexPost` (seed) + `RelatedPosts` | seeds 6 posts plus an identical-text twin each, so every post has a guaranteed nearest neighbour; asserts results, twin on top, self excluded |
+| `generate-recommend` | `IndexPost` + `UpdateUserProfile` (seed) + `RecommendFeed` | seeds 6 tagged posts plus a twin for each of the 3 posts the user interacts with (VIEW/LIKE/SAVE), then requests feeds; asserts the feed ranks the user's taste, never returns seen posts, surprise order is seed-stable, and a profile-less user gets an empty feed |
 | `generate-chat` | `IndexPost` (seed) + `ChatAnswer` (stream) | seeds the same 6-post corpus, then streams grounded answers; asserts the stream completes with cited posts, gibberish every 10th iteration must cite nothing (fake embeddings only) |
 | `mixed` (default) | all three | weighted mix, `WEIGHTS` env tunable |
 
@@ -72,6 +73,7 @@ for the `generate-*` LLM scenarios.
 | `EMBEDDING_MODE` | `fake` | `fake` = deterministic, `ollama` = real model (starts the `ollama` container) |
 | `EMBEDDING_MODEL` | `snowflake-arctic-embed2:568m` | Model used by the `ollama` container |
 | `SEARCH_P95` `SEARCH_P99` | `250`/`600` | Search/related latency budgets; auto-widened to `2000`/`4000` for embedding-real runs, still overridable |
+| `RECOMMEND_P95` `RECOMMEND_P99` | `250`/`600` | Recommend latency budgets; auto-widened to `1000`/`2000` for `VECTOR_MODE=qdrant` (the surprise feed relaxes its score threshold over many store roundtrips), still overridable |
 | `CHAT_P95` `CHAT_P99` | `500`/`1500` | Chat latency budgets; auto-widened to `2000`/`4000` for embedding-real and `15000`/`30000` for `LLM_MODE=real`, still overridable |
 | `LLM_API_KEY` | unset | Required only for `LLM_MODE=real` runs |
 | `LOG_LEVEL` | `WARNING` | Quiet access logs during the run |
@@ -96,6 +98,10 @@ make -C services/ai load-test-search VECTOR_MODE=fake RPS=200 DURATION=1m
 make -C services/ai load-test-related RPS=200 DURATION=1m
 make -C services/ai load-test-related VECTOR_MODE=fake RPS=200 DURATION=1m
 
+# Recommend: exercises the profile + feed path end to end
+make -C services/ai load-test-recommend VECTOR_MODE=fake RPS=200 DURATION=1m
+make -C services/ai load-test-recommend RPS=200 DURATION=1m
+
 # Real embeddings (first run pulls the model, ~1GB)
 make -C services/ai load-test-related EMBEDDING_MODE=ollama RPS=20 DURATION=1m
 make -C services/ai load-test-search EMBEDDING_MODE=ollama SEARCH_P95=3000 RPS=20 DURATION=1m
@@ -112,7 +118,8 @@ make -C services/ai load-test WEIGHTS=post:70,summary:20,tags:10 DURATION=1m
 ## What k6 reports
 
 - `grpc_req_duration` — built-in latency trend, thresholds p(95)<100ms, p(99)<250ms
-  (search/related widen and tune theirs via `SEARCH_P95`/`SEARCH_P99`)
+  (search/related widen and tune theirs via `SEARCH_P95`/`SEARCH_P99`;
+  recommend via `RECOMMEND_P95`/`RECOMMEND_P99`; chat via `CHAT_P95`/`CHAT_P99`)
 - `summary_duration` / `tags_duration` / `post_duration` — per-RPC custom trends
 - `chat_duration` — streaming chat latency trend, thresholded via
   `CHAT_P95`/`CHAT_P99` (an LLM answer per call dominates)
@@ -120,6 +127,8 @@ make -C services/ai load-test WEIGHTS=post:70,summary:20,tags:10 DURATION=1m
   asserts relevant queries return results and gibberish returns none
   (gibberish only binds with fake embeddings, see "Store and embedding modes");
   `generate-related` asserts every post finds its twin and never itself;
+  `generate-recommend` asserts the feed ranks the user's taste, excludes seen
+  posts, is seed-stable in surprise mode, and cold-starts empty;
   `generate-chat` asserts the stream completes and cites retrieved posts
 
 ## Inspecting state
