@@ -268,3 +268,48 @@ def test_recommend_surprise_fallback_orders_by_created_at(service, qdrant) -> No
     assert fresh in response.post_ids
     assert target not in response.post_ids
     assert response.total >= 1
+
+
+def test_recommend_profile_round_trip(service) -> None:
+    """One user's interactions drive both feeds: update folds the profile,
+    the default feed ranks the twin of the interacted post, and surprise
+    ranks the unrelated post; both exclude the seen history."""
+    target = "6a75a41221a9752ec47bc613"
+    similar = "6a75a41221a9752ec47bc614"
+    unrelated = "6a75a41221a9752ec47bc615"
+    user_id = "44444444-4444-4444-4444-444444444444"
+    now = datetime.now(UTC)
+    _index(service, target, "Kubernetes deployment guide", created_at=now)
+    _index(service, similar, "Kubernetes deployment guide", created_at=now)
+    _index(service, unrelated, "Italian pasta recipes", created_at=now)
+    service.stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id=user_id,
+            post_id=target,
+            kind=ai_service_pb2.INTERACTION_KIND_VIEW,
+        )
+    )
+
+    feed = service.stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id=user_id,
+            offset=0,
+            limit=10,
+            mode=ai_service_pb2.RECOMMEND_MODE_DEFAULT,
+        )
+    )
+    surprise = service.stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id=user_id,
+            offset=0,
+            limit=10,
+            mode=ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            seed=0,
+        )
+    )
+
+    assert similar in feed.post_ids
+    assert target not in feed.post_ids
+    assert unrelated in surprise.post_ids
+    assert target not in surprise.post_ids
+    assert surprise.total >= 1
