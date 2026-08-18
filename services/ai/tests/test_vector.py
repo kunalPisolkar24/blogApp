@@ -100,6 +100,33 @@ async def test_ensure_collection_leaves_existing_posts_untouched(
     assert await client.collection_exists(settings.QDRANT_USERS_COLLECTION)
 
 
+async def test_ensure_collection_indexes_post_created_at(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    """The surprise feed's recent-posts fallback orders by created_at,
+    which qdrant only allows on an indexed field. The index is created
+    for the posts collection only: the users collection never orders."""
+    search, client = index
+    calls: list[dict] = []
+    original = client.create_payload_index
+
+    async def recording(*args, **kwargs) -> None:
+        calls.append(kwargs)
+        await original(*args, **kwargs)
+
+    client.create_payload_index = recording
+
+    await search.ensure_collection()
+
+    assert calls == [
+        {
+            "collection_name": settings.QDRANT_COLLECTION,
+            "field_name": "created_at",
+            "field_schema": models.PayloadSchemaType.DATETIME,
+        }
+    ]
+
+
 class _RaisesOnEmbed:
     """Embedding provider that fails the test if it is ever called."""
 

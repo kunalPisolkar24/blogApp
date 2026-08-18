@@ -224,3 +224,47 @@ def test_recommend_feed_surprise_returns_anti_taste_posts(service) -> None:
     assert unrelated in response.post_ids
     assert similar not in response.post_ids
     assert response.total >= 1
+
+
+def test_recommend_surprise_fallback_orders_by_created_at(service, qdrant) -> None:
+    """The surprise feed falls back to the newest posts when the
+    anti-taste window cannot fill the page. The fallback orders by
+    created_at, which qdrant only allows on an indexed field, so the
+    posts collection must come up with a created_at payload index."""
+    host = qdrant.get_container_host_ip()
+    port = qdrant.get_exposed_port(6333)
+    info = httpx.get(f"http://{host}:{port}/collections/posts")
+    assert info.status_code == 200
+    assert (
+        info.json()["result"]["payload_schema"]["created_at"]["data_type"] == "datetime"
+    )
+
+    target = "6a75a41221a9752ec47bc611"
+    fresh = "6a75a41221a9752ec47bc612"
+    user_id = "33333333-3333-3333-3333-333333333333"
+    _index(service, target, "Kubernetes deployment guide", created_at=datetime.now(UTC))
+    _index(service, fresh, "Italian pasta recipes", created_at=datetime.now(UTC))
+    service.stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id=user_id,
+            post_id=target,
+            kind=ai_service_pb2.INTERACTION_KIND_VIEW,
+        )
+    )
+
+    # The negated profile scores the interacted post below even the
+    # surprise floor, so the window can never fill a page of 10 and the
+    # recent-posts fallback must run; it returns the newest unseen posts.
+    response = service.stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id=user_id,
+            offset=0,
+            limit=10,
+            mode=ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            seed=0,
+        )
+    )
+
+    assert fresh in response.post_ids
+    assert target not in response.post_ids
+    assert response.total >= 1
