@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-chat load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -82,11 +82,13 @@ OLLAMA_MEM ?= 2G
 SEARCH_P95 ?= $(if $(filter ollama,$(EMBEDDING_MODE)),2000,250)
 SEARCH_P99 ?= $(if $(filter ollama,$(EMBEDDING_MODE)),4000,600)
 
-# Recommend hits the store per call too; in qdrant mode the surprise feed
-# relaxes its score threshold over many roundtrips, so its budget widens
-# for VECTOR_MODE=qdrant (fake mode stays service-bound).
-RECOMMEND_P95 ?= $(if $(filter qdrant,$(VECTOR_MODE)),1000,250)
-RECOMMEND_P99 ?= $(if $(filter qdrant,$(VECTOR_MODE)),2000,600)
+# Recommend hits the store once per call like search, so it shares the
+# plain budget; surprise relaxes its score threshold over many
+# roundtrips, so its own budget widens for VECTOR_MODE=qdrant.
+RECOMMEND_P95 ?= 250
+RECOMMEND_P99 ?= 600
+SURPRISE_P95 ?= $(if $(filter qdrant,$(VECTOR_MODE)),1000,250)
+SURPRISE_P99 ?= $(if $(filter qdrant,$(VECTOR_MODE)),2000,600)
 
 # Chat streams a full LLM answer per call, so budgets widen for real
 # embeddings and again for a real LLM.
@@ -103,9 +105,10 @@ LT_VARS = SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
 	LLM_API_KEY=$(LLM_API_KEY) \
 	SEARCH_P95=$(SEARCH_P95) SEARCH_P99=$(SEARCH_P99) \
 	RECOMMEND_P95=$(RECOMMEND_P95) RECOMMEND_P99=$(RECOMMEND_P99) \
+	SURPRISE_P95=$(SURPRISE_P95) SURPRISE_P99=$(SURPRISE_P99) \
 	CHAT_P95=$(CHAT_P95) CHAT_P99=$(CHAT_P99)
 
-VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search generate-related generate-recommend generate-chat
+VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search generate-related generate-recommend generate-surprise generate-chat
 
 load-test-build:
 	$(LT_VARS) $(COMPOSE_LT) build
@@ -143,6 +146,9 @@ load-test-related: load-test
 
 load-test-recommend: SCRIPT = generate-recommend
 load-test-recommend: load-test
+
+load-test-surprise: SCRIPT = generate-surprise
+load-test-surprise: load-test
 
 load-test-chat: SCRIPT = generate-chat
 load-test-chat: load-test

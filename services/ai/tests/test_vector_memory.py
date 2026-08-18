@@ -325,6 +325,24 @@ async def test_recommend_surprise_returns_anti_taste_posts() -> None:
     assert surprise.total == 1
 
 
+async def test_recommend_surprise_relaxes_threshold_to_fill_the_page() -> None:
+    index = MemoryIndex(_BagOfWordsEmbeddings())
+    await _seed_fresh(index, "post-a", "kafka consumers")
+    await _seed_fresh(index, "post-b", "kafka consumers guide")
+    await _seed_fresh(index, "post-c", "italian pasta")
+    await _seed_fresh(index, "post-d", "italian pasta recipes")
+    # Balanced profile: both interacted posts score the negated query at
+    # ~-0.5, below even the floor, so the page fills only once the
+    # threshold relaxes and the unrelated posts pass.
+    await index.update_user_profile("user-1", "post-a", 1.0)
+    await index.update_user_profile("user-1", "post-b", 1.0)
+
+    surprise = await index.recommend_surprise("user-1", 0, 2, seed=0)
+
+    assert sorted(surprise.post_ids) == ["post-c", "post-d"]
+    assert surprise.total == 2
+
+
 async def test_recommend_surprise_is_seed_stable() -> None:
     index = MemoryIndex(_BagOfWordsEmbeddings())
     await _seed_fresh(index, "post-a", "kafka consumers")
