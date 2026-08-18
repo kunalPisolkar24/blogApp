@@ -134,6 +134,14 @@ class SearchIndex:
                 SPARSE_VECTOR: models.SparseVectorParams(modifier=models.Modifier.IDF)
             },
         )
+        if name == settings.QDRANT_COLLECTION:
+            # The surprise feed's recent-posts fallback orders by
+            # created_at; qdrant only allows order_by on an indexed field.
+            await self._client.create_payload_index(
+                collection_name=name,
+                field_name="created_at",
+                field_schema=models.PayloadSchemaType.DATETIME,
+            )
         logger.info("created qdrant collection %s", name)
 
     async def upsert(
