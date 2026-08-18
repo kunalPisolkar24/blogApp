@@ -10,12 +10,21 @@ the interaction weights, tag and seen lists respect their caps, unknown
 posts are no-ops, and no embedding call happens on this path.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from qdrant_client import AsyncQdrantClient, models
 
 from src.config import settings
 from src.embeddings import FakeEmbeddingClient
-from src.vector import DENSE_VECTOR, SPARSE_VECTOR, SearchIndex, _token_id
+from src.vector import (
+    DENSE_VECTOR,
+    SPARSE_VECTOR,
+    SearchIndex,
+    SearchResult,
+    _token_id,
+    _user_point_id,
+)
 from tests.scripted_embedding import ScriptedEmbedding
 
 POST_A = "6a75a41221a9752ec47bc60a"
@@ -101,21 +110,30 @@ class _RaisesOnEmbed:
         return None
 
 
-def _index_request(post_id: str, text: str, tags: list[str] | None = None):
+def _index_request(
+    post_id: str,
+    text: str,
+    tags: list[str] | None = None,
+    created_at: str = "2026-01-01T00:00:00Z",
+):
     return {
         "post_id": post_id,
         "title": text,
         "body": f"<p>{text}</p>",
         "summary": f"summary {text}",
         "tags": tags or [],
-        "created_at": "2026-01-01T00:00:00Z",
+        "created_at": created_at,
     }
 
 
 async def _seed_post(
-    index: SearchIndex, post_id: str, text: str, tags: list[str] | None = None
+    index: SearchIndex,
+    post_id: str,
+    text: str,
+    tags: list[str] | None = None,
+    created_at: str = "2026-01-01T00:00:00Z",
 ) -> None:
-    await index.upsert(**_index_request(post_id, text, tags))
+    await index.upsert(**_index_request(post_id, text, tags, created_at))
 
 
 async def _user_points(client: AsyncQdrantClient) -> list[models.Record]:
@@ -310,3 +328,140 @@ async def test_update_user_profile_stores_sparse_vector_matching_tags(
     sparse = points[0].vector[SPARSE_VECTOR]
     assert sorted(sparse.indices) == sorted([_token_id("go"), _token_id("grpc")])
     assert sparse.values == [1.0, 1.0]
+
+
+def _fresh_date() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def _seed_fresh(index: SearchIndex, post_id: str, text: str) -> None:
+    await _seed_post(index, post_id, text, created_at=_fresh_date())
+
+
+async def _fold_fresh(
+    index: SearchIndex, user_id: str, post_id: str, weight: float
+) -> None:
+    await _seed_fresh(index, post_id, "beta doc")
+    await _fold(index, user_id, post_id, weight)
+
+
+async def test_recommend_returns_empty_for_cold_start_user(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+
+    result = await search.recommend("user-1", 0, 10)
+
+    assert result == SearchResult(post_ids=[], total=0)
+
+
+async def test_recommend_returns_empty_for_empty_profile(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    """A profile point with no accumulated weight carries no signal."""
+    search, client = index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await client.upsert(
+        collection_name=settings.QDRANT_USERS_COLLECTION,
+        points=[
+            models.PointStruct(
+                id=_user_point_id("user-1"),
+                vector={DENSE_VECTOR: [0.0] * settings.QDRANT_VECTOR_SIZE},
+                payload={"total_weight": 0.0},
+            )
+        ],
+    )
+
+    result = await search.recommend("user-1", 0, 10)
+
+    assert result == SearchResult(post_ids=[], total=0)
+
+
+async def test_recommend_ranks_similar_posts_first_and_excludes_seen(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await _seed_fresh(search, POST_B, "beta doc")
+    await _seed_fresh(search, POST_C, "alpha doc")
+
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    result = await search.recommend("user-1", 0, 10)
+
+    # The profile points at the beta axis: the other beta post ranks
+    # first, the alpha post is below the score threshold, and the
+    # interacted post itself is excluded from the feed.
+    assert result.post_ids == [POST_B]
+    assert result.total == 1
+
+
+async def test_recommend_slices_pagination_with_exact_total(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "alpha doc")
+    await _seed_fresh(search, POST_B, "beta doc")
+    await _seed_fresh(search, POST_C, "alpha doc")
+    await _seed_fresh(search, POST_D, "beta doc")
+
+    # Mixed profile: one like on beta (weight 3) outweighs one view on
+    # alpha (weight 1), so beta posts rank above alpha posts.
+    await _fold(search, "user-1", POST_C, 1.0)
+    await _fold(search, "user-1", POST_D, 3.0)
+
+    result = await search.recommend("user-1", 1, 1)
+
+    assert result.post_ids == [POST_A]
+    assert result.total == 2
+
+
+async def test_recommend_excludes_posts_older_than_recency(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "RECOMMEND_RECENCY_DAYS", 60)
+    search, _ = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_B, "beta doc", created_at="2026-01-01T00:00:00Z")
+    await _seed_fresh(search, POST_C, "beta doc")
+    await _fold_fresh(search, "user-1", POST_A, 1.0)
+
+    result = await search.recommend("user-1", 0, 10)
+
+    assert result.post_ids == [POST_C]
+    assert result.total == 1
+
+
+async def test_recommend_excludes_posts_without_created_at(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_B, "beta doc", created_at="")
+    await _fold_fresh(search, "user-1", POST_A, 1.0)
+
+    result = await search.recommend("user-1", 0, 10)
+
+    assert result == SearchResult(post_ids=[], total=0)
+
+
+async def test_recommend_never_calls_the_embedding_provider(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    """The feed must query with the stored profile vector, not re-embed."""
+    search, client = index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await _seed_fresh(search, POST_B, "beta doc")
+    await _fold(search, "user-1", POST_A, 1.0)
+    guarded = SearchIndex(_RaisesOnEmbed(), client)
+
+    result = await guarded.recommend("user-1", 0, 10)
+
+    assert result.post_ids == [POST_B]

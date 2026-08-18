@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     PROFILE_TAG_WEIGHT_CAP: float = 10.0
     # Validation limit for user ids accepted by the profile RPCs.
     PROFILE_MAX_ID_CHARS: int = 128
+    # Recommendations only surface posts created within this window; posts
+    # without a usable created_at are excluded from the feed.
+    RECOMMEND_RECENCY_DAYS: int = 60
     # Attempts, 5s apart, before failing startup when Qdrant is unreachable.
     QDRANT_STARTUP_RETRIES: int = 12
     SEARCH_MAX_RESULT_WINDOW: int = 1000

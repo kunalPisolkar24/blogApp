@@ -21,13 +21,14 @@ def _index(
     post_id: str,
     title: str,
     body: str = "<p>body</p>",
+    created_at: datetime = datetime(2026, 1, 1, tzinfo=UTC),
 ) -> None:
     service.stub.IndexPost(
         ai_service_pb2.IndexRequest(
             post_id=post_id,
             title=title,
             body=body,
-            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            created_at=created_at,
         )
     )
 
@@ -154,3 +155,36 @@ def test_update_user_profile_writes_a_user_point(service, qdrant) -> None:
     assert payload["total_weight"] == 1.0
     assert payload["tag_weights"] == {}
     assert payload["seen_post_ids"] == [post_id]
+
+
+def test_recommend_feed_ranks_and_filters_posts(service) -> None:
+    target = "6a75a41221a9752ec47bc60b"
+    similar = "6a75a41221a9752ec47bc60c"
+    user_id = "11111111-1111-1111-1111-111111111111"
+    _index(service, target, "Kubernetes deployment guide", created_at=datetime.now(UTC))
+    _index(
+        service, similar, "Kubernetes deployment guide", created_at=datetime.now(UTC)
+    )
+    _index(
+        service,
+        "6a75a41221a9752ec47bc60d",
+        "Italian pasta recipes",
+        created_at=datetime.now(UTC),
+    )
+    service.stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id=user_id,
+            post_id=target,
+            kind=ai_service_pb2.INTERACTION_KIND_VIEW,
+        )
+    )
+
+    response = service.stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(user_id=user_id, offset=0, limit=10)
+    )
+
+    # The similar post ranks, the interacted post is excluded as seen,
+    # and the unrelated post stays below the score threshold. Older
+    # posts indexed by other tests fall outside the recency window.
+    assert response.post_ids == [similar]
+    assert response.total == 1
