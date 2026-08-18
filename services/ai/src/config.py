@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     # Recommendations only surface posts created within this window; posts
     # without a usable created_at are excluded from the feed.
     RECOMMEND_RECENCY_DAYS: int = 60
+    # Surprise mode queries the negated profile vector, so scores above
+    # this threshold mean posts genuinely unlike the user's taste
+    # (cos(profile, post) < -SURPRISE_DENSE_SCORE_THRESHOLD). When a page
+    # cannot fill, the threshold relaxes by STEP per attempt down to
+    # FLOOR, after which the feed falls back to recent posts.
+    SURPRISE_DENSE_SCORE_THRESHOLD: float = 0.1
+    SURPRISE_THRESHOLD_STEP: float = 0.1
+    SURPRISE_THRESHOLD_FLOOR: float = -0.9
+    # How many of the user's least-used tags feed the surprise sparse
+    # channel: their low weights make them the weakest expression of taste.
+    SURPRISE_TAG_TOP_K: int = 10
     # Attempts, 5s apart, before failing startup when Qdrant is unreachable.
     QDRANT_STARTUP_RETRIES: int = 12
     SEARCH_MAX_RESULT_WINDOW: int = 1000

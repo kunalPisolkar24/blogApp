@@ -9,7 +9,7 @@ never re-embed. Fake embeddings keep every score deterministic.
 
 import hashlib
 import math
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -302,3 +302,83 @@ async def test_recommend_slices_pagination_with_exact_total() -> None:
 
     assert result.post_ids == ["post-d"]
     assert result.total == 2
+
+
+def _days_ago(days: int) -> str:
+    return (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def test_recommend_surprise_returns_anti_taste_posts() -> None:
+    index = MemoryIndex(_BagOfWordsEmbeddings())
+    await _seed_fresh(index, "post-a", "kafka consumers")
+    await _seed_fresh(index, "post-b", "kafka consumers guide")
+    await _seed_fresh(index, "post-c", "italian pasta")
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    default = await index.recommend("user-1", 0, 10)
+    surprise = await index.recommend_surprise("user-1", 0, 1, seed=0)
+
+    # The negated profile scores the pasta post ~0.0, only passable once
+    # the strict threshold relaxes from 0.1 down to 0.0.
+    assert default.post_ids == ["post-b"]
+    assert surprise.post_ids == ["post-c"]
+    assert surprise.total == 1
+
+
+async def test_recommend_surprise_is_seed_stable() -> None:
+    index = MemoryIndex(_BagOfWordsEmbeddings())
+    await _seed_fresh(index, "post-a", "kafka consumers")
+    await index.upsert("post-b", "italian pasta", "", "", [], _days_ago(1))
+    await index.upsert("post-c", "kafka consumers guide", "", "", [], _days_ago(2))
+    await index.upsert("post-d", "italian pasta", "", "", [], _days_ago(3))
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    first = await index.recommend_surprise("user-1", 0, 10, seed=7)
+    same_seed = await index.recommend_surprise("user-1", 0, 10, seed=7)
+    other_seed = await index.recommend_surprise("user-1", 0, 10, seed=11)
+
+    assert first.post_ids == same_seed.post_ids
+    assert first.post_ids != other_seed.post_ids
+
+
+async def test_recommend_surprise_falls_back_to_recent_posts() -> None:
+    index = MemoryIndex(FakeEmbeddingClient())
+    await _seed_fresh(index, "post-a", "beta doc")
+    await index.upsert("post-b", "beta doc", "", "", [], _days_ago(1))
+    await index.upsert("post-c", "beta doc", "", "", [], _days_ago(2))
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    # Every candidate is exactly the user's taste: the negated query
+    # scores them -1.0, below even the floor, so the feed falls back to
+    # the newest posts.
+    surprise = await index.recommend_surprise("user-1", 0, 2, seed=0)
+
+    assert sorted(surprise.post_ids) == ["post-b", "post-c"]
+    assert surprise.total == 2
+
+
+async def test_recommend_surprise_excludes_seen_and_stale_posts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "RECOMMEND_RECENCY_DAYS", 60)
+    index = MemoryIndex(FakeEmbeddingClient())
+    await _seed_fresh(index, "post-a", "beta doc")
+    await index.upsert("post-b", "beta doc", "", "", [], "2026-01-01T00:00:00Z")
+    await index.upsert("post-c", "beta doc", "", "", [], "")
+    await _seed_fresh(index, "post-d", "alpha doc")
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    surprise = await index.recommend_surprise("user-1", 0, 1, seed=0)
+
+    assert surprise.post_ids == ["post-d"]
+    assert surprise.total == 1
+
+
+async def test_recommend_surprise_returns_empty_for_cold_start_user(
+    index: MemoryIndex,
+) -> None:
+    await _seed_fresh(index, "post-a", "kafka consumers")
+
+    result = await index.recommend_surprise("user-1", 0, 10, seed=0)
+
+    assert result == SearchResult(post_ids=[], total=0)

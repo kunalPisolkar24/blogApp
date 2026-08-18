@@ -10,7 +10,7 @@ the interaction weights, tag and seen lists respect their caps, unknown
 posts are no-ops, and no embedding call happens on this path.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from qdrant_client import AsyncQdrantClient, models
@@ -465,3 +465,129 @@ async def test_recommend_never_calls_the_embedding_provider(
     result = await guarded.recommend("user-1", 0, 10)
 
     assert result.post_ids == [POST_B]
+
+
+def _days_ago(days: int) -> str:
+    return (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def test_recommend_surprise_returns_anti_taste_posts(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await _seed_fresh(search, POST_B, "beta doc")
+    await _seed_fresh(search, POST_C, "alpha doc")
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    default = await search.recommend("user-1", 0, 10)
+    surprise = await search.recommend_surprise("user-1", 0, 1, seed=0)
+
+    # The default feed surfaces the other beta post; surprise inverts the
+    # profile, so the orthogonal alpha post is the only hit, and only
+    # after the strict threshold relaxes from 0.1 down to 0.0.
+    assert default.post_ids == [POST_B]
+    assert surprise.post_ids == [POST_C]
+    assert surprise.total == 1
+
+
+async def test_recommend_surprise_relaxes_threshold_to_fill_the_page(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "alpha doc")
+    await _seed_fresh(search, POST_B, "beta doc")
+    await _seed_fresh(search, POST_C, "alpha doc")
+    await _seed_fresh(search, POST_D, "beta doc")
+    # Balanced profile: no post clears even the floor at the first pass,
+    # so the page fills only once the threshold relaxes to -0.8.
+    await _fold(search, "user-1", POST_A, 1.0)
+    await _fold(search, "user-1", POST_B, 1.0)
+
+    surprise = await search.recommend_surprise("user-1", 0, 2, seed=0)
+
+    assert sorted(surprise.post_ids) == [POST_C, POST_D]
+    assert surprise.total == 2
+
+
+async def test_recommend_surprise_is_seed_stable(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await _seed_post(search, POST_B, "alpha doc", created_at=_days_ago(1))
+    await _seed_post(search, POST_C, "beta doc", created_at=_days_ago(2))
+    await _seed_post(search, POST_D, "alpha doc", created_at=_days_ago(3))
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    first = await search.recommend_surprise("user-1", 0, 10, seed=7)
+    same_seed = await search.recommend_surprise("user-1", 0, 10, seed=7)
+    other_seed = await search.recommend_surprise("user-1", 0, 10, seed=11)
+
+    assert first.post_ids == same_seed.post_ids
+    assert first.post_ids != other_seed.post_ids
+
+
+async def test_recommend_surprise_falls_back_to_recent_posts(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await _seed_post(search, POST_B, "beta doc", created_at=_days_ago(1))
+    await _seed_post(search, POST_C, "beta doc", created_at=_days_ago(2))
+    await _fold(search, "user-1", POST_A, 1.0)
+
+    # Every candidate is exactly the user's taste: the negated query
+    # scores them -1.0, below even the floor, so the feed falls back to
+    # the newest posts.
+    surprise = await search.recommend_surprise("user-1", 0, 2, seed=0)
+
+    assert sorted(surprise.post_ids) == [POST_B, POST_C]
+    assert surprise.total == 2
+
+
+async def test_recommend_surprise_excludes_seen_and_stale_posts(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = index
+    await search.ensure_collection()
+    await _seed_post(search, POST_B, "beta doc", created_at="2026-01-01T00:00:00Z")
+    await _seed_fresh(search, POST_C, "alpha doc")
+    await _fold_fresh(search, "user-1", POST_A, 1.0)
+
+    surprise = await search.recommend_surprise("user-1", 0, 1, seed=0)
+
+    assert surprise.post_ids == [POST_C]
+    assert surprise.total == 1
+
+
+async def test_recommend_surprise_returns_empty_for_cold_start_user(
+    scripted_index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, _ = scripted_index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+
+    result = await search.recommend_surprise("user-1", 0, 10, seed=0)
+
+    assert result == SearchResult(post_ids=[], total=0)
+
+
+async def test_recommend_surprise_never_calls_the_embedding_provider(
+    index: tuple[SearchIndex, AsyncQdrantClient],
+) -> None:
+    search, client = index
+    await search.ensure_collection()
+    await _seed_fresh(search, POST_A, "beta doc")
+    await _seed_fresh(search, POST_B, "beta doc")
+    await _seed_fresh(search, POST_C, "alpha doc")
+    await _fold(search, "user-1", POST_A, 1.0)
+    guarded = SearchIndex(_RaisesOnEmbed(), client)
+
+    result = await guarded.recommend_surprise("user-1", 0, 1, seed=0)
+
+    assert result.post_ids == [POST_C]
