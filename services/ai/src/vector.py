@@ -12,7 +12,7 @@ import math
 import struct
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from qdrant_client import AsyncQdrantClient, models
 
@@ -210,15 +210,28 @@ class SearchIndex:
 
     async def search(self, query: str, offset: int, limit: int) -> SearchResult:
         dense = (await self._embeddings.embed([query]))[0]
-        sparse = sparse_embed(query)
+        post_ids = await self._rank_window(dense, sparse_embed(query), None)
+        return SearchResult(
+            post_ids=post_ids[offset : offset + limit], total=len(post_ids)
+        )
 
-        # Fetch the whole fused ranking in one pass, capped at the
-        # searchable window, then slice the requested page out of it.
-        # Qdrant 1.19 does not expose a total count for query points, so
-        # this is the only way to report an exact total, and it keeps
-        # every page of the same query on a single stable ranking.
+    async def _rank_window(
+        self,
+        dense: list[float],
+        sparse_weights: dict[str, float],
+        query_filter: models.Filter | None,
+    ) -> list[str]:
+        """Rank the whole searchable window for a dense query vector.
+
+        Runs the dense and sparse channels as parallel prefetches fused
+        with reciprocal rank fusion, or dense alone when the query has no
+        sparse terms, and returns the stable full-window ranking. Qdrant
+        1.19 does not expose a total count for query points, so fetching
+        the whole window once is the only way to report an exact total
+        while keeping every page of the same query on a single ranking.
+        """
         window = settings.SEARCH_MAX_RESULT_WINDOW
-        if sparse:
+        if sparse_weights:
             response = await self._client.query_points(
                 collection_name=settings.QDRANT_COLLECTION,
                 prefetch=[
@@ -227,11 +240,13 @@ class SearchIndex:
                         using=DENSE_VECTOR,
                         limit=window,
                         score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+                        filter=query_filter,
                     ),
                     models.Prefetch(
-                        query=_sparse_vector(sparse),
+                        query=_sparse_vector(sparse_weights),
                         using=SPARSE_VECTOR,
                         limit=window,
+                        filter=query_filter,
                     ),
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
@@ -243,13 +258,10 @@ class SearchIndex:
                 query=dense,
                 using=DENSE_VECTOR,
                 score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+                query_filter=query_filter,
                 limit=window,
             )
-
-        post_ids = [_post_id_from_point(point.id) for point in response.points]
-        return SearchResult(
-            post_ids=post_ids[offset : offset + limit], total=len(post_ids)
-        )
+        return [_post_id_from_point(point.id) for point in response.points]
 
     async def retrieve_by_vector(
         self, vector: list[float], top_k: int
@@ -337,6 +349,49 @@ class SearchIndex:
                     },
                 )
             ],
+        )
+
+    async def recommend(self, user_id: str, offset: int, limit: int) -> SearchResult:
+        """Rank posts for a user from their stored interest profile.
+
+        Queries the posts collection with the user's profile vector and
+        tag weights — no embedding call — restricted to posts created
+        within RECOMMEND_RECENCY_DAYS and excluding the user's seen
+        history. A user without a profile (cold start) gets an empty feed
+        so the content service can fall back to recency-based ranking.
+        """
+        profiles = await self._client.retrieve(
+            collection_name=settings.QDRANT_USERS_COLLECTION,
+            ids=[_user_point_id(user_id)],
+            with_vectors=True,
+        )
+        if not profiles:
+            return SearchResult(post_ids=[], total=0)
+        payload = profiles[0].payload or {}
+        if payload.get("total_weight", 0.0) <= 0:
+            return SearchResult(post_ids=[], total=0)
+
+        cutoff = datetime.now(UTC) - timedelta(days=settings.RECOMMEND_RECENCY_DAYS)
+        must = [
+            models.FieldCondition(
+                key="created_at",
+                range=models.DatetimeRange(gte=cutoff),
+            )
+        ]
+        must_not = []
+        seen = payload.get("seen_post_ids", [])
+        if seen:
+            must_not.append(
+                models.HasIdCondition(has_id=[_point_id(post_id) for post_id in seen])
+            )
+
+        post_ids = await self._rank_window(
+            profiles[0].vector[DENSE_VECTOR],
+            payload.get("tag_weights", {}),
+            models.Filter(must=must, must_not=must_not),
+        )
+        return SearchResult(
+            post_ids=post_ids[offset : offset + limit], total=len(post_ids)
         )
 
     async def close(self) -> None:
@@ -454,6 +509,22 @@ class _StoredPost:
     title: str
     body: str
     tags: list[str]
+    created_at: str
+
+
+def _created_after(created_at: str, cutoff: datetime) -> bool:
+    """True when a post's created_at falls at or after the cutoff.
+
+    Posts without a usable created_at are excluded, matching the qdrant
+    recency filter which likewise requires the field.
+    """
+    if not created_at:
+        return False
+    try:
+        parsed = datetime.fromisoformat(created_at)
+    except ValueError:
+        return False
+    return parsed >= cutoff
 
 
 class MemoryIndex:
@@ -496,6 +567,7 @@ class MemoryIndex:
             title=title,
             body=clean_html(body)[: settings.EMBEDDING_MAX_CHARS],
             tags=list(tags),
+            created_at=created_at,
         )
 
     async def delete(self, post_id: str) -> None:
@@ -585,6 +657,45 @@ class MemoryIndex:
         self._profiles[user_id] = _fold_profile(
             self._profiles.get(user_id), post.post_id, post.dense, post.tags, weight
         )
+
+    async def recommend(self, user_id: str, offset: int, limit: int) -> SearchResult:
+        """Mirror SearchIndex.recommend over in-memory posts."""
+        profile = self._profiles.get(user_id)
+        if profile is None or profile.total_weight <= 0:
+            return SearchResult(post_ids=[], total=0)
+
+        cutoff = datetime.now(UTC) - timedelta(days=settings.RECOMMEND_RECENCY_DAYS)
+        seen = set(profile.seen_post_ids)
+        candidates = [
+            post
+            for post in self._posts.values()
+            if post.post_id not in seen and _created_after(post.created_at, cutoff)
+        ]
+
+        window = settings.SEARCH_MAX_RESULT_WINDOW
+        dense_scored = [
+            (post.post_id, _cosine_similarity(profile.dense, post.dense))
+            for post in candidates
+        ]
+        dense_scored.sort(key=lambda item: item[1], reverse=True)
+        dense_ranking = [
+            post_id
+            for post_id, score in dense_scored
+            if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
+        ]
+
+        rankings = [dense_ranking[:window]]
+        if profile.tag_weights:
+            scored = [
+                (post.post_id, _sparse_overlap(profile.tag_weights, post.tokens))
+                for post in candidates
+            ]
+            scored.sort(key=lambda item: item[1], reverse=True)
+            sparse_ranking = [post_id for post_id, score in scored if score > 0]
+            rankings.append(sparse_ranking[:window])
+
+        fused = _rrf_fuse(rankings)[:window]
+        return SearchResult(post_ids=fused[offset : offset + limit], total=len(fused))
 
     async def close(self) -> None:
         return None

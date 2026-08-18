@@ -402,6 +402,37 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         await self._search.update_user_profile(user_id, post_id, weight)
         return ai_service_pb2.UserProfileUpdateResponse()
 
+    @rpc_metrics("/ai.AIService/RecommendFeed")
+    async def RecommendFeed(
+        self,
+        request: ai_service_pb2.RecommendRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.RecommendResponse:
+        user_id = request.user_id.strip()
+        if not user_id:
+            raise ValidationError("user_id must be a non-empty string")
+        if len(user_id) > settings.PROFILE_MAX_ID_CHARS:
+            raise ValidationError(
+                f"user_id length must be <= {settings.PROFILE_MAX_ID_CHARS} characters"
+            )
+        if request.mode not in (
+            ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED,
+            ai_service_pb2.RECOMMEND_MODE_DEFAULT,
+        ):
+            raise ValidationError(f"unsupported recommend mode: {request.mode}")
+        limit = request.limit or 10
+        if limit > settings.SEARCH_MAX_LIMIT:
+            raise ValidationError(f"limit must be <= {settings.SEARCH_MAX_LIMIT}")
+        if request.offset + limit > settings.SEARCH_MAX_RESULT_WINDOW:
+            raise ValidationError(
+                f"pagination window exceeds {settings.SEARCH_MAX_RESULT_WINDOW}"
+            )
+
+        result = await self._search.recommend(user_id, request.offset, limit)
+        return ai_service_pb2.RecommendResponse(
+            post_ids=result.post_ids, total=result.total
+        )
+
     @rpc_metrics("/ai.AIService/Embed")
     async def Embed(
         self, request: ai_service_pb2.EmbedRequest, context: grpc.aio.ServicerContext

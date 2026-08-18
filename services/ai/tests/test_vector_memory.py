@@ -9,12 +9,13 @@ never re-embed. Fake embeddings keep every score deterministic.
 
 import hashlib
 import math
+from datetime import UTC, datetime
 
 import pytest
 
 from src.config import settings
 from src.embeddings import FakeEmbeddingClient
-from src.vector import MemoryIndex
+from src.vector import MemoryIndex, SearchResult
 
 TITLE_POSTS = [
     (
@@ -240,3 +241,64 @@ async def test_update_user_profile_caps_seen_posts(
         await index.update_user_profile("user-1", post_id, 1.0)
 
     assert index._profiles["user-1"].seen_post_ids == ["post-b", "post-c", "post-d"]
+
+
+def _fresh_date() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def _seed_fresh(index: MemoryIndex, post_id: str, text: str) -> None:
+    await index.upsert(post_id, text, f"<p>{text}</p>", "", [], _fresh_date())
+
+
+async def test_recommend_returns_empty_for_cold_start_user(index: MemoryIndex) -> None:
+    await _seed_fresh(index, "post-a", "kafka consumers")
+
+    result = await index.recommend("user-1", 0, 10)
+
+    assert result == SearchResult(post_ids=[], total=0)
+
+
+async def test_recommend_ranks_by_profile_similarity() -> None:
+    index = MemoryIndex(_BagOfWordsEmbeddings())
+    await _seed_fresh(index, "post-a", "kafka consumers")
+    await _seed_fresh(index, "post-b", "kafka consumers guide")
+    await _seed_fresh(index, "post-c", "italian pasta")
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    result = await index.recommend("user-1", 0, 10)
+
+    # The interacted post is excluded, the similar post ranks first, and
+    # the unrelated post stays below the score threshold.
+    assert result.post_ids == ["post-b"]
+    assert result.total == 1
+
+
+async def test_recommend_excludes_seen_and_stale_posts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "RECOMMEND_RECENCY_DAYS", 60)
+    index = MemoryIndex(FakeEmbeddingClient())
+    await _seed_fresh(index, "post-a", "beta doc")
+    await index.upsert("post-b", "beta doc", "", "", [], "2026-01-01T00:00:00Z")
+    await index.upsert("post-c", "beta doc", "", "", [], "")
+    await _seed_fresh(index, "post-d", "beta doc")
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    result = await index.recommend("user-1", 0, 10)
+
+    assert result.post_ids == ["post-d"]
+    assert result.total == 1
+
+
+async def test_recommend_slices_pagination_with_exact_total() -> None:
+    index = MemoryIndex(_BagOfWordsEmbeddings())
+    await _seed_fresh(index, "post-a", "kafka consumers")
+    await _seed_fresh(index, "post-b", "kafka consumers guide")
+    await _seed_fresh(index, "post-d", "kafka consumers deep dive")
+    await index.update_user_profile("user-1", "post-a", 1.0)
+
+    result = await index.recommend("user-1", 1, 1)
+
+    assert result.post_ids == ["post-d"]
+    assert result.total == 2
