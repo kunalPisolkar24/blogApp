@@ -418,6 +418,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         if request.mode not in (
             ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED,
             ai_service_pb2.RECOMMEND_MODE_DEFAULT,
+            ai_service_pb2.RECOMMEND_MODE_SURPRISE,
         ):
             raise ValidationError(f"unsupported recommend mode: {request.mode}")
         limit = request.limit or 10
@@ -428,7 +429,12 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
                 f"pagination window exceeds {settings.SEARCH_MAX_RESULT_WINDOW}"
             )
 
-        result = await self._search.recommend(user_id, request.offset, limit)
+        if request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
+            result = await self._search.recommend_surprise(
+                user_id, request.offset, limit, request.seed
+            )
+        else:
+            result = await self._search.recommend(user_id, request.offset, limit)
         return ai_service_pb2.RecommendResponse(
             post_ids=result.post_ids, total=result.total
         )

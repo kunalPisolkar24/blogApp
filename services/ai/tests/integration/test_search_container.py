@@ -188,3 +188,39 @@ def test_recommend_feed_ranks_and_filters_posts(service) -> None:
     # posts indexed by other tests fall outside the recency window.
     assert response.post_ids == [similar]
     assert response.total == 1
+
+
+def test_recommend_feed_surprise_returns_anti_taste_posts(service) -> None:
+    target = "6a75a41221a9752ec47bc60e"
+    similar = "6a75a41221a9752ec47bc60f"
+    unrelated = "6a75a41221a9752ec47bc610"
+    user_id = "22222222-2222-2222-2222-222222222222"
+    now = datetime.now(UTC)
+    _index(service, target, "Kubernetes deployment guide", created_at=now)
+    _index(service, similar, "Kubernetes deployment guide", created_at=now)
+    _index(service, unrelated, "Italian pasta recipes", created_at=now)
+    service.stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id=user_id,
+            post_id=target,
+            kind=ai_service_pb2.INTERACTION_KIND_VIEW,
+        )
+    )
+
+    response = service.stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id=user_id,
+            offset=0,
+            limit=1,
+            mode=ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            seed=0,
+        )
+    )
+
+    # The negated profile scores identical posts below even the surprise
+    # floor, so only unrelated posts can clear the relaxed threshold.
+    # The collection is shared with the default-feed test, which leaves
+    # its own fresh posts behind, so assert on properties of the result.
+    assert unrelated in response.post_ids
+    assert similar not in response.post_ids
+    assert response.total >= 1

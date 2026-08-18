@@ -9,6 +9,7 @@ plus semantic recall.
 import hashlib
 import logging
 import math
+import random
 import struct
 import uuid
 from dataclasses import dataclass
@@ -220,6 +221,7 @@ class SearchIndex:
         dense: list[float],
         sparse_weights: dict[str, float],
         query_filter: models.Filter | None,
+        dense_score_threshold: float | None = None,
     ) -> list[str]:
         """Rank the whole searchable window for a dense query vector.
 
@@ -231,6 +233,11 @@ class SearchIndex:
         while keeping every page of the same query on a single ranking.
         """
         window = settings.SEARCH_MAX_RESULT_WINDOW
+        threshold = (
+            settings.SEARCH_DENSE_SCORE_THRESHOLD
+            if dense_score_threshold is None
+            else dense_score_threshold
+        )
         if sparse_weights:
             response = await self._client.query_points(
                 collection_name=settings.QDRANT_COLLECTION,
@@ -239,7 +246,7 @@ class SearchIndex:
                         query=dense,
                         using=DENSE_VECTOR,
                         limit=window,
-                        score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+                        score_threshold=threshold,
                         filter=query_filter,
                     ),
                     models.Prefetch(
@@ -257,7 +264,7 @@ class SearchIndex:
                 collection_name=settings.QDRANT_COLLECTION,
                 query=dense,
                 using=DENSE_VECTOR,
-                score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+                score_threshold=threshold,
                 query_filter=query_filter,
                 limit=window,
             )
@@ -360,17 +367,39 @@ class SearchIndex:
         history. A user without a profile (cold start) gets an empty feed
         so the content service can fall back to recency-based ranking.
         """
+        profile = await self._user_profile(user_id)
+        if profile is None:
+            return SearchResult(post_ids=[], total=0)
+
+        post_ids = await self._rank_window(
+            profile[0],
+            profile[1].get("tag_weights", {}),
+            self._feed_filter(profile[1]),
+        )
+        return SearchResult(
+            post_ids=post_ids[offset : offset + limit], total=len(post_ids)
+        )
+
+    async def _user_profile(self, user_id: str) -> tuple[list[float], dict] | None:
+        """The user's stored dense vector and payload, or None on cold start.
+
+        A missing point or a profile with no accumulated weight carries
+        no taste signal, so both count as cold start.
+        """
         profiles = await self._client.retrieve(
             collection_name=settings.QDRANT_USERS_COLLECTION,
             ids=[_user_point_id(user_id)],
             with_vectors=True,
         )
         if not profiles:
-            return SearchResult(post_ids=[], total=0)
+            return None
         payload = profiles[0].payload or {}
         if payload.get("total_weight", 0.0) <= 0:
-            return SearchResult(post_ids=[], total=0)
+            return None
+        return profiles[0].vector[DENSE_VECTOR], payload
 
+    def _feed_filter(self, payload: dict) -> models.Filter:
+        """Restrict the feed to recent posts the user has not seen yet."""
         cutoff = datetime.now(UTC) - timedelta(days=settings.RECOMMEND_RECENCY_DAYS)
         must = [
             models.FieldCondition(
@@ -384,15 +413,58 @@ class SearchIndex:
             must_not.append(
                 models.HasIdCondition(has_id=[_point_id(post_id) for post_id in seen])
             )
+        return models.Filter(must=must, must_not=must_not)
 
-        post_ids = await self._rank_window(
-            profiles[0].vector[DENSE_VECTOR],
-            payload.get("tag_weights", {}),
-            models.Filter(must=must, must_not=must_not),
+    async def recommend_surprise(
+        self, user_id: str, offset: int, limit: int, seed: int
+    ) -> SearchResult:
+        """Rank posts deliberately unlike the user's usual taste.
+
+        Queries the negated profile vector (anti-taste dense channel)
+        fused with the user's least-used tags (weak-taste sparse channel),
+        starting at a strict threshold and relaxing step by step until the
+        page fills. A window that never fills falls back to the newest
+        posts. The final window is shuffled deterministically by `seed`
+        before slicing, so a seed yields a stable but varied ordering.
+        """
+        profile = await self._user_profile(user_id)
+        if profile is None:
+            return SearchResult(post_ids=[], total=0)
+        dense, payload = profile
+
+        query_filter = self._feed_filter(payload)
+        sparse = _least_used_tags(
+            payload.get("tag_weights") or {}, settings.SURPRISE_TAG_TOP_K
         )
+        need = offset + limit
+        threshold = settings.SURPRISE_DENSE_SCORE_THRESHOLD
+        post_ids: list[str] = []
+        while threshold >= settings.SURPRISE_THRESHOLD_FLOOR and len(post_ids) < need:
+            post_ids = await self._rank_window(
+                [-component for component in dense], sparse, query_filter, threshold
+            )
+            threshold -= settings.SURPRISE_THRESHOLD_STEP
+        if len(post_ids) < need:
+            post_ids = await self._recent_posts(query_filter)
+
+        post_ids = _seeded_shuffle(post_ids, seed)
         return SearchResult(
             post_ids=post_ids[offset : offset + limit], total=len(post_ids)
         )
+
+    async def _recent_posts(self, query_filter: models.Filter) -> list[str]:
+        """The newest posts matching a filter, in descending age order."""
+        response = await self._client.query_points(
+            collection_name=settings.QDRANT_COLLECTION,
+            query=models.OrderByQuery(
+                order_by=models.OrderBy(
+                    key="created_at", direction=models.Direction.DESC
+                )
+            ),
+            query_filter=query_filter,
+            limit=settings.SEARCH_MAX_RESULT_WINDOW,
+        )
+        return [_post_id_from_point(point.id) for point in response.points]
 
     async def close(self) -> None:
         await self._client.close()
@@ -421,6 +493,22 @@ def _renormalize(vector: list[float]) -> list[float]:
     if norm == 0:
         return vector
     return [component / norm for component in vector]
+
+
+def _least_used_tags(tag_weights: dict[str, float], top_k: int) -> dict[str, float]:
+    """The user's least-used tags: the weakest expression of their taste.
+
+    Tags are ranked by accumulated weight ascending, so the bottom-k carry
+    the least signal and make good surprise-mode sparse query terms.
+    """
+    return dict(sorted(tag_weights.items(), key=lambda item: item[1])[:top_k])
+
+
+def _seeded_shuffle(items: list[str], seed: int) -> list[str]:
+    """Deterministic shuffle: the same seed always yields the same order."""
+    shuffled = list(items)
+    random.Random(seed).shuffle(shuffled)
+    return shuffled
 
 
 @dataclass
@@ -512,19 +600,24 @@ class _StoredPost:
     created_at: str
 
 
+def _parse_created_at(created_at: str) -> datetime | None:
+    """Parse a stored RFC3339 created_at, or None when it is unusable."""
+    if not created_at:
+        return None
+    try:
+        return datetime.fromisoformat(created_at)
+    except ValueError:
+        return None
+
+
 def _created_after(created_at: str, cutoff: datetime) -> bool:
     """True when a post's created_at falls at or after the cutoff.
 
     Posts without a usable created_at are excluded, matching the qdrant
     recency filter which likewise requires the field.
     """
-    if not created_at:
-        return False
-    try:
-        parsed = datetime.fromisoformat(created_at)
-    except ValueError:
-        return False
-    return parsed >= cutoff
+    parsed = _parse_created_at(created_at)
+    return parsed is not None and parsed >= cutoff
 
 
 class MemoryIndex:
@@ -696,6 +789,70 @@ class MemoryIndex:
 
         fused = _rrf_fuse(rankings)[:window]
         return SearchResult(post_ids=fused[offset : offset + limit], total=len(fused))
+
+    async def recommend_surprise(
+        self, user_id: str, offset: int, limit: int, seed: int
+    ) -> SearchResult:
+        """Mirror SearchIndex.recommend_surprise over in-memory posts."""
+        profile = self._profiles.get(user_id)
+        if profile is None or profile.total_weight <= 0:
+            return SearchResult(post_ids=[], total=0)
+
+        cutoff = datetime.now(UTC) - timedelta(days=settings.RECOMMEND_RECENCY_DAYS)
+        seen = set(profile.seen_post_ids)
+        candidates = [
+            post
+            for post in self._posts.values()
+            if post.post_id not in seen and _created_after(post.created_at, cutoff)
+        ]
+        window = settings.SEARCH_MAX_RESULT_WINDOW
+        need = offset + limit
+        sparse = _least_used_tags(profile.tag_weights, settings.SURPRISE_TAG_TOP_K)
+
+        threshold = settings.SURPRISE_DENSE_SCORE_THRESHOLD
+        post_ids: list[str] = []
+        while threshold >= settings.SURPRISE_THRESHOLD_FLOOR and len(post_ids) < need:
+            dense_scored = [
+                (
+                    post.post_id,
+                    _cosine_similarity(
+                        [-component for component in profile.dense], post.dense
+                    ),
+                )
+                for post in candidates
+            ]
+            dense_scored.sort(key=lambda item: item[1], reverse=True)
+            dense_ranking = [
+                post_id for post_id, score in dense_scored if score >= threshold
+            ]
+
+            rankings = [dense_ranking[:window]]
+            if sparse:
+                scored = [
+                    (post.post_id, _sparse_overlap(sparse, post.tokens))
+                    for post in candidates
+                ]
+                scored.sort(key=lambda item: item[1], reverse=True)
+                sparse_ranking = [post_id for post_id, score in scored if score > 0]
+                rankings.append(sparse_ranking[:window])
+
+            post_ids = _rrf_fuse(rankings)[:window]
+            threshold -= settings.SURPRISE_THRESHOLD_STEP
+
+        if len(post_ids) < need:
+            post_ids = [
+                post.post_id
+                for post in sorted(
+                    candidates,
+                    key=lambda post: _parse_created_at(post.created_at),
+                    reverse=True,
+                )
+            ][:window]
+
+        post_ids = _seeded_shuffle(post_ids, seed)
+        return SearchResult(
+            post_ids=post_ids[offset : offset + limit], total=len(post_ids)
+        )
 
     async def close(self) -> None:
         return None
