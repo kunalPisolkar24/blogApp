@@ -49,3 +49,31 @@ EMBEDDING_REQUEST_DURATION = Histogram(
     "embedding_request_duration_seconds",
     "Time spent waiting for the embedding provider",
 )
+
+RECOMMEND_REQUESTS = Counter(
+    "recommend_requests_total",
+    "Total number of successful recommend feed calls",
+    ["method", "status"],
+)
+
+RECOMMEND_REQUEST_DURATION = Histogram(
+    "recommend_request_duration_seconds",
+    "Time spent ranking a recommend feed",
+    ["method", "status"],
+)
+
+PROFILE_UPDATES = Counter(
+    "profile_updates_total",
+    "Total number of successful user profile updates",
+    ["kind"],
+)
+
+RECOMMEND_COLD_START = Counter(
+    "recommend_cold_start_total",
+    "Total number of recommend calls that returned an empty feed (cold start)",
+)
+
+RECOMMEND_COLD_START_RATIO = Gauge(
+    "recommend_cold_start_ratio",
+    "Share of recommend calls that returned an empty feed (cold start), 0-1",
+)

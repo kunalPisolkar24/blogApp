@@ -11,11 +11,14 @@ pytestmark = pytest.mark.container
 
 
 def _counter_value(service, metric: str, labels: dict[str, str]) -> float:
-    """Scrape /metrics and return the value of a labeled counter (0 if absent)."""
+    """Scrape /metrics and return the value of a counter (0 if absent)."""
     body = httpx.get(service.metrics_url, timeout=5).text
 
-    labels_str = ",".join(f'{key}="{value}"' for key, value in labels.items())
-    prefix = f"{metric}{{{labels_str}}}"
+    if labels:
+        labels_str = ",".join(f'{key}="{value}"' for key, value in labels.items())
+        prefix = f"{metric}{{{labels_str}}}"
+    else:
+        prefix = f"{metric} "
     for line in body.splitlines():
         if line.startswith(prefix):
             return float(line.split()[-1])
@@ -92,3 +95,62 @@ def test_logs_are_json_and_include_access_log(service) -> None:
     assert access["duration_ms"] > 0
     assert access["trace_id"] == "-"
     assert access["span_id"] == "-"
+
+
+def test_metrics_expose_recommend_families(service) -> None:
+    body = httpx.get(service.metrics_url, timeout=5).text
+
+    for family in (
+        "recommend_requests_total",
+        "recommend_request_duration_seconds",
+        "profile_updates_total",
+        "recommend_cold_start_total",
+        "recommend_cold_start_ratio",
+    ):
+        assert family in body
+
+
+def test_metrics_record_recommend_and_cold_start(service) -> None:
+    recommend_labels = {"method": "default", "status": "OK"}
+    recommend_before = _counter_value(
+        service, "recommend_requests_total", recommend_labels
+    )
+    cold_before = _counter_value(service, "recommend_cold_start_total", {})
+
+    service.stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(user_id="metrics-cold-user")
+    )
+
+    assert (
+        _counter_value(service, "recommend_requests_total", recommend_labels)
+        == recommend_before + 1
+    )
+    assert _counter_value(service, "recommend_cold_start_total", {}) == cold_before + 1
+
+
+def test_metrics_record_profile_updates(service) -> None:
+    labels = {"kind": "view"}
+    before = _counter_value(service, "profile_updates_total", labels)
+
+    service.stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id="metrics-user",
+            post_id="6a75a41221a9752ec47bc6df",
+            kind=ai_service_pb2.INTERACTION_KIND_VIEW,
+        )
+    )
+
+    assert _counter_value(service, "profile_updates_total", labels) == before + 1
+
+
+def test_access_log_carries_recommend_fields(service) -> None:
+    service.stub.RecommendFeed(ai_service_pb2.RecommendRequest(user_id="metrics-user"))
+
+    records = [json.loads(line) for line in service.logs().splitlines() if line.strip()]
+    access = next(
+        r for r in records if r.get("method") == "/ai.AIService/RecommendFeed"
+    )
+    assert access["message"] == "rpc completed"
+    assert access["mode"] == "default"
+    assert access["result_count"] == 0
+    assert access["total"] == 0

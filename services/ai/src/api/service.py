@@ -33,6 +33,7 @@ access_logger = logging.getLogger("access")
 
 Handler = Callable[..., Awaitable[Any]]
 StreamHandler = Callable[..., AsyncIterator[Any]]
+AccessFields = Callable[[Any, Any], dict[str, Any]]
 
 
 class TooLargeError(Exception):
@@ -92,7 +93,76 @@ def _interaction_weight(kind: int) -> float | None:
     }.get(kind)
 
 
-def _record_rpc(method: str, status: str, start: float) -> None:
+def _mode_name(mode: int) -> str:
+    """Map a RecommendMode enum value to its metric and log label.
+
+    UNSPECIFIED requests are served as default-mode feeds, so they share
+    the default label.
+    """
+    return {
+        ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED: "default",
+        ai_service_pb2.RECOMMEND_MODE_DEFAULT: "default",
+        ai_service_pb2.RECOMMEND_MODE_SURPRISE: "surprise",
+    }[mode]
+
+
+def _kind_name(kind: int) -> str:
+    """Map an InteractionKind enum value to its metric and log label."""
+    return {
+        ai_service_pb2.INTERACTION_KIND_VIEW: "view",
+        ai_service_pb2.INTERACTION_KIND_LIKE: "like",
+        ai_service_pb2.INTERACTION_KIND_SAVE: "save",
+    }[kind]
+
+
+def _recommend_access_fields(
+    request: ai_service_pb2.RecommendRequest,
+    response: ai_service_pb2.RecommendResponse,
+) -> dict[str, Any]:
+    """Extra access-log fields describing a completed RecommendFeed call."""
+    return {
+        "mode": _mode_name(request.mode),
+        "result_count": len(response.post_ids),
+        "total": response.total,
+    }
+
+
+def _profile_access_fields(
+    request: ai_service_pb2.UserProfileUpdateRequest,
+    response: ai_service_pb2.UserProfileUpdateResponse,
+) -> dict[str, Any]:
+    """Extra access-log fields describing a completed UpdateUserProfile call."""
+    return {"kind": _kind_name(request.kind)}
+
+
+_recommend_calls = 0
+_cold_start_calls = 0
+
+
+def _record_recommend(mode: str, duration: float, cold_start: bool) -> None:
+    """Record recommendation metrics for a successful RecommendFeed call.
+
+    cold_start marks an empty feed, i.e. a user with no profile yet; the
+    ratio gauge is the cumulative cold-start share since process start.
+    """
+    global _recommend_calls, _cold_start_calls
+    metrics.RECOMMEND_REQUESTS.labels(method=mode, status="OK").inc()
+    metrics.RECOMMEND_REQUEST_DURATION.labels(method=mode, status="OK").observe(
+        duration
+    )
+    _recommend_calls += 1
+    if cold_start:
+        _cold_start_calls += 1
+        metrics.RECOMMEND_COLD_START.inc()
+    metrics.RECOMMEND_COLD_START_RATIO.set(_cold_start_calls / _recommend_calls)
+
+
+def _record_rpc(
+    method: str,
+    status: str,
+    start: float,
+    extra: dict[str, Any] | None = None,
+) -> None:
     duration = time.perf_counter() - start
     metrics.GRPC_REQUESTS.labels(method=method, status=status).inc()
     metrics.GRPC_REQUEST_DURATION.labels(method=method, status=status).observe(duration)
@@ -105,6 +175,7 @@ def _record_rpc(method: str, status: str, start: float) -> None:
             "duration_ms": round(duration * 1000, 1),
             "trace_id": trace_id,
             "span_id": span_id,
+            **(extra or {}),
         },
     )
 
@@ -165,8 +236,14 @@ def rpc_stream_metrics(method: str) -> Callable[[StreamHandler], StreamHandler]:
     return decorator
 
 
-def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
-    """Track metrics and access logs around a gRPC method handler."""
+def rpc_metrics(
+    method: str, extra_fields: AccessFields | None = None
+) -> Callable[[Handler], Handler]:
+    """Track metrics and access logs around a gRPC method handler.
+
+    extra_fields maps a completed (request, response) pair to extra
+    fields merged into the access log entry; it runs only on success.
+    """
 
     def decorator(fn: Handler) -> Handler:
         @functools.wraps(fn)
@@ -176,8 +253,12 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
             start = time.perf_counter()
             status = "OK"
             metrics.GRPC_ACTIVE_REQUESTS.inc()
+            fields: dict[str, Any] | None = None
             try:
-                return await fn(self, request, context)
+                response = await fn(self, request, context)
+                if extra_fields is not None:
+                    fields = extra_fields(request, response)
+                return response
             except TooLargeError as exc:
                 status = "INVALID_ARGUMENT"
                 await context.abort(
@@ -208,7 +289,7 @@ def rpc_metrics(method: str) -> Callable[[Handler], Handler]:
                 await context.abort(grpc.StatusCode.INTERNAL, "Internal service error")
             finally:
                 metrics.GRPC_ACTIVE_REQUESTS.dec()
-                _record_rpc(method, status, start)
+                _record_rpc(method, status, start, extra=fields)
 
         return wrapper
 
@@ -379,7 +460,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             ]
         )
 
-    @rpc_metrics("/ai.AIService/UpdateUserProfile")
+    @rpc_metrics("/ai.AIService/UpdateUserProfile", extra_fields=_profile_access_fields)
     async def UpdateUserProfile(
         self,
         request: ai_service_pb2.UserProfileUpdateRequest,
@@ -400,9 +481,10 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             raise ValidationError(f"unsupported interaction kind: {request.kind}")
 
         await self._search.update_user_profile(user_id, post_id, weight)
+        metrics.PROFILE_UPDATES.labels(kind=_kind_name(request.kind)).inc()
         return ai_service_pb2.UserProfileUpdateResponse()
 
-    @rpc_metrics("/ai.AIService/RecommendFeed")
+    @rpc_metrics("/ai.AIService/RecommendFeed", extra_fields=_recommend_access_fields)
     async def RecommendFeed(
         self,
         request: ai_service_pb2.RecommendRequest,
@@ -429,12 +511,17 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
                 f"pagination window exceeds {settings.SEARCH_MAX_RESULT_WINDOW}"
             )
 
+        mode = _mode_name(request.mode)
+        start = time.perf_counter()
         if request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
             result = await self._search.recommend_surprise(
                 user_id, request.offset, limit, request.seed
             )
         else:
             result = await self._search.recommend(user_id, request.offset, limit)
+        _record_recommend(
+            mode, time.perf_counter() - start, cold_start=result.total == 0
+        )
         return ai_service_pb2.RecommendResponse(
             post_ids=result.post_ids, total=result.total
         )
