@@ -1,6 +1,7 @@
 import json
 import logging
 
+import grpc
 import pytest
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -88,3 +89,71 @@ async def test_access_log_emitted_per_rpc(running_server, fake_llm, capsys) -> N
     assert access["duration_ms"] >= 0
     assert access["trace_id"] == "-"
     assert access["span_id"] == "-"
+
+
+def _access_records(capsys) -> list[dict]:
+    records = [
+        json.loads(line) for line in capsys.readouterr().out.strip().splitlines()
+    ]
+    return [record for record in records if record.get("logger") == "access"]
+
+
+async def test_access_log_carries_recommend_fields(running_server, capsys) -> None:
+    setup_logging()
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+
+    await stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id="user-1", mode=ai_service_pb2.RECOMMEND_MODE_SURPRISE
+        )
+    )
+
+    access = next(
+        r
+        for r in _access_records(capsys)
+        if r.get("method") == "/ai.AIService/RecommendFeed"
+    )
+    assert access["mode"] == "surprise"
+    assert access["result_count"] == 0
+    assert access["total"] == 0
+
+
+async def test_access_log_carries_profile_kind(running_server, capsys) -> None:
+    setup_logging()
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+
+    await stub.UpdateUserProfile(
+        ai_service_pb2.UserProfileUpdateRequest(
+            user_id="user-1",
+            post_id="6a75a41221a9752ec47bc6df",
+            kind=ai_service_pb2.INTERACTION_KIND_LIKE,
+        )
+    )
+
+    access = next(
+        r
+        for r in _access_records(capsys)
+        if r.get("method") == "/ai.AIService/UpdateUserProfile"
+    )
+    assert access["kind"] == "like"
+
+
+async def test_access_log_omits_request_fields_on_error(running_server, capsys) -> None:
+    setup_logging()
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+
+    with pytest.raises(grpc.aio.AioRpcError):
+        await stub.RecommendFeed(ai_service_pb2.RecommendRequest(user_id=""))
+
+    access = next(
+        r
+        for r in _access_records(capsys)
+        if r.get("method") == "/ai.AIService/RecommendFeed"
+    )
+    assert access["status"] == "INVALID_ARGUMENT"
+    assert "mode" not in access
+    assert "result_count" not in access
+    assert "total" not in access

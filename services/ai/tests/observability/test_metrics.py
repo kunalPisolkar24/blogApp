@@ -1,4 +1,6 @@
 import asyncio
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import grpc
 import pytest
@@ -36,6 +38,51 @@ def _grpc_counter(method: str, status: str) -> float:
             "grpc_requests_total", {"method": method, "status": status}
         )
         or 0.0
+    )
+
+
+def _recommend_counter(mode: str, status: str) -> float:
+    return (
+        REGISTRY.get_sample_value(
+            "recommend_requests_total", {"method": mode, "status": status}
+        )
+        or 0.0
+    )
+
+
+def _recommend_duration_count(mode: str) -> float:
+    return (
+        REGISTRY.get_sample_value(
+            "recommend_request_duration_seconds_count",
+            {"method": mode, "status": "OK"},
+        )
+        or 0.0
+    )
+
+
+def _profile_updates(kind: str) -> float:
+    return REGISTRY.get_sample_value("profile_updates_total", {"kind": kind}) or 0.0
+
+
+def _cold_start_total() -> float:
+    return REGISTRY.get_sample_value("recommend_cold_start_total") or 0.0
+
+
+def _index_request(post_id: str, text: str) -> ai_service_pb2.IndexRequest:
+    return ai_service_pb2.IndexRequest(
+        post_id=post_id,
+        title=text,
+        body=f"<p>{text}</p>",
+        summary=f"summary {text}",
+        created_at=datetime.now(UTC),
+    )
+
+
+def _profile_update(
+    user_id: str, post_id: str, kind: int
+) -> ai_service_pb2.UserProfileUpdateRequest:
+    return ai_service_pb2.UserProfileUpdateRequest(
+        user_id=user_id, post_id=post_id, kind=kind
     )
 
 
@@ -215,3 +262,99 @@ async def test_metrics_stream_tokens_estimated_when_usage_missing(monkeypatch) -
     # 13 prompt chars // 4 = 3, 11 completion chars // 4 = 2.
     assert _tokens("stream", "prompt") == prompt_before + 3
     assert _tokens("stream", "completion") == completion_before + 2
+
+
+async def test_metrics_recommend_record_mode_and_duration(running_server) -> None:
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+    target = str(uuid4())
+    twin = str(uuid4())
+    await stub.IndexPost(_index_request(target, "beta doc"))
+    await stub.IndexPost(_index_request(twin, "beta doc"))
+    await stub.UpdateUserProfile(
+        _profile_update("user-1", target, ai_service_pb2.INTERACTION_KIND_VIEW)
+    )
+    default_before = _recommend_counter("default", "OK")
+    surprise_before = _recommend_counter("surprise", "OK")
+    duration_before = _recommend_duration_count("default")
+
+    await stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id="user-1", mode=ai_service_pb2.RECOMMEND_MODE_DEFAULT
+        )
+    )
+    await stub.RecommendFeed(
+        ai_service_pb2.RecommendRequest(
+            user_id="user-1", mode=ai_service_pb2.RECOMMEND_MODE_SURPRISE
+        )
+    )
+
+    assert _recommend_counter("default", "OK") == default_before + 1
+    assert _recommend_counter("surprise", "OK") == surprise_before + 1
+    assert _recommend_duration_count("default") == duration_before + 1
+
+
+async def test_metrics_recommend_cold_start_ratio_and_counter(running_server) -> None:
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+    target = str(uuid4())
+    twin = str(uuid4())
+    await stub.IndexPost(_index_request(target, "beta doc"))
+    await stub.IndexPost(_index_request(twin, "beta doc"))
+    await stub.UpdateUserProfile(
+        _profile_update("user-1", target, ai_service_pb2.INTERACTION_KIND_VIEW)
+    )
+    cold_before = _cold_start_total()
+
+    await stub.RecommendFeed(ai_service_pb2.RecommendRequest(user_id="cold-user"))
+    assert _cold_start_total() == cold_before + 1
+
+    await stub.RecommendFeed(ai_service_pb2.RecommendRequest(user_id="user-1"))
+    assert _cold_start_total() == cold_before + 1
+
+    total = _recommend_counter("default", "OK") + _recommend_counter("surprise", "OK")
+    ratio = REGISTRY.get_sample_value("recommend_cold_start_ratio")
+    assert ratio == _cold_start_total() / total
+
+
+async def test_metrics_profile_updates_record_kind(running_server) -> None:
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+    before = {kind: _profile_updates(kind) for kind in ("view", "like", "save")}
+
+    await stub.UpdateUserProfile(
+        _profile_update("user-1", str(uuid4()), ai_service_pb2.INTERACTION_KIND_VIEW)
+    )
+    await stub.UpdateUserProfile(
+        _profile_update("user-1", str(uuid4()), ai_service_pb2.INTERACTION_KIND_LIKE)
+    )
+    await stub.UpdateUserProfile(
+        _profile_update("user-1", str(uuid4()), ai_service_pb2.INTERACTION_KIND_SAVE)
+    )
+
+    assert _profile_updates("view") == before["view"] + 1
+    assert _profile_updates("like") == before["like"] + 1
+    assert _profile_updates("save") == before["save"] + 1
+
+
+async def test_metrics_recommend_counters_not_recorded_on_validation_error(
+    running_server,
+) -> None:
+    channel, _ = running_server
+    stub = ai_stubs.AIServiceStub(channel)
+    recommend_before = _recommend_counter("default", "OK")
+    cold_before = _cold_start_total()
+    profile_before = _profile_updates("view")
+
+    with pytest.raises(grpc.aio.AioRpcError):
+        await stub.RecommendFeed(ai_service_pb2.RecommendRequest(user_id=""))
+    with pytest.raises(grpc.aio.AioRpcError):
+        await stub.UpdateUserProfile(
+            _profile_update(
+                "user-1", str(uuid4()), ai_service_pb2.INTERACTION_KIND_UNSPECIFIED
+            )
+        )
+
+    assert _recommend_counter("default", "OK") == recommend_before
+    assert _cold_start_total() == cold_before
+    assert _profile_updates("view") == profile_before
