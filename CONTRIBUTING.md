@@ -1,93 +1,82 @@
-# Contributing to BlogApp
+# Contributing to Topos
 
-First off, thank you for considering contributing to BlogApp! It's people like you that make open source projects such a great experience. Your contributions are valuable and will help improve this platform for everyone.
+Thanks for contributing to Topos. This document covers the branch flow,
+commit rules, and what to verify before opening a pull request. For
+architecture, service commands, and code style, read
+[AGENTS.md](AGENTS.md) first — agents and humans follow the same rules.
 
-This document provides guidelines for contributing to BlogApp. Please read it carefully to ensure a smooth and effective collaboration process.
+## Branch flow
 
-## Code of Conduct
+- Create a branch off `dev`, not `main` or `staging`.
+- Use a descriptive, scoped name: `feat/add-user-directory`,
+  `fix/pagination-cursor`, `chore/update-deps`.
+- Keep branches small and focused on one change. Big changes are easier to
+  review (and easier for agents to implement well) as a sequence of small
+  PRs.
+- Pull requests target `dev`.
 
-This project and everyone participating in it is governed by a [Code of Conduct](CODE_OF_CONDUCT.md) (You'll need to create this, a common one is the Contributor Covenant). By participating, you are expected to uphold this code. Please report unacceptable behavior.
+## Commits
 
-## How Can I Contribute?
+One-line commit messages in the imperative mood, no conventional-commit
+prefix, under ~72 characters.
 
-There are many ways to contribute, from writing code and documentation to reporting bugs and suggesting enhancements.
+Good:
 
-### Reporting Bugs
+```
+Add recommendation RPCs to the ai proto
+Fix pagination cursor validation in content service
+```
 
-*   **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/kunalPisolkar24/blogApp/issues).
-*   If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/kunalPisolkar24/blogApp/issues/new). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample or an executable test case** demonstrating the expected behavior that is not occurring.
-*   Provide details about your environment (e.g., OS, Docker version, Node.js version, browser).
+Avoid:
 
-### Suggesting Enhancements
+```
+feat(ai): add recommendation RPCs
+fix: pagination bug
+WIP stuff
+```
 
-*   Open a new issue to discuss your enhancement idea. Please provide a clear description of the proposed enhancement and its potential benefits.
-*   Explain why this enhancement would be useful to BlogApp users and an idea of how it might be implemented.
+## Code style
 
-### Code Contributions
+Clean, simple, readable, maintainable code. No over-engineering, no
+premature abstraction, no restating comments. Follow the idioms of the
+service you touch; keep diffs focused. The full rules live in
+[AGENTS.md](AGENTS.md) under "Code style".
 
-1.  **Fork the Repository:**
-    Start by forking the [kunalPisolkar24/blogApp](https://github.com/kunalPisolkar24/blogApp) repository to your own GitHub account.
+## Verify before pushing
 
-2.  **Clone Your Fork:**
-    Clone your forked repository to your local machine:
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/blogApp.git
-    cd blogApp
-    ```
+Run the relevant checks in the service directory (see the service matrix in
+AGENTS.md for the exact commands):
 
-3.  **Set Upstream Remote:**
-    Add the original repository as the upstream remote:
-    ```bash
-    git remote add upstream https://github.com/kunalPisolkar24/blogApp.git
-    ```
+- `ai`: `make test` + `make lint` (run `make integration` if you touched
+  LLM/vector code paths and Docker is available).
+- `content`: `make test` + `make vet` + `make fmt` (`make test-integration`
+  if the change touches DB, Kafka, Redis, or the AI client).
+- `user`: `npm test` + `npm run lint` (`npm run test:integration` if the
+  change touches Prisma, Redis, or auth flows).
+- `frontend`: `npm test` + `npm run lint`.
+- `gateway`: no tests; validate config by bringing up `compose.yml`.
 
-4.  **Create a New Branch:**
-    Create a new branch for your feature or bugfix. Use a descriptive branch name (e.g., `feature/new-user-profile` or `fix/login-bug`).
-    ```bash
-    git checkout -b feature/your-feature-name
-    ```
+Regenerate any affected code (proto stubs, Prisma client, GraphQL types) —
+see "Codegen" in AGENTS.md. Generated files are gitignored and must be
+regenerated, not edited.
 
-5.  **Set Up Development Environment:**
-    Follow the instructions in the main `README.md` under "Getting Started Locally (Docker Compose)" to set up your local development environment.
+Add tests for new behavior. Bug fixes should include a test that
+demonstrates the bug and verifies the fix.
 
-6.  **Make Your Changes:**
-    Write your code, ensuring it adheres to the project's coding style and conventions (e.g., run linters/formatters if configured).
+## Opening a pull request
 
-7.  **Test Your Changes:**
-    *   Ensure any existing tests pass.
-    *   Add new unit tests for any new functionality you've introduced.
-    *   Run tests for the relevant service (e.g., backend tests).
+1. Push your branch: `git push origin <branch>`.
+2. Open a PR against `dev` using the
+   [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
+3. Keep the title one line, no prefix, imperative — the same rules as
+   commits (for example, "Add recommendation RPCs to the ai proto").
+4. Fill in the summary, the commands you ran to verify, and any codegen or
+   environment notes.
+5. CI runs tests and lint per service on every PR; make sure your branch
+   passes before requesting review.
 
-8.  **Commit Your Changes:**
-    Use clear and descriptive commit messages. A good practice is to follow conventional commit message formats (e.g., `feat: Add user profile page` or `fix: Resolve issue with image uploads`).
-    ```bash
-    git add .
-    git commit -m "feat: Describe your feature or fix"
-    ```
+## Reporting issues
 
-9.  **Keep Your Branch Updated:**
-    Periodically sync your branch with the upstream `main` (or `master`) branch:
-    ```bash
-    git fetch upstream
-    git rebase upstream/main  # or upstream/master
-    ```
-
-10. **Push Your Branch:**
-    Push your changes to your forked repository:
-    ```bash
-    git push origin feature/your-feature-name
-    ```
-
-11. **Submit a Pull Request (PR):**
-    Open a pull request from your branch in your fork to the `main` (or `master`) branch of the `kunalPisolkar24/blogApp` repository.
-    *   Provide a clear title and description for your pull request.
-    *   Reference any related issues (e.g., "Closes #123").
-    *   Be prepared to discuss your changes and make adjustments if requested by the maintainers.
-
-## Coding Conventions
-
-*   **Style:** Follow the existing coding style. If linters (like ESLint, Prettier) are set up, please ensure your code passes their checks.
-*   **Tests:** All new features should include corresponding tests. Bug fixes should ideally include a test that demonstrates the bug and verifies the fix.
-*   **Documentation:** Update any relevant documentation (READMEs, code comments) if your changes affect them.
-
-Thank you for your contribution!
+Use the issue templates in `.github/ISSUE_TEMPLATE/`. Include a clear
+description, what you expected, what happened, and the environment (OS,
+Docker/Node/Go/Python versions).
