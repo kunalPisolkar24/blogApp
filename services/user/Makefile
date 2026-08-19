@@ -121,7 +121,7 @@ HA_TEST_COMPOSE := docker compose -f compose.yml --env-file $(HA_TEST_ENV) \
 
 ha-test-up:
 	docker network create $(HA_TEST_NETWORK) 2>/dev/null || true
-	$(HA_TEST_COMPOSE) up -d --build --wait user-service
+	$(HA_TEST_COMPOSE) up -d --build --wait user-service user-postgres-replica-1 user-postgres-replica-2
 	$(HA_TEST_COMPOSE) logs --no-color user-migrator
 
 ha-test-logs:
@@ -159,7 +159,7 @@ HA_COMPOSE  := docker compose -f compose.yml --env-file $(HA_ENV) \
 
 ha-up:
 	docker network create $(HA_NETWORK) 2>/dev/null || true
-	$(HA_COMPOSE) up -d --build --wait user-service
+	$(HA_COMPOSE) up -d --build --wait user-service user-postgres-replica-1 user-postgres-replica-2
 	$(HA_COMPOSE) logs --no-color user-migrator
 
 ha-down:
