@@ -23,7 +23,7 @@ const buildZones = () =>
   )
 
 export default tseslint.config(
-  { ignores: ['coverage', 'dist', 'node_modules', 'src/graphql/generated/**'] },
+  { ignores: ['coverage', 'dist', 'node_modules', 'src/graphql/generated/**', 'public/mockServiceWorker.js'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

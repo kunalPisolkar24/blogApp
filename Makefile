@@ -1,5 +1,6 @@
 .PHONY: help build ensure-network up down logs restart clean prune \
-       local-build local-up local-down local-logs local-restart local-clean
+       local-build local-up local-down local-logs local-restart local-clean \
+       frontend-mock
 
 ENV_FILE ?= .env
 APP_NETWORK ?= topos_network
@@ -31,6 +32,9 @@ help:
 	@echo "  make local-restart - Restart local dev environment"
 	@echo "  make local-logs    - View local dev logs"
 	@echo "  make local-clean   - Stop local dev and remove volumes"
+	@echo ""
+	@echo "  Frontend:"
+	@echo "  make frontend-mock - Run only the frontend with an in-memory mock backend"
 
 build:
 	$(COMPOSE) build
@@ -83,3 +87,8 @@ local-logs:
 
 local-clean:
 	$(LOCAL_COMPOSE) down -v
+
+# --- Frontend ---
+
+frontend-mock:
+	cd frontend && npm run dev:mock
