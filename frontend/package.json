@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "VITE_ENABLE_MOCKS=true VITE_GRAPHQL_URL=http://localhost:4000/graphql VITE_CLOUDINARY_CLOUD_NAME=mock VITE_CLOUDINARY_UPLOAD_PRESET=mock vite",
     "codegen": "graphql-codegen --config codegen.ts",
     "build": "npm run codegen && tsc -b && vite build",
     "lint": "eslint .",
@@ -77,5 +78,10 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^6.3.5",
     "vitest": "^4.0.18"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
