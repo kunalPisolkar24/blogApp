@@ -222,6 +222,20 @@ export interface SearchPostsQuery {
   };
 }
 
+export type RecommendMode = "DEFAULT" | "SURPRISE";
+
+export interface RecommendedPostsQueryVariables {
+  page?: number;
+  limit?: number;
+  mode?: RecommendMode;
+  seed?: number;
+}
+
+export interface RecommendedPostsQuery {
+  __typename?: "Query";
+  recommendedPosts: PaginatedContentPosts;
+}
+
 const POST_CARD_FIELDS = gql`
   fragment PostCardFields on Post {
     id
@@ -408,3 +422,17 @@ export const SearchPostsDocument = gql`
   }
   ${POST_CARD_FIELDS}
 ` as DocumentNode<SearchPostsQuery, SearchPostsQueryVariables>;
+
+export const RecommendedPostsDocument = gql`
+  query RecommendedPosts(
+    $page: Int
+    $limit: Int
+    $mode: RecommendMode
+    $seed: Int
+  ) {
+    recommendedPosts(page: $page, limit: $limit, mode: $mode, seed: $seed) {
+      ...PaginatedPostFields
+    }
+  }
+  ${PAGINATED_POST_FIELDS}
+` as DocumentNode<RecommendedPostsQuery, RecommendedPostsQueryVariables>;

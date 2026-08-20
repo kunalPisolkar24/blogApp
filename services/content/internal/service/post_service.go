@@ -321,6 +321,8 @@ func (s *PostService) RecommendedPosts(ctx context.Context, userID string, page,
 			return s.postRepo.FindAllExceptAuthor(ctx, userID, page, limit)
 		}
 		if len(search.PostIDs) == 0 {
+			metrics.RecommendColdStartTotal.Inc()
+			slog.Info("recommend feed empty, serving recency fallback", "userID", userID)
 			return s.postRepo.FindAllExceptAuthor(ctx, userID, page, limit)
 		}
 

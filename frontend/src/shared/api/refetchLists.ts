@@ -4,13 +4,15 @@ export type PostListQueryName =
   | "Posts"
   | "PostsByTag"
   | "MyPosts"
-  | "SearchPosts";
+  | "SearchPosts"
+  | "RecommendedPosts";
 
 export const POST_LIST_QUERY_NAMES: PostListQueryName[] = [
   "Posts",
   "PostsByTag",
   "MyPosts",
   "SearchPosts",
+  "RecommendedPosts",
 ];
 
 export interface PostListCacheRefreshOptions {
@@ -18,7 +20,12 @@ export interface PostListCacheRefreshOptions {
 }
 
 const ROOT_QUERY_ID = "ROOT_QUERY";
-const ROOT_POST_LIST_FIELDS = ["posts", "postsByTag", "searchPosts"] as const;
+const ROOT_POST_LIST_FIELDS = [
+  "posts",
+  "postsByTag",
+  "searchPosts",
+  "recommendedPosts",
+] as const;
 
 const getCacheEntityIds = (cache: ApolloCache, typename: string) => {
   const snapshot = cache.extract(false);
