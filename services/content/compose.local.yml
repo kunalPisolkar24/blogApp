@@ -198,6 +198,35 @@ services:
     networks:
       - app-network
 
+  content-personalizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "${CONTENT_PERSONALIZER_INT_PORT:-4005}"
+    command: ["./content-personalizer"]
+    environment:
+      - PORT=${CONTENT_PERSONALIZER_INT_PORT:-4005}
+      - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
+      - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
+      - KAFKA_USER_INTERACTED_TOPIC=${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
+      - KAFKA_DLQ_TOPIC=${KAFKA_DLQ_TOPIC:-posts-dlq}
+      - KAFKA_PERSONALIZER_CONSUMER_GROUP_ID=${KAFKA_PERSONALIZER_CONSUMER_GROUP_ID:-content-personalizer-worker-group}
+      - WORKER_CONCURRENCY=${PERSONALIZER_WORKER_CONCURRENCY:-3}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_PERSONALIZER_INT_PORT:-4005}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
 volumes:
   content_mongo_data:
   content_kafka_data:

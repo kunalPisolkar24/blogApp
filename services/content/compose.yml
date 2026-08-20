@@ -114,6 +114,33 @@ services:
     networks:
       - app-network
 
+  content-personalizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${CONTENT_PERSONALIZER_CONTAINER:-prod-content-personalizer}
+    restart: unless-stopped
+    command: ["./content-personalizer"]
+    ports:
+      - "${CONTENT_PERSONALIZER_EXT_PORT:-4005}:${CONTENT_PERSONALIZER_INT_PORT:-4005}"
+    environment:
+      <<: *content-env
+      PORT: ${CONTENT_PERSONALIZER_INT_PORT:-4005}
+      KAFKA_PERSONALIZER_CONSUMER_GROUP_ID: ${KAFKA_PERSONALIZER_CONSUMER_GROUP_ID:-content-personalizer-worker-group}
+      WORKER_CONCURRENCY: ${PERSONALIZER_WORKER_CONCURRENCY:-3}
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${CONTENT_PERSONALIZER_INT_PORT:-4005}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
+
 networks:
   app-network:
     external: true

@@ -1,6 +1,6 @@
 # Kafka HA: three combined broker+controller nodes in KRaft mode (apache
 # image), replication factor 3, min in-sync replicas 2. init-kafka creates
-# the posts and posts-dlq topics once the cluster is up.
+# the posts, posts-dlq and user-interacted topics once the cluster is up.
 
 x-kafka-common: &kafka-common
   image: apache/kafka:3.7.0
@@ -81,7 +81,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command: |
       "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_TOPIC:-posts} --replication-factor 3 --partitions ${KAFKA_POSTS_PARTITIONS:-6}
-       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 3 --partitions 3"
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 3 --partitions 3
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_USER_INTERACTED_TOPIC:-user-interacted} --replication-factor 3 --partitions 3"
     networks:
       - app-network
 
