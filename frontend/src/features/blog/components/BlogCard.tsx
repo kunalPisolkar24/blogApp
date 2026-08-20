@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/cn";
 import { getBlogCardImageSources } from "@/entities/upload";
 import { useSessionStore } from "@/entities/session";
+import { useFeedMode } from "@/features/blog/feed-mode";
 import { usePostInteractions } from "@/features/blog/interactions/usePostInteractions";
 import {
   DEFAULT_BLOG_CARD_IMAGE,
@@ -31,8 +32,9 @@ export const BlogCard: React.FC<BlogCardProps> = ({
 }) => {
   const isAuthenticated =
     useSessionStore((state) => state.status) === "authenticated";
+  const feedMode = useFeedMode();
   const { liked, saved, isToggling, toggleLike, toggleSave } =
-    usePostInteractions(id, likedByMe, savedByMe);
+    usePostInteractions(id, likedByMe, savedByMe, feedMode);
 
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
   const remainingTagsCount = tags.length - MAX_VISIBLE_TAGS;

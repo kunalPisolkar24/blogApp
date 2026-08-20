@@ -28,7 +28,7 @@ func newInteractionService(t *testing.T, repo *testutil.MockPostInteractionRepos
 func TestRecordViewRecordsAndPublishes(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, nil)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
 
 	assert.Equal(t, 1, repo.RecordCalls)
 	require.Len(t, publisher.Interacted, 1)
@@ -46,8 +46,8 @@ func TestRecordViewDuplicateDoesNotError(t *testing.T) {
 	}
 	svc, _, publisher := newInteractionService(t, repo, nil, nil)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "duplicate views never error the UI")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "duplicate views never error the UI")
 	assert.Equal(t, 2, repo.RecordCalls)
 	assert.Len(t, publisher.Interacted, 2)
 }
@@ -60,7 +60,7 @@ func TestRecordViewRepoErrorIsReturned(t *testing.T) {
 	}
 	svc, _, publisher := newInteractionService(t, repo, nil, nil)
 
-	err := svc.RecordView(context.Background(), "u_1", "p_1")
+	err := svc.RecordView(context.Background(), "u_1", "p_1", "")
 	require.Error(t, err)
 	assert.Empty(t, publisher.Interacted)
 }
@@ -69,14 +69,14 @@ func TestRecordViewPublishFailureIsSwallowed(t *testing.T) {
 	publisher := &testutil.MockEventPublisher{Err: errors.New("kafka down")}
 	svc, repo, _ := newInteractionService(t, nil, publisher, nil)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "a kafka outage must not fail the view")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "a kafka outage must not fail the view")
 	assert.Equal(t, 1, repo.RecordCalls)
 }
 
 func TestToggleLikeOnAndOff(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, nil)
 
-	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1", "")
 	require.NoError(t, err)
 	assert.True(t, liked, "first toggle likes the post")
 	assert.Equal(t, 1, repo.RecordCalls)
@@ -87,7 +87,7 @@ func TestToggleLikeOnAndOff(t *testing.T) {
 		return &domain.PostInteraction{ID: "i_1", UserID: userID, PostID: postID, Kind: kind}, nil
 	}
 
-	liked, err = svc.ToggleLike(context.Background(), "u_1", "p_1")
+	liked, err = svc.ToggleLike(context.Background(), "u_1", "p_1", "")
 	require.NoError(t, err)
 	assert.False(t, liked, "second toggle unlikes the post")
 	assert.Equal(t, 1, repo.DeleteCalls)
@@ -97,7 +97,7 @@ func TestToggleLikeOnAndOff(t *testing.T) {
 func TestToggleSaveUsesSaveKind(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, nil)
 
-	saved, err := svc.ToggleSave(context.Background(), "u_1", "p_1")
+	saved, err := svc.ToggleSave(context.Background(), "u_1", "p_1", "")
 	require.NoError(t, err)
 	assert.True(t, saved)
 	assert.Equal(t, domain.PostInteractionSave, repo.FindByUserPostKind, "the lookup keys the user's own save")
@@ -114,14 +114,14 @@ func TestTogglePropagatesRepoErrors(t *testing.T) {
 	}
 	svc, _, _ := newInteractionService(t, repo, nil, nil)
 
-	_, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	_, err := svc.ToggleLike(context.Background(), "u_1", "p_1", "")
 	require.Error(t, err)
 }
 
 func TestRecordViewFirstViewPublishes(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, newMemCache(t))
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
 
 	assert.Equal(t, 1, repo.RecordCalls)
 	require.Len(t, publisher.Interacted, 1)
@@ -130,8 +130,8 @@ func TestRecordViewFirstViewPublishes(t *testing.T) {
 func TestRecordViewDuplicateWithin24hIsSkipped(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, newMemCache(t))
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "a duplicate view never errors the UI")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "a duplicate view never errors the UI")
 
 	assert.Equal(t, 1, repo.RecordCalls, "the second view must not re-record")
 	require.Len(t, publisher.Interacted, 1, "the second view must not publish a second event")
@@ -140,9 +140,9 @@ func TestRecordViewDuplicateWithin24hIsSkipped(t *testing.T) {
 func TestRecordViewKeysArePerUserAndPost(t *testing.T) {
 	svc, _, publisher := newInteractionService(t, nil, nil, newMemCache(t))
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_2"), "a different post is a fresh view")
-	require.NoError(t, svc.RecordView(context.Background(), "u_2", "p_1"), "a different user is a fresh view")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_2", ""), "a different post is a fresh view")
+	require.NoError(t, svc.RecordView(context.Background(), "u_2", "p_1", ""), "a different user is a fresh view")
 
 	assert.Len(t, publisher.Interacted, 3)
 }
@@ -151,11 +151,11 @@ func TestRecordViewRedisDownStillPublishes(t *testing.T) {
 	c := newMemCache(t)
 	svc, repo, publisher := newInteractionService(t, nil, nil, c)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
 
 	c.Close()
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "a redis outage must not fail the view")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "a redis outage must not fail the view")
 
 	assert.Equal(t, 2, repo.RecordCalls, "dedupe fails open: the view is recorded anyway")
 	assert.Len(t, publisher.Interacted, 2)
@@ -164,9 +164,9 @@ func TestRecordViewRedisDownStillPublishes(t *testing.T) {
 func TestToggleLikeUnaffectedBySeenKey(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, newMemCache(t))
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "records the view and claims seen:{u_1}:{p_1}")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "records the view and claims seen:{u_1}:{p_1}")
 
-	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1", "")
 	require.NoError(t, err)
 	assert.True(t, liked)
 	assert.Equal(t, 2, repo.RecordCalls, "the like records unconditionally on top of the view record")
@@ -227,8 +227,8 @@ func TestInteractionMetricsCountPublished(t *testing.T) {
 	viewsBefore := interactionCount(domain.PostInteractionView, interactionStatusPublished)
 	likesBefore := interactionCount(domain.PostInteractionLike, interactionStatusPublished)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
-	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1", "")
 	require.NoError(t, err)
 	assert.True(t, liked)
 
@@ -241,7 +241,7 @@ func TestInteractionMetricsCountPublishFailure(t *testing.T) {
 	svc, _, _ := newInteractionService(t, nil, publisher, nil)
 	before := interactionCount(domain.PostInteractionView, interactionStatusPublishFailed)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "publish failures are swallowed")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "publish failures are swallowed")
 
 	assertInteractionCount(t, domain.PostInteractionView, interactionStatusPublishFailed, before+1)
 }
@@ -250,8 +250,8 @@ func TestInteractionMetricsCountDeduplicatedViews(t *testing.T) {
 	svc, repo, publisher := newInteractionService(t, nil, nil, newMemCache(t))
 	before := interactionCount(domain.PostInteractionView, interactionStatusDeduplicated)
 
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"))
-	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1"), "the second view within 24h is deduped")
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""), "the second view within 24h is deduped")
 
 	assert.Equal(t, 1, repo.RecordCalls, "the deduped view must not re-record")
 	require.Len(t, publisher.Interacted, 1, "the deduped view must not publish")
@@ -267,7 +267,7 @@ func TestInteractionMetricsCountRemovedToggles(t *testing.T) {
 	svc, _, _ := newInteractionService(t, repo, nil, nil)
 	before := interactionCount(domain.PostInteractionSave, interactionStatusRemoved)
 
-	saved, err := svc.ToggleSave(context.Background(), "u_1", "p_1")
+	saved, err := svc.ToggleSave(context.Background(), "u_1", "p_1", "")
 	require.NoError(t, err)
 	assert.False(t, saved, "an existing save is removed")
 
@@ -287,10 +287,78 @@ func TestInteractionMetricsCountErrors(t *testing.T) {
 	viewsBefore := interactionCount(domain.PostInteractionView, interactionStatusError)
 	likesBefore := interactionCount(domain.PostInteractionLike, interactionStatusError)
 
-	require.Error(t, svc.RecordView(context.Background(), "u_1", "p_1"))
-	_, err := svc.ToggleLike(context.Background(), "u_1", "p_1")
+	require.Error(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	_, err := svc.ToggleLike(context.Background(), "u_1", "p_1", "")
 	require.Error(t, err)
 
 	assertInteractionCount(t, domain.PostInteractionView, interactionStatusError, viewsBefore+1)
 	assertInteractionCount(t, domain.PostInteractionLike, interactionStatusError, likesBefore+1)
+}
+
+// --- per-mode feed interaction metrics ---------------------------------------
+
+// feedInteractionCount reads the current value of
+// recommend_feed_interaction_total for a mode and kind. Counters are
+// shared across tests in this package, so assertions always compare
+// deltas instead of absolute values.
+func feedInteractionCount(mode domain.RecommendMode, kind domain.PostInteractionKind) float64 {
+	return promtestutil.ToFloat64(metrics.RecommendFeedInteractionTotal.WithLabelValues(string(mode), string(kind)))
+}
+
+func assertFeedInteractionCount(t *testing.T, mode domain.RecommendMode, kind domain.PostInteractionKind, want float64) {
+	t.Helper()
+	got := feedInteractionCount(mode, kind)
+	assert.Equal(t, want, got, "recommend_feed_interaction_total{mode=%q, kind=%q}", mode, kind)
+}
+
+func TestFeedInteractionMetricsAttributedByMode(t *testing.T) {
+	svc, _, publisher := newInteractionService(t, nil, nil, nil)
+	viewsBefore := feedInteractionCount(domain.RecommendModeSurprise, domain.PostInteractionView)
+	likesBefore := feedInteractionCount(domain.RecommendModeSurprise, domain.PostInteractionLike)
+	savesBefore := feedInteractionCount(domain.RecommendModeSurprise, domain.PostInteractionSave)
+
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", domain.RecommendModeSurprise))
+	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1", domain.RecommendModeSurprise)
+	require.NoError(t, err)
+	assert.True(t, liked)
+	saved, err := svc.ToggleSave(context.Background(), "u_1", "p_1", domain.RecommendModeSurprise)
+	require.NoError(t, err)
+	assert.True(t, saved)
+
+	assertFeedInteractionCount(t, domain.RecommendModeSurprise, domain.PostInteractionView, viewsBefore+1)
+	assertFeedInteractionCount(t, domain.RecommendModeSurprise, domain.PostInteractionLike, likesBefore+1)
+	assertFeedInteractionCount(t, domain.RecommendModeSurprise, domain.PostInteractionSave, savesBefore+1)
+
+	require.Len(t, publisher.Interacted, 3)
+	for _, interaction := range publisher.Interacted {
+		assert.Equal(t, domain.RecommendModeSurprise, interaction.Mode, "the mode travels on the published interaction")
+	}
+}
+
+func TestFeedInteractionMetricsSkipUnattributed(t *testing.T) {
+	svc, _, publisher := newInteractionService(t, nil, nil, nil)
+	viewsBefore := feedInteractionCount(domain.RecommendModeDefault, domain.PostInteractionView)
+	likesBefore := feedInteractionCount(domain.RecommendModeDefault, domain.PostInteractionLike)
+
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", ""))
+	liked, err := svc.ToggleLike(context.Background(), "u_1", "p_1", "")
+	require.NoError(t, err)
+	assert.True(t, liked)
+
+	assertFeedInteractionCount(t, domain.RecommendModeDefault, domain.PostInteractionView, viewsBefore)
+	assertFeedInteractionCount(t, domain.RecommendModeDefault, domain.PostInteractionLike, likesBefore)
+	require.Len(t, publisher.Interacted, 2)
+	for _, interaction := range publisher.Interacted {
+		assert.Empty(t, interaction.Mode, "interactions without a feed context carry no mode")
+	}
+}
+
+func TestFeedInteractionMetricsCountOnPublishFailure(t *testing.T) {
+	publisher := &testutil.MockEventPublisher{Err: errors.New("kafka down")}
+	svc, _, _ := newInteractionService(t, nil, publisher, nil)
+	before := feedInteractionCount(domain.RecommendModeSurprise, domain.PostInteractionView)
+
+	require.NoError(t, svc.RecordView(context.Background(), "u_1", "p_1", domain.RecommendModeSurprise), "publish failures are swallowed")
+
+	assertFeedInteractionCount(t, domain.RecommendModeSurprise, domain.PostInteractionView, before+1)
 }

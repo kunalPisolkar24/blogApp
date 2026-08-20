@@ -25,9 +25,9 @@ type Documents = {
     "\n  mutation CreatePost($input: CreatePostInput!) {\n    createPost(input: $input) {\n      id\n    }\n  }\n": typeof types.CreatePostDocument,
     "\n  mutation UpdatePost($id: ID!, $input: UpdatePostInput!) {\n    updatePost(id: $id, input: $input) {\n      ...PostDetailFields\n    }\n  }\n  \n": typeof types.UpdatePostDocument,
     "\n  mutation DeletePost($id: ID!) {\n    deletePost(id: $id)\n  }\n": typeof types.DeletePostDocument,
-    "\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n": typeof types.RecordPostViewDocument,
-    "\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n": typeof types.LikePostDocument,
-    "\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n": typeof types.SavePostDocument,
+    "\n  mutation RecordPostView($postId: ID!, $mode: RecommendMode) {\n    recordPostView(postId: $postId, mode: $mode)\n  }\n": typeof types.RecordPostViewDocument,
+    "\n  mutation LikePost($postId: ID!, $mode: RecommendMode) {\n    likePost(postId: $postId, mode: $mode)\n  }\n": typeof types.LikePostDocument,
+    "\n  mutation SavePost($postId: ID!, $mode: RecommendMode) {\n    savePost(postId: $postId, mode: $mode)\n  }\n": typeof types.SavePostDocument,
     "\n  mutation GenerateTags($title: String!, $body: String!) {\n    generateTags(title: $title, body: $body)\n  }\n": typeof types.GenerateTagsDocument,
     "\n  mutation GeneratePostContent($prompt: String!) {\n    generatePostContent(prompt: $prompt) {\n      title\n      body\n      summary\n      tags\n    }\n  }\n": typeof types.GeneratePostContentDocument,
     "\n  query MyPosts($page: Int, $limit: Int) {\n    me {\n      id\n      posts(page: $page, limit: $limit) {\n        ...PaginatedPostFields\n      }\n    }\n  }\n  \n": typeof types.MyPostsDocument,
@@ -51,9 +51,9 @@ const documents: Documents = {
     "\n  mutation CreatePost($input: CreatePostInput!) {\n    createPost(input: $input) {\n      id\n    }\n  }\n": types.CreatePostDocument,
     "\n  mutation UpdatePost($id: ID!, $input: UpdatePostInput!) {\n    updatePost(id: $id, input: $input) {\n      ...PostDetailFields\n    }\n  }\n  \n": types.UpdatePostDocument,
     "\n  mutation DeletePost($id: ID!) {\n    deletePost(id: $id)\n  }\n": types.DeletePostDocument,
-    "\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n": types.RecordPostViewDocument,
-    "\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n": types.LikePostDocument,
-    "\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n": types.SavePostDocument,
+    "\n  mutation RecordPostView($postId: ID!, $mode: RecommendMode) {\n    recordPostView(postId: $postId, mode: $mode)\n  }\n": types.RecordPostViewDocument,
+    "\n  mutation LikePost($postId: ID!, $mode: RecommendMode) {\n    likePost(postId: $postId, mode: $mode)\n  }\n": types.LikePostDocument,
+    "\n  mutation SavePost($postId: ID!, $mode: RecommendMode) {\n    savePost(postId: $postId, mode: $mode)\n  }\n": types.SavePostDocument,
     "\n  mutation GenerateTags($title: String!, $body: String!) {\n    generateTags(title: $title, body: $body)\n  }\n": types.GenerateTagsDocument,
     "\n  mutation GeneratePostContent($prompt: String!) {\n    generatePostContent(prompt: $prompt) {\n      title\n      body\n      summary\n      tags\n    }\n  }\n": types.GeneratePostContentDocument,
     "\n  query MyPosts($page: Int, $limit: Int) {\n    me {\n      id\n      posts(page: $page, limit: $limit) {\n        ...PaginatedPostFields\n      }\n    }\n  }\n  \n": types.MyPostsDocument,
@@ -127,15 +127,15 @@ export function graphql(source: "\n  mutation DeletePost($id: ID!) {\n    delete
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n"): (typeof documents)["\n  mutation RecordPostView($postId: ID!) {\n    recordPostView(postId: $postId)\n  }\n"];
+export function graphql(source: "\n  mutation RecordPostView($postId: ID!, $mode: RecommendMode) {\n    recordPostView(postId: $postId, mode: $mode)\n  }\n"): (typeof documents)["\n  mutation RecordPostView($postId: ID!, $mode: RecommendMode) {\n    recordPostView(postId: $postId, mode: $mode)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n"): (typeof documents)["\n  mutation LikePost($postId: ID!) {\n    likePost(postId: $postId)\n  }\n"];
+export function graphql(source: "\n  mutation LikePost($postId: ID!, $mode: RecommendMode) {\n    likePost(postId: $postId, mode: $mode)\n  }\n"): (typeof documents)["\n  mutation LikePost($postId: ID!, $mode: RecommendMode) {\n    likePost(postId: $postId, mode: $mode)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n"): (typeof documents)["\n  mutation SavePost($postId: ID!) {\n    savePost(postId: $postId)\n  }\n"];
+export function graphql(source: "\n  mutation SavePost($postId: ID!, $mode: RecommendMode) {\n    savePost(postId: $postId, mode: $mode)\n  }\n"): (typeof documents)["\n  mutation SavePost($postId: ID!, $mode: RecommendMode) {\n    savePost(postId: $postId, mode: $mode)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

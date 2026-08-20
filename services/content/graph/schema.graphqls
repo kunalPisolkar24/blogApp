@@ -115,9 +115,9 @@ type Mutation {
   renameChat(id: ID!, title: String!): Chat!
   deleteChat(id: ID!): Boolean!
   askChat(chatId: ID!, query: String!): ChatMessage!
-  recordPostView(postId: ID!): Boolean!
-  likePost(postId: ID!): Boolean!
-  savePost(postId: ID!): Boolean!
+  recordPostView(postId: ID!, mode: RecommendMode): Boolean!
+  likePost(postId: ID!, mode: RecommendMode): Boolean!
+  savePost(postId: ID!, mode: RecommendMode): Boolean!
 }
 
 input CreatePostInput {

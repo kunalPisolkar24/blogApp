@@ -87,10 +87,10 @@ type ComplexityRoot struct {
 		DeletePost          func(childComplexity int, id string) int
 		GeneratePostContent func(childComplexity int, prompt string) int
 		GenerateTags        func(childComplexity int, title string, body string) int
-		LikePost            func(childComplexity int, postID string) int
-		RecordPostView      func(childComplexity int, postID string) int
+		LikePost            func(childComplexity int, postID string, mode *model.RecommendMode) int
+		RecordPostView      func(childComplexity int, postID string, mode *model.RecommendMode) int
 		RenameChat          func(childComplexity int, id string, title string) int
-		SavePost            func(childComplexity int, postID string) int
+		SavePost            func(childComplexity int, postID string, mode *model.RecommendMode) int
 		UpdatePost          func(childComplexity int, id string, input model.UpdatePostInput) int
 	}
 
@@ -180,9 +180,9 @@ type MutationResolver interface {
 	RenameChat(ctx context.Context, id string, title string) (*model.Chat, error)
 	DeleteChat(ctx context.Context, id string) (bool, error)
 	AskChat(ctx context.Context, chatID string, query string) (*model.ChatMessage, error)
-	RecordPostView(ctx context.Context, postID string) (bool, error)
-	LikePost(ctx context.Context, postID string) (bool, error)
-	SavePost(ctx context.Context, postID string) (bool, error)
+	RecordPostView(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error)
+	LikePost(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error)
+	SavePost(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error)
 }
 type PostResolver interface {
 	Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error)
@@ -420,7 +420,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.LikePost(childComplexity, args["postId"].(string)), true
+		return e.complexity.Mutation.LikePost(childComplexity, args["postId"].(string), args["mode"].(*model.RecommendMode)), true
 	case "Mutation.recordPostView":
 		if e.complexity.Mutation.RecordPostView == nil {
 			break
@@ -431,7 +431,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.RecordPostView(childComplexity, args["postId"].(string)), true
+		return e.complexity.Mutation.RecordPostView(childComplexity, args["postId"].(string), args["mode"].(*model.RecommendMode)), true
 	case "Mutation.renameChat":
 		if e.complexity.Mutation.RenameChat == nil {
 			break
@@ -453,7 +453,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.SavePost(childComplexity, args["postId"].(string)), true
+		return e.complexity.Mutation.SavePost(childComplexity, args["postId"].(string), args["mode"].(*model.RecommendMode)), true
 	case "Mutation.updatePost":
 		if e.complexity.Mutation.UpdatePost == nil {
 			break
@@ -1112,6 +1112,11 @@ func (ec *executionContext) field_Mutation_likePost_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["postId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mode", ec.unmarshalORecommendMode2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐRecommendMode)
+	if err != nil {
+		return nil, err
+	}
+	args["mode"] = arg1
 	return args, nil
 }
 
@@ -1123,6 +1128,11 @@ func (ec *executionContext) field_Mutation_recordPostView_args(ctx context.Conte
 		return nil, err
 	}
 	args["postId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mode", ec.unmarshalORecommendMode2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐRecommendMode)
+	if err != nil {
+		return nil, err
+	}
+	args["mode"] = arg1
 	return args, nil
 }
 
@@ -1150,6 +1160,11 @@ func (ec *executionContext) field_Mutation_savePost_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["postId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mode", ec.unmarshalORecommendMode2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐRecommendMode)
+	if err != nil {
+		return nil, err
+	}
+	args["mode"] = arg1
 	return args, nil
 }
 
@@ -2434,7 +2449,7 @@ func (ec *executionContext) _Mutation_recordPostView(ctx context.Context, field 
 		ec.fieldContext_Mutation_recordPostView,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().RecordPostView(ctx, fc.Args["postId"].(string))
+			return ec.resolvers.Mutation().RecordPostView(ctx, fc.Args["postId"].(string), fc.Args["mode"].(*model.RecommendMode))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -2475,7 +2490,7 @@ func (ec *executionContext) _Mutation_likePost(ctx context.Context, field graphq
 		ec.fieldContext_Mutation_likePost,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().LikePost(ctx, fc.Args["postId"].(string))
+			return ec.resolvers.Mutation().LikePost(ctx, fc.Args["postId"].(string), fc.Args["mode"].(*model.RecommendMode))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
@@ -2516,7 +2531,7 @@ func (ec *executionContext) _Mutation_savePost(ctx context.Context, field graphq
 		ec.fieldContext_Mutation_savePost,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().SavePost(ctx, fc.Args["postId"].(string))
+			return ec.resolvers.Mutation().SavePost(ctx, fc.Args["postId"].(string), fc.Args["mode"].(*model.RecommendMode))
 		},
 		nil,
 		ec.marshalNBoolean2bool,
