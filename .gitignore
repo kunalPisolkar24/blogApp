@@ -3,3 +3,4 @@
 .env.local
 .zed/
 .env.ha-test
+node_modules
