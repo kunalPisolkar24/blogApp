@@ -103,7 +103,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command: |
       "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_TOPIC:-posts} --replication-factor 1 --partitions ${PARTITIONS:-3}
-       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 1 --partitions 1"
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_DLQ_TOPIC:-posts-dlq} --replication-factor 1 --partitions 1
+       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 --create --if-not-exists --topic ${KAFKA_USER_INTERACTED_TOPIC:-user-interacted} --replication-factor 1 --partitions ${PARTITIONS:-3}"
     networks:
       - loadtest-net
 
@@ -223,6 +224,45 @@ services:
         reservations:
           memory: 128M
 
+  content-personalizer:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: loadtest-content-personalizer
+    restart: unless-stopped
+    command: ["./content-personalizer"]
+    environment:
+      PORT: 4005
+      AI_SERVICE_URL: ai-service:50051
+      KAFKA_BROKERS: kafka-1:9092
+      KAFKA_USER_INTERACTED_TOPIC: ${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
+      KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-posts-dlq}
+      KAFKA_PERSONALIZER_CONSUMER_GROUP_ID: content-loadtest-personalizer-worker-group
+      WORKER_CONCURRENCY: ${PERSONALIZER_WORKER_CONCURRENCY:-3}
+    expose:
+      - "4005"
+    depends_on:
+      ai-service:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4005/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${SVC_MEM:-512M}
+        reservations:
+          memory: 128M
+
   producer:
     build:
       context: ./producer
@@ -232,6 +272,31 @@ services:
     environment:
       BROKERS: kafka-1:9092
       TOPIC: ${KAFKA_TOPIC:-posts}
+      RPS: ${PRODUCER_RPS:-${RPS:-50}}
+      DURATION: ${PRODUCER_DURATION:-${DURATION:-30s}}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+    networks:
+      - loadtest-net
+    deploy:
+      resources:
+        limits:
+          memory: ${PRODUCER_MEM:-128M}
+        reservations:
+          memory: 32M
+
+  producer-interactions:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: loadtest-content-interaction-producer
+    restart: "no"
+    environment:
+      BROKERS: kafka-1:9092
+      TOPIC: ${KAFKA_USER_INTERACTED_TOPIC:-user-interacted}
       RPS: ${PRODUCER_RPS:-${RPS:-50}}
       DURATION: ${PRODUCER_DURATION:-${DURATION:-30s}}
     depends_on:

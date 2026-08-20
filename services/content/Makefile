@@ -113,8 +113,8 @@ load-test: load-test-build
 
 load-test-worker: load-test-build
 	@export RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION); \
-	cd $(LOADTEST_DIR) && docker compose -f compose.worker-loadtest.yml up -d --wait content-worker content-search-worker && \
-	docker compose -f compose.worker-loadtest.yml up -d producer && \
+	cd $(LOADTEST_DIR) && docker compose -f compose.worker-loadtest.yml up -d --wait content-worker content-search-worker content-personalizer && \
+	docker compose -f compose.worker-loadtest.yml up -d producer producer-interactions && \
 	docker compose -f compose.worker-loadtest.yml run --rm \
 		-e RPS=$(RPS) -e VUS=$(VUS) -e DURATION=$(DURATION) \
 		k6
@@ -138,7 +138,7 @@ load-test-interactions:
 load-test-build:
 	cd $(LOADTEST_DIR)/producer && go mod download
 	$(LT_VARS) $(COMPOSE_LT) build content-service
-	cd $(LOADTEST_DIR) && docker compose -f compose.worker-loadtest.yml build content-worker content-search-worker producer
+	cd $(LOADTEST_DIR) && docker compose -f compose.worker-loadtest.yml build content-worker content-search-worker content-personalizer producer
 
 load-test-stop:
 	$(LT_VARS) $(COMPOSE_LT) down -v --remove-orphans
@@ -151,7 +151,8 @@ load-test-clean:
 		loadtest-content-qdrant loadtest-content-ai-service loadtest-content-ollama \
 		loadtest-worker-mongo loadtest-worker-redis loadtest-worker-kafka \
 		loadtest-worker-init-kafka loadtest-worker-qdrant loadtest-worker-ai \
-		loadtest-content-worker loadtest-content-search-worker loadtest-content-producer loadtest-worker-k6 2>/dev/null || true
+		loadtest-content-worker loadtest-content-search-worker loadtest-content-personalizer \
+		loadtest-content-producer loadtest-content-interaction-producer loadtest-worker-k6 2>/dev/null || true
 
 load-test-tail:
 	cd $(LOADTEST_DIR) && docker compose -f compose.loadtest.yml logs -f --tail=50
