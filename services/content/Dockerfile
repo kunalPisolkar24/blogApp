@@ -22,7 +22,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/content-search-worker ./cmd/search-worker \
     && CGO_ENABLED=0 GOOS=linux go build \
     -trimpath -ldflags="-s -w" \
-    -o /out/content-dlq-replay ./cmd/dlq-replay
+    -o /out/content-dlq-replay ./cmd/dlq-replay \
+    && CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath -ldflags="-s -w" \
+    -o /out/content-personalizer ./cmd/personalizer
 
 # --- Runtime stage: minimal image, non-root user ---
 FROM alpine:3.20 AS runtime
@@ -41,6 +44,7 @@ COPY --from=builder --chown=appuser:appuser /out/content-service ./
 COPY --from=builder --chown=appuser:appuser /out/content-worker ./
 COPY --from=builder --chown=appuser:appuser /out/content-search-worker ./
 COPY --from=builder --chown=appuser:appuser /out/content-dlq-replay ./
+COPY --from=builder --chown=appuser:appuser /out/content-personalizer ./
 
 USER appuser
 EXPOSE 4002

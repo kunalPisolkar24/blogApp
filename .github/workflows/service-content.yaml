@@ -93,6 +93,10 @@ jobs:
             image: kunalpisolkar/topos-content-worker
             tag_suffix: "-worker"
             cache_namespace: worker
+          - target: content-personalizer
+            image: kunalpisolkar/topos-content-personalizer
+            tag_suffix: "-personalizer"
+            cache_namespace: personalizer
 
     steps:
       - name: Checkout Repository
