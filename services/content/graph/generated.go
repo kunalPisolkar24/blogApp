@@ -139,6 +139,7 @@ type ComplexityRoot struct {
 		Post               func(childComplexity int, id string) int
 		Posts              func(childComplexity int, page *int, limit *int) int
 		PostsByTag         func(childComplexity int, tag string, page *int, limit *int) int
+		RecommendedPosts   func(childComplexity int, page *int, limit *int, mode *model.RecommendMode, seed *int) int
 		SearchPosts        func(childComplexity int, query string, page *int, limit *int) int
 		Tags               func(childComplexity int, query *string, limit *int) int
 		__resolve__service func(childComplexity int) int
@@ -194,6 +195,7 @@ type QueryResolver interface {
 	Tags(ctx context.Context, query *string, limit *int) ([]*model.Tag, error)
 	PostsByTag(ctx context.Context, tag string, page *int, limit *int) (*model.PaginatedPosts, error)
 	SearchPosts(ctx context.Context, query string, page *int, limit *int) (*model.SearchResult, error)
+	RecommendedPosts(ctx context.Context, page *int, limit *int, mode *model.RecommendMode, seed *int) (*model.PaginatedPosts, error)
 	Chats(ctx context.Context, page *int, limit *int) (*model.PaginatedChats, error)
 	Chat(ctx context.Context, id string) (*model.Chat, error)
 	ChatMessages(ctx context.Context, chatID string, page *int, limit *int) (*model.PaginatedMessages, error)
@@ -695,6 +697,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.PostsByTag(childComplexity, args["tag"].(string), args["page"].(*int), args["limit"].(*int)), true
+	case "Query.recommendedPosts":
+		if e.complexity.Query.RecommendedPosts == nil {
+			break
+		}
+
+		args, err := ec.field_Query_recommendedPosts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.RecommendedPosts(childComplexity, args["page"].(*int), args["limit"].(*int), args["mode"].(*model.RecommendMode), args["seed"].(*int)), true
 	case "Query.searchPosts":
 		if e.complexity.Query.SearchPosts == nil {
 			break
@@ -1282,6 +1295,32 @@ func (ec *executionContext) field_Query_posts_args(ctx context.Context, rawArgs 
 		return nil, err
 	}
 	args["limit"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_recommendedPosts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "mode", ec.unmarshalORecommendMode2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐRecommendMode)
+	if err != nil {
+		return nil, err
+	}
+	args["mode"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "seed", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["seed"] = arg3
 	return args, nil
 }
 
@@ -3633,6 +3672,57 @@ func (ec *executionContext) fieldContext_Query_searchPosts(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_searchPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_recommendedPosts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_recommendedPosts,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().RecommendedPosts(ctx, fc.Args["page"].(*int), fc.Args["limit"].(*int), fc.Args["mode"].(*model.RecommendMode), fc.Args["seed"].(*int))
+		},
+		nil,
+		ec.marshalNPaginatedPosts2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPosts,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_recommendedPosts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "posts":
+				return ec.fieldContext_PaginatedPosts_posts(ctx, field)
+			case "totalPages":
+				return ec.fieldContext_PaginatedPosts_totalPages(ctx, field)
+			case "currentPage":
+				return ec.fieldContext_PaginatedPosts_currentPage(ctx, field)
+			case "totalPosts":
+				return ec.fieldContext_PaginatedPosts_totalPosts(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PaginatedPosts", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_recommendedPosts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -6673,6 +6763,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "recommendedPosts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_recommendedPosts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "chats":
 			field := field
 
@@ -8376,6 +8488,22 @@ func (ec *executionContext) marshalOPost2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtop
 		return graphql.Null
 	}
 	return ec._Post(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalORecommendMode2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐRecommendMode(ctx context.Context, v any) (*model.RecommendMode, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.RecommendMode)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalORecommendMode2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐRecommendMode(ctx context.Context, sel ast.SelectionSet, v *model.RecommendMode) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOString2string(ctx context.Context, v any) (string, error) {

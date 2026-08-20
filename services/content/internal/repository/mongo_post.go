@@ -175,6 +175,10 @@ func (r *MongoPostRepository) FindByAuthor(ctx context.Context, authorID string,
 	return r.findWithPagination(ctx, bson.M{"authorId": authorID}, page, limit)
 }
 
+func (r *MongoPostRepository) FindAllExceptAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
+	return r.findWithPagination(ctx, bson.M{"authorId": bson.M{"$ne": authorID}}, page, limit)
+}
+
 func (r *MongoPostRepository) FindByTag(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error) {
 	return r.findWithPagination(ctx, bson.M{"tags": tag}, page, limit)
 }

@@ -235,6 +235,20 @@ func (r *queryResolver) SearchPosts(ctx context.Context, query string, page *int
 	return mapDomainSearchResultToModel(posts), nil
 }
 
+// RecommendedPosts is the resolver for the recommendedPosts field.
+func (r *queryResolver) RecommendedPosts(ctx context.Context, page *int, limit *int, mode *model.RecommendMode, seed *int) (*model.PaginatedPosts, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	posts, err := r.PostService.RecommendedPosts(ctx, userID, deref(page), deref(limit), recommendModeToDomain(mode), seedToUint32(seed))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPaginatedToModel(posts), nil
+}
+
 // Chats is the resolver for the chats field.
 func (r *queryResolver) Chats(ctx context.Context, page *int, limit *int) (*model.PaginatedChats, error) {
 	userID, ok := middleware.UserIDFromContext(ctx)

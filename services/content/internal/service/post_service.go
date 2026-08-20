@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -102,7 +103,7 @@ func (s *PostService) CreatePost(ctx context.Context, title, body, authorID stri
 		created, err := s.postRepo.Create(ctx, post)
 		if err == nil {
 			s.ensureTags(ctx, created.ID, tags)
-			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
+			invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern, cache.RecommendPattern)
 			metrics.PostsCreated.Inc()
 			if s.eventPublisher != nil {
 				s.publishEvent(ctx, "post created", created.ID, s.eventPublisher.PublishPostCreated, created)
@@ -268,7 +269,7 @@ func (s *PostService) GetPostsByTag(ctx context.Context, tag string, page, limit
 // invalidatePost drops the single-post entry and every list derived from it.
 func (s *PostService) invalidatePost(ctx context.Context, id string) {
 	cache.Del(s.cache, ctx, cache.KeyPost(id))
-	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern)
+	invalidate(s.cache, ctx, cache.PostsPattern, cache.TagsPattern, cache.SearchPattern, cache.RelatedPattern, cache.RecommendPattern)
 }
 
 // SearchPosts runs a hybrid search through the AI service and hydrates
@@ -303,6 +304,50 @@ func (s *PostService) SearchPosts(ctx context.Context, query string, page, limit
 			}
 		}
 		return result, nil
+	})
+}
+
+// RecommendedPosts ranks posts for a user by their learned taste, keeping
+// the AI order and never surfacing the user's own posts. On cold start
+// (no profile yet, or the AI service degraded) it falls back to recency
+// ordering, excluding the user's own posts the same way. The feed is
+// cached briefly per user, mode and seed; post writes invalidate it.
+func (s *PostService) RecommendedPosts(ctx context.Context, userID string, page, limit int, mode domain.RecommendMode, seed uint32) (*domain.PaginatedPosts, error) {
+	page, limit = pagination.Normalize(page, limit)
+	return withCache(s.cache, ctx, cache.KeyRecommended(userID, string(mode), seed, page, limit), cache.RecommendTTL, func() (*domain.PaginatedPosts, error) {
+		search, err := s.aiService.RecommendFeed(ctx, userID, (page-1)*limit, limit, mode, seed)
+		if err != nil {
+			slog.Warn("recommend feed failed, serving recency fallback", "error", err, "userID", userID)
+			return s.postRepo.FindAllExceptAuthor(ctx, userID, page, limit)
+		}
+		if len(search.PostIDs) == 0 {
+			return s.postRepo.FindAllExceptAuthor(ctx, userID, page, limit)
+		}
+
+		posts, err := s.postRepo.FindByIDs(ctx, search.PostIDs)
+		if err != nil {
+			return nil, err
+		}
+
+		byID := make(map[string]*domain.Post, len(posts))
+		for _, post := range posts {
+			byID[post.ID] = post
+		}
+		recommended := make([]*domain.Post, 0, len(search.PostIDs))
+		for _, id := range search.PostIDs {
+			post, ok := byID[id]
+			if !ok || post.AuthorID == userID {
+				continue
+			}
+			recommended = append(recommended, post)
+		}
+
+		return &domain.PaginatedPosts{
+			Posts:      recommended,
+			TotalPages: int(math.Ceil(float64(search.Total) / float64(limit))),
+			TotalPosts: int64(search.Total),
+			Page:       page,
+		}, nil
 	})
 }
 

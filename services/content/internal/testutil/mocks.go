@@ -10,16 +10,17 @@ import (
 )
 
 type MockPostRepository struct {
-	CreateFn        func(ctx context.Context, post *domain.Post) (*domain.Post, error)
-	UpdateFn        func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error)
-	UpdateSummaryFn func(ctx context.Context, id, summary string, status domain.PostStatus) error
-	DeleteFn        func(ctx context.Context, id string) error
-	FindAllFn       func(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error)
-	FindByIDFn      func(ctx context.Context, id string) (*domain.Post, error)
-	FindBySlugFn    func(ctx context.Context, slug string) (*domain.Post, error)
-	FindByIDsFn     func(ctx context.Context, ids []string) ([]*domain.Post, error)
-	FindByAuthorFn  func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error)
-	FindByTagFn     func(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error)
+	CreateFn              func(ctx context.Context, post *domain.Post) (*domain.Post, error)
+	UpdateFn              func(ctx context.Context, id string, post *domain.Post) (*domain.Post, error)
+	UpdateSummaryFn       func(ctx context.Context, id, summary string, status domain.PostStatus) error
+	DeleteFn              func(ctx context.Context, id string) error
+	FindAllFn             func(ctx context.Context, page, limit int) (*domain.PaginatedPosts, error)
+	FindByIDFn            func(ctx context.Context, id string) (*domain.Post, error)
+	FindBySlugFn          func(ctx context.Context, slug string) (*domain.Post, error)
+	FindByIDsFn           func(ctx context.Context, ids []string) ([]*domain.Post, error)
+	FindByAuthorFn        func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error)
+	FindAllExceptAuthorFn func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error)
+	FindByTagFn           func(ctx context.Context, tag string, page, limit int) (*domain.PaginatedPosts, error)
 
 	CreateCalls int
 }
@@ -89,6 +90,13 @@ func (m *MockPostRepository) FindByIDs(ctx context.Context, ids []string) ([]*do
 func (m *MockPostRepository) FindByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
 	if m.FindByAuthorFn != nil {
 		return m.FindByAuthorFn(ctx, authorID, page, limit)
+	}
+	return &domain.PaginatedPosts{Page: page}, nil
+}
+
+func (m *MockPostRepository) FindAllExceptAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
+	if m.FindAllExceptAuthorFn != nil {
+		return m.FindAllExceptAuthorFn(ctx, authorID, page, limit)
 	}
 	return &domain.PaginatedPosts{Page: page}, nil
 }

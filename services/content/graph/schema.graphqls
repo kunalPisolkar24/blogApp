@@ -48,6 +48,11 @@ type SearchResult {
   total: Int!
 }
 
+enum RecommendMode {
+  DEFAULT
+  SURPRISE
+}
+
 enum MessageRole {
   USER
   ASSISTANT
@@ -94,6 +99,7 @@ type Query {
   tags(query: String, limit: Int): [Tag!]!
   postsByTag(tag: String!, page: Int, limit: Int): PaginatedPosts!
   searchPosts(query: String!, page: Int, limit: Int): SearchResult!
+  recommendedPosts(page: Int, limit: Int, mode: RecommendMode = DEFAULT, seed: Int): PaginatedPosts!
   chats(page: Int, limit: Int): PaginatedChats!
   chat(id: ID!): Chat
   chatMessages(chatId: ID!, page: Int, limit: Int): PaginatedMessages!
