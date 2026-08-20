@@ -11,9 +11,11 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 	"github.com/kunalPisolkar24/topos/services/content/internal/service"
 	"github.com/kunalPisolkar24/topos/services/content/internal/testutil"
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -121,6 +123,7 @@ func TestQueryResolverRecommendedPosts(t *testing.T) {
 	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}, nil))
 
 	mode, seed := model.RecommendModeSurprise, 42
+	servedBefore := promtestutil.ToFloat64(metrics.RecommendFeedServedTotal.WithLabelValues(string(domain.RecommendModeSurprise)))
 	result, err := resolver.Query().RecommendedPosts(authenticatedContext("u_1"), intPtr(1), intPtr(10), &mode, &seed)
 
 	require.NoError(t, err)
@@ -128,6 +131,7 @@ func TestQueryResolverRecommendedPosts(t *testing.T) {
 	assert.Equal(t, "p_1", result.Posts[0].ID)
 	assert.Equal(t, "Hello", result.Posts[0].Title)
 	assert.Equal(t, 3, result.TotalPosts)
+	assert.Equal(t, servedBefore+1, promtestutil.ToFloat64(metrics.RecommendFeedServedTotal.WithLabelValues(string(domain.RecommendModeSurprise))), "each successful feed response counts as served")
 }
 
 func TestQueryResolverRecommendedPostsUnauthorized(t *testing.T) {
@@ -514,7 +518,7 @@ func newTestInteractionResolver(t *testing.T, repo *testutil.MockPostInteraction
 func TestMutationResolverRecordPostView(t *testing.T) {
 	resolver, repo, publisher := newTestInteractionResolver(t, nil, nil)
 
-	ok, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1")
+	ok, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1", nil)
 	require.NoError(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, 1, repo.RecordCalls)
@@ -532,16 +536,16 @@ func TestMutationResolverRecordPostViewDuplicateNeverErrors(t *testing.T) {
 	}
 	resolver, _, _ := newTestInteractionResolver(t, repo, nil)
 
-	_, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1")
+	_, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1", nil)
 	require.NoError(t, err)
-	_, err = resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1")
+	_, err = resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1", nil)
 	require.NoError(t, err, "duplicate views never error the UI")
 }
 
 func TestMutationResolverRecordPostViewUnauthorized(t *testing.T) {
 	resolver, _, _ := newTestInteractionResolver(t, nil, nil)
 
-	_, err := resolver.Mutation().RecordPostView(context.Background(), "p_1")
+	_, err := resolver.Mutation().RecordPostView(context.Background(), "p_1", nil)
 	require.Error(t, err)
 	assert.Equal(t, "unauthorized", err.(*gqlerror.Error).Message)
 }
@@ -550,7 +554,7 @@ func TestMutationResolverLikePostToggles(t *testing.T) {
 	repo := &testutil.MockPostInteractionRepository{}
 	resolver, repo, publisher := newTestInteractionResolver(t, repo, nil)
 
-	liked, err := resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1")
+	liked, err := resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1", nil)
 	require.NoError(t, err)
 	assert.True(t, liked, "first toggle likes the post")
 	assert.Equal(t, 1, repo.RecordCalls)
@@ -561,7 +565,7 @@ func TestMutationResolverLikePostToggles(t *testing.T) {
 		return &domain.PostInteraction{ID: "i_1", UserID: userID, PostID: postID, Kind: kind}, nil
 	}
 
-	liked, err = resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1")
+	liked, err = resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1", nil)
 	require.NoError(t, err)
 	assert.False(t, liked, "second toggle unlikes the post")
 	assert.Equal(t, 1, repo.DeleteCalls)
@@ -570,16 +574,68 @@ func TestMutationResolverLikePostToggles(t *testing.T) {
 func TestMutationResolverSavePostToggles(t *testing.T) {
 	resolver, repo, _ := newTestInteractionResolver(t, nil, nil)
 
-	saved, err := resolver.Mutation().SavePost(authenticatedContext("u_1"), "p_1")
+	saved, err := resolver.Mutation().SavePost(authenticatedContext("u_1"), "p_1", nil)
 	require.NoError(t, err)
 	assert.True(t, saved)
 	assert.Equal(t, domain.PostInteractionSave, repo.FindByUserPostKind)
 }
 
+func TestQueryResolverRecommendedPostsCountsDefaultMode(t *testing.T) {
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		assert.Equal(t, domain.RecommendModeDefault, mode)
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 1}, nil
+	}}
+	postRepo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_1", Title: "Hello", AuthorID: "u_2"}}, nil
+	}}
+	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}, nil))
+	servedBefore := promtestutil.ToFloat64(metrics.RecommendFeedServedTotal.WithLabelValues(string(domain.RecommendModeDefault)))
+
+	mode := model.RecommendModeDefault
+	result, err := resolver.Query().RecommendedPosts(authenticatedContext("u_1"), intPtr(1), intPtr(10), &mode, nil)
+
+	require.NoError(t, err)
+	require.Len(t, result.Posts, 1)
+	assert.Equal(t, servedBefore+1, promtestutil.ToFloat64(metrics.RecommendFeedServedTotal.WithLabelValues(string(domain.RecommendModeDefault))))
+}
+
+func TestMutationResolverRecordPostViewForwardsMode(t *testing.T) {
+	resolver, _, publisher := newTestInteractionResolver(t, nil, nil)
+	mode := model.RecommendModeSurprise
+
+	ok, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1", &mode)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	require.Len(t, publisher.Interacted, 1)
+	assert.Equal(t, domain.RecommendModeSurprise, publisher.Interacted[0].Mode, "the feed mode reaches the interaction event")
+}
+
+func TestMutationResolverLikePostForwardsMode(t *testing.T) {
+	resolver, _, publisher := newTestInteractionResolver(t, nil, nil)
+	mode := model.RecommendModeSurprise
+
+	liked, err := resolver.Mutation().LikePost(authenticatedContext("u_1"), "p_1", &mode)
+	require.NoError(t, err)
+	assert.True(t, liked)
+	require.Len(t, publisher.Interacted, 1)
+	assert.Equal(t, domain.RecommendModeSurprise, publisher.Interacted[0].Mode)
+}
+
+func TestMutationResolverInteractionWithoutModeStaysUnattributed(t *testing.T) {
+	resolver, _, publisher := newTestInteractionResolver(t, nil, nil)
+
+	ok, err := resolver.Mutation().RecordPostView(authenticatedContext("u_1"), "p_1", nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	require.Len(t, publisher.Interacted, 1)
+	assert.Empty(t, publisher.Interacted[0].Mode, "no mode arg means no feed attribution")
+}
+
 func TestMutationResolverToggleUnauthorized(t *testing.T) {
 	for name, mutate := range map[string]func(resolver *Resolver) (bool, error){
-		"likePost": func(r *Resolver) (bool, error) { return r.Mutation().LikePost(context.Background(), "p_1") },
-		"savePost": func(r *Resolver) (bool, error) { return r.Mutation().SavePost(context.Background(), "p_1") },
+		"likePost": func(r *Resolver) (bool, error) { return r.Mutation().LikePost(context.Background(), "p_1", nil) },
+		"savePost": func(r *Resolver) (bool, error) { return r.Mutation().SavePost(context.Background(), "p_1", nil) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			resolver, _, _ := newTestInteractionResolver(t, nil, nil)

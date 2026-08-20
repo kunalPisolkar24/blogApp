@@ -7,9 +7,11 @@ package graph
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/kunalPisolkar24/topos/services/content/internal/middleware"
 	"github.com/kunalPisolkar24/topos/services/content/internal/pagination"
 )
@@ -141,26 +143,26 @@ func (r *mutationResolver) AskChat(ctx context.Context, chatID string, query str
 }
 
 // RecordPostView is the resolver for the recordPostView field.
-func (r *mutationResolver) RecordPostView(ctx context.Context, postID string) (bool, error) {
+func (r *mutationResolver) RecordPostView(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error) {
 	userID, ok := middleware.UserIDFromContext(ctx)
 	if !ok {
 		return false, mapDomainError(domain.ErrUnauthorized)
 	}
 
-	if err := r.InteractionService.RecordView(ctx, userID, postID); err != nil {
+	if err := r.InteractionService.RecordView(ctx, userID, postID, interactionMode(mode)); err != nil {
 		return false, mapDomainError(err)
 	}
 	return true, nil
 }
 
 // LikePost is the resolver for the likePost field.
-func (r *mutationResolver) LikePost(ctx context.Context, postID string) (bool, error) {
-	return r.toggleInteraction(ctx, postID, r.InteractionService.ToggleLike)
+func (r *mutationResolver) LikePost(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error) {
+	return r.toggleInteraction(ctx, postID, interactionMode(mode), r.InteractionService.ToggleLike)
 }
 
 // SavePost is the resolver for the savePost field.
-func (r *mutationResolver) SavePost(ctx context.Context, postID string) (bool, error) {
-	return r.toggleInteraction(ctx, postID, r.InteractionService.ToggleSave)
+func (r *mutationResolver) SavePost(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error) {
+	return r.toggleInteraction(ctx, postID, interactionMode(mode), r.InteractionService.ToggleSave)
 }
 
 // Related is the resolver for the related field.
@@ -242,10 +244,14 @@ func (r *queryResolver) RecommendedPosts(ctx context.Context, page *int, limit *
 		return nil, mapDomainError(domain.ErrUnauthorized)
 	}
 
-	posts, err := r.PostService.RecommendedPosts(ctx, userID, deref(page), deref(limit), recommendModeToDomain(mode), seedToUint32(seed))
+	feedMode := recommendModeToDomain(mode)
+	posts, err := r.PostService.RecommendedPosts(ctx, userID, deref(page), deref(limit), feedMode, seedToUint32(seed))
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
+
+	metrics.RecommendFeedServedTotal.WithLabelValues(string(feedMode)).Inc()
+	slog.Info("recommend feed served", "userID", userID, "mode", feedMode, "result_size", len(posts.Posts))
 	return mapDomainPaginatedToModel(posts), nil
 }
 

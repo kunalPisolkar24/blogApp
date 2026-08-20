@@ -30,12 +30,15 @@ type PostEventPayload struct {
 // UserInteractedPayload is the event published on the dedicated
 // user-interacted topic whenever a user views, likes or saves a post.
 // Weight is the signal strength of the interaction (see
-// PostInteractionKind.Weight).
+// PostInteractionKind.Weight). Mode is the recommendation feed the post
+// was shown in, or empty when there was no feed attribution; it feeds
+// the M5 recommender evals, the personalizer ignores it.
 type UserInteractedPayload struct {
 	UserID string              `json:"userId"`
 	PostID string              `json:"postId"`
 	Kind   PostInteractionKind `json:"kind"`
 	Weight int                 `json:"weight"`
+	Mode   RecommendMode       `json:"mode,omitempty"`
 }
 
 type EventPublisher interface {

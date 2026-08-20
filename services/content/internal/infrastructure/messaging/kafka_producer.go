@@ -75,6 +75,7 @@ func (k *kafkaProducer) PublishUserInteracted(ctx context.Context, interaction *
 		PostID: interaction.PostID,
 		Kind:   interaction.Kind,
 		Weight: interaction.Kind.Weight(),
+		Mode:   interaction.Mode,
 	}
 
 	value, err := json.Marshal(payload)

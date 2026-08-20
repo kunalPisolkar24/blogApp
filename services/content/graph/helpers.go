@@ -10,17 +10,28 @@ import (
 
 // toggleInteraction runs an interaction toggle for the authenticated
 // user and maps its result to the client.
-func (r *mutationResolver) toggleInteraction(ctx context.Context, postID string, toggle func(ctx context.Context, userID, postID string) (bool, error)) (bool, error) {
+func (r *mutationResolver) toggleInteraction(ctx context.Context, postID string, mode domain.RecommendMode, toggle func(ctx context.Context, userID, postID string, mode domain.RecommendMode) (bool, error)) (bool, error) {
 	userID, ok := middleware.UserIDFromContext(ctx)
 	if !ok {
 		return false, mapDomainError(domain.ErrUnauthorized)
 	}
 
-	state, err := toggle(ctx, userID, postID)
+	state, err := toggle(ctx, userID, postID, mode)
 	if err != nil {
 		return false, mapDomainError(err)
 	}
 	return state, nil
+}
+
+// interactionMode maps an optional GraphQL mode to the domain value.
+// nil means the client gave no feed context (opened directly, or from a
+// non-recommended list), which stays empty and is not attributed to any
+// feed mode.
+func interactionMode(mode *model.RecommendMode) domain.RecommendMode {
+	if mode == nil {
+		return ""
+	}
+	return recommendModeToDomain(mode)
 }
 
 // interactionState resolves the like/save state of the requesting user

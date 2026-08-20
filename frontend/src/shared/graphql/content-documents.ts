@@ -149,6 +149,7 @@ export interface DeletePostMutation {
 
 export interface RecordPostViewMutationVariables {
   postId: string;
+  mode?: RecommendMode | null;
 }
 
 export interface RecordPostViewMutation {
@@ -158,6 +159,7 @@ export interface RecordPostViewMutation {
 
 export interface LikePostMutationVariables {
   postId: string;
+  mode?: RecommendMode | null;
 }
 
 export interface LikePostMutation {
@@ -167,6 +169,7 @@ export interface LikePostMutation {
 
 export interface SavePostMutationVariables {
   postId: string;
+  mode?: RecommendMode | null;
 }
 
 export interface SavePostMutation {
@@ -362,20 +365,20 @@ export const DeletePostDocument = gql`
 ` as DocumentNode<DeletePostMutation, DeletePostMutationVariables>;
 
 export const RecordPostViewDocument = gql`
-  mutation RecordPostView($postId: ID!) {
-    recordPostView(postId: $postId)
+  mutation RecordPostView($postId: ID!, $mode: RecommendMode) {
+    recordPostView(postId: $postId, mode: $mode)
   }
 ` as DocumentNode<RecordPostViewMutation, RecordPostViewMutationVariables>;
 
 export const LikePostDocument = gql`
-  mutation LikePost($postId: ID!) {
-    likePost(postId: $postId)
+  mutation LikePost($postId: ID!, $mode: RecommendMode) {
+    likePost(postId: $postId, mode: $mode)
   }
 ` as DocumentNode<LikePostMutation, LikePostMutationVariables>;
 
 export const SavePostDocument = gql`
-  mutation SavePost($postId: ID!) {
-    savePost(postId: $postId)
+  mutation SavePost($postId: ID!, $mode: RecommendMode) {
+    savePost(postId: $postId, mode: $mode)
   }
 ` as DocumentNode<SavePostMutation, SavePostMutationVariables>;
 

@@ -30,11 +30,14 @@ func (k PostInteractionKind) Weight() int {
 
 // PostInteraction records a single user interaction (view, like or save)
 // with a post. It is the raw material feed personalization runs on.
+// Mode is the recommendation feed the post was shown in ("" when there
+// is none); it is event-only metadata, never persisted.
 type PostInteraction struct {
 	ID        string              `bson:"_id,omitempty" json:"id,omitempty"`
 	UserID    string              `bson:"userId" json:"userId"`
 	PostID    string              `bson:"postId" json:"postId"`
 	Kind      PostInteractionKind `bson:"kind" json:"kind"`
+	Mode      RecommendMode       `bson:"-" json:"mode,omitempty"`
 	CreatedAt time.Time           `bson:"createdAt" json:"createdAt"`
 }
 

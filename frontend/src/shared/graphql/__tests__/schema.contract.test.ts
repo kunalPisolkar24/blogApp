@@ -37,4 +37,15 @@ describe("content schema contract", () => {
     expect(schema).toContain("hits: [Post!]!");
     expect(schema).toContain("total: Int!");
   });
+
+  it("accepts an optional feed mode on the interaction mutations", () => {
+    const schema = readFileSync(
+      resolve(process.cwd(), "../services/content/graph/schema.graphqls"),
+      "utf8",
+    );
+
+    expect(schema).toContain("recordPostView(postId: ID!, mode: RecommendMode)");
+    expect(schema).toContain("likePost(postId: ID!, mode: RecommendMode)");
+    expect(schema).toContain("savePost(postId: ID!, mode: RecommendMode)");
+  });
 });

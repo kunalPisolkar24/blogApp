@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "@/test/render-with-providers";
 import { server } from "@/test/server";
 import { sessionStoreActions } from "@/entities/session";
+import { resetFeedAttributionForTests } from "@/features/blog/viewing/feed-attribution";
 import { ForYouList } from "../ForYouList";
 
 const graphqlApi = graphql.link("http://localhost:4000/graphql");
@@ -42,6 +43,7 @@ const buildPostsResponse = (posts: unknown[] = [buildPost()], totalPosts = 1) =>
 describe("ForYouList", () => {
   afterEach(() => {
     sessionStoreActions.markAnonymous();
+    resetFeedAttributionForTests();
   });
 
   it("shows the latest feed for an anonymous user with no error surfaced", async () => {
@@ -173,5 +175,47 @@ describe("ForYouList", () => {
     expect(firstRequest?.mode).toBe("DEFAULT");
     expect(surpriseRequest?.mode).toBe("SURPRISE");
     expect(surpriseRequest?.seed).not.toBe(firstRequest?.seed);
+  });
+
+  it("attributes interactions to the current feed mode", async () => {
+    sessionStoreActions.markAuthenticated("test-token");
+    const captured: { mode?: string | null }[] = [];
+    server.use(
+      graphqlApi.query("RecommendedPosts", () =>
+        HttpResponse.json({
+          data: { recommendedPosts: buildPostsResponse([buildPost()]) },
+        }),
+      ),
+      graphqlApi.mutation("LikePost", ({ variables }) => {
+        captured.push({ mode: variables?.mode });
+        return HttpResponse.json({ data: { likePost: true } });
+      }),
+      graphqlApi.mutation("SavePost", ({ variables }) => {
+        captured.push({ mode: variables?.mode });
+        return HttpResponse.json({ data: { savePost: true } });
+      }),
+    );
+
+    renderWithProviders(<ForYouList />);
+
+    await screen.findByRole("link", {
+      name: /open blog post: optimizing neural network throughput/i,
+    });
+    expect(sessionStorage.getItem("topos.feedMode.post-1")).toBe("DEFAULT");
+
+    fireEvent.click(screen.getByRole("button", { name: /like post/i }));
+    await waitFor(() => {
+      expect(captured).toContainEqual({ mode: "DEFAULT" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /surprise me/i }));
+    await waitFor(() => {
+      expect(sessionStorage.getItem("topos.feedMode.post-1")).toBe("SURPRISE");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save post/i }));
+    await waitFor(() => {
+      expect(captured).toContainEqual({ mode: "SURPRISE" });
+    });
   });
 });

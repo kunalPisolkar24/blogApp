@@ -2,6 +2,7 @@ import { useApolloClient, useMutation } from "@apollo/client/react";
 import {
   LikePostDocument,
   SavePostDocument,
+  type RecommendMode,
 } from "@/shared/graphql/content-documents";
 import { getGraphQLErrorMessage } from "@/shared/api";
 import { useToast } from "@/shared/ui/hooks/useToast";
@@ -20,10 +21,15 @@ export interface PostInteractionsController {
 // state straight into the normalized Post entity, so every list that
 // shows the post updates in place. The UI flips optimistically and is
 // rolled back to the previous value when the mutation fails.
+//
+// feedMode attributes the interaction to the recommendation feed the
+// post was shown in (null when there is none); it rides along in the
+// mutation so the backend can measure engagement per feed mode.
 export const usePostInteractions = (
   postId: string,
   likedByMe: boolean,
   savedByMe: boolean,
+  feedMode: RecommendMode | null = null,
 ): PostInteractionsController => {
   const client = useApolloClient();
   const { toast } = useToast();
@@ -50,12 +56,14 @@ export const usePostInteractions = (
     });
   };
 
+  const modeVariable = feedMode ?? undefined;
+
   const toggleLike = async () => {
     const previous = likedByMe;
     applyState(!previous, savedByMe);
     try {
       const { data } = await likePost({
-        variables: { postId },
+        variables: { postId, mode: modeVariable },
         optimisticResponse: { likePost: !previous },
       });
       applyState(data?.likePost ?? !previous, savedByMe);
@@ -70,7 +78,7 @@ export const usePostInteractions = (
     applyState(likedByMe, !previous);
     try {
       const { data } = await savePost({
-        variables: { postId },
+        variables: { postId, mode: modeVariable },
         optimisticResponse: { savePost: !previous },
       });
       applyState(likedByMe, data?.savePost ?? !previous);

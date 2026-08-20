@@ -42,12 +42,13 @@ func NewPostInteractionService(repo domain.PostInteractionRepository, publisher 
 	}
 }
 
-// RecordView records a view and publishes its event. The unique
+// RecordView records a view and publishes its event. Mode is the
+// recommendation feed the post was shown in ("" for none). The unique
 // (userId, postId, kind) index makes duplicates idempotent: a repeated
 // view returns the existing record and never errors the caller. Re-reads
 // within 24h are deduped in Redis (seen:{user}:{post}) so they neither
 // re-record nor re-publish; likes and saves are unaffected.
-func (s *PostInteractionService) RecordView(ctx context.Context, userID, postID string) error {
+func (s *PostInteractionService) RecordView(ctx context.Context, userID, postID string, mode domain.RecommendMode) error {
 	if !cache.MarkSeen(s.cache, ctx, cache.KeySeenView(userID, postID), cache.SeenViewTTL) {
 		countInteraction(domain.PostInteractionView, interactionStatusDeduplicated)
 		return nil
@@ -56,6 +57,7 @@ func (s *PostInteractionService) RecordView(ctx context.Context, userID, postID 
 		UserID:    userID,
 		PostID:    postID,
 		Kind:      domain.PostInteractionView,
+		Mode:      mode,
 		CreatedAt: s.clock(),
 	})
 	return err
@@ -63,14 +65,14 @@ func (s *PostInteractionService) RecordView(ctx context.Context, userID, postID 
 
 // ToggleLike likes a post when it is not liked yet, and unlikes it
 // otherwise. The returned bool is the new state: true means liked.
-func (s *PostInteractionService) ToggleLike(ctx context.Context, userID, postID string) (bool, error) {
-	return s.toggle(ctx, userID, postID, domain.PostInteractionLike)
+func (s *PostInteractionService) ToggleLike(ctx context.Context, userID, postID string, mode domain.RecommendMode) (bool, error) {
+	return s.toggle(ctx, userID, postID, domain.PostInteractionLike, mode)
 }
 
 // ToggleSave saves a post when it is not saved yet, and unsaves it
 // otherwise. The returned bool is the new state: true means saved.
-func (s *PostInteractionService) ToggleSave(ctx context.Context, userID, postID string) (bool, error) {
-	return s.toggle(ctx, userID, postID, domain.PostInteractionSave)
+func (s *PostInteractionService) ToggleSave(ctx context.Context, userID, postID string, mode domain.RecommendMode) (bool, error) {
+	return s.toggle(ctx, userID, postID, domain.PostInteractionSave, mode)
 }
 
 // States returns the like/save state of a user for every given post.
@@ -83,7 +85,7 @@ func (s *PostInteractionService) States(ctx context.Context, userID string, post
 // without publishing - there is no negative kind), and on otherwise.
 // The user id from the caller always keys the lookup, so a user can
 // only ever toggle their own interaction.
-func (s *PostInteractionService) toggle(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) (bool, error) {
+func (s *PostInteractionService) toggle(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) (bool, error) {
 	existing, err := s.repo.FindByUserPostAndKind(ctx, userID, postID, kind)
 	if err == nil {
 		if err := s.repo.Delete(ctx, existing.ID); err != nil {
@@ -102,6 +104,7 @@ func (s *PostInteractionService) toggle(ctx context.Context, userID, postID stri
 		UserID:    userID,
 		PostID:    postID,
 		Kind:      kind,
+		Mode:      mode,
 		CreatedAt: s.clock(),
 	}); err != nil {
 		return false, err
@@ -110,12 +113,19 @@ func (s *PostInteractionService) toggle(ctx context.Context, userID, postID stri
 }
 
 // recordAndPublish stores the interaction and publishes its event. A
-// publish failure is logged and swallowed (fire-and-forget).
+// publish failure is logged and swallowed (fire-and-forget). Created
+// interactions with a feed attribution also move the per-mode feed
+// interaction counter, which measures engagement by feed mode.
 func (s *PostInteractionService) recordAndPublish(ctx context.Context, interaction *domain.PostInteraction) (*domain.PostInteraction, error) {
 	created, err := s.repo.Record(ctx, interaction)
 	if err != nil {
 		countInteraction(interaction.Kind, interactionStatusError)
 		return nil, err
+	}
+
+	if interaction.Mode != "" {
+		metrics.RecommendFeedInteractionTotal.WithLabelValues(string(interaction.Mode), string(interaction.Kind)).Inc()
+		slog.Info("interaction recorded", "user_id", created.UserID, "post_id", created.PostID, "kind", created.Kind, "mode", interaction.Mode)
 	}
 
 	if err := s.publisher.PublishUserInteracted(ctx, created); err != nil {

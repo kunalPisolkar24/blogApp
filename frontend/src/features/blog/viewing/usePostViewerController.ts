@@ -12,6 +12,7 @@ import { getGraphQLErrorMessage, refreshPostListQueries } from "@/shared/api";
 import { useToast } from "@/shared/ui/hooks/useToast";
 import { useSessionStore } from "@/entities/session";
 import { markPostViewed } from "./viewed-posts";
+import { takeFeedMode } from "./feed-attribution";
 
 // Views are best-effort signal, so they wait a moment before firing and
 // never surface errors to the reader.
@@ -75,12 +76,16 @@ export const usePostViewerController = (
 
   // Report the view once the post has loaded: debounced, once per
   // session per post, and never for anonymous readers (the mutation
-  // requires auth). Failures are swallowed on purpose.
+  // requires auth). Failures are swallowed on purpose. If the post was
+  // opened from the For You feed, the stored feed mode is attached to
+  // the view event for engagement measurement.
   useEffect(() => {
     if (!postId || !isReady || !isAuthenticated) return;
     const timer = setTimeout(() => {
       if (!markPostViewed(postId)) return;
-      void recordPostView({ variables: { postId } }).catch(() => {});
+      void recordPostView({
+        variables: { postId, mode: takeFeedMode(postId) ?? undefined },
+      }).catch(() => {});
     }, VIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [postId, isReady, isAuthenticated, recordPostView]);

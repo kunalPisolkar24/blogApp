@@ -5,6 +5,8 @@ import { BlogCardSkeleton } from "@/shared/ui/feedback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/entities/session";
+import { FeedModeProvider } from "@/features/blog/feed-mode";
+import { markFeedMode } from "@/features/blog/viewing/feed-attribution";
 import {
   PostsDocument,
   RecommendedPostsDocument,
@@ -70,6 +72,17 @@ export const ForYouList: React.FC = () => {
     [paginatedPosts],
   );
 
+  // Remember the feed mode per rendered card so the view recorded on
+  // the detail page can be attributed to this feed. Only the
+  // recommendation feed attributes: the latest fallback is not a
+  // personalized feed, so it leaves no attribution behind.
+  useEffect(() => {
+    if (!isAuthenticated || useLatestFallback) {
+      return;
+    }
+    blogPosts.forEach((post) => markFeedMode(post.id, mode));
+  }, [blogPosts, mode, isAuthenticated, useLatestFallback]);
+
   const totalPages = paginatedPosts?.totalPages ?? 1;
   const totalPosts = paginatedPosts?.totalPosts ?? 0;
 
@@ -134,11 +147,13 @@ export const ForYouList: React.FC = () => {
   return (
     <div className="mx-auto w-full max-w-[88rem] px-4 py-8 sm:px-5 lg:px-6">
       {sectionHeading}
-      <div className="space-y-4">
-        {blogPosts.map((post) => (
-          <BlogCard key={post.id} {...post} />
-        ))}
-      </div>
+      <FeedModeProvider value={mode}>
+        <div className="space-y-4">
+          {blogPosts.map((post) => (
+            <BlogCard key={post.id} {...post} />
+          ))}
+        </div>
+      </FeedModeProvider>
 
       <div className="mt-10">
         <PagePagination

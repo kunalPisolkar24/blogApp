@@ -100,6 +100,7 @@ func TestPublishUserInteracted(t *testing.T) {
 				UserID: "u_1",
 				PostID: "p_1",
 				Kind:   tt.kind,
+				Mode:   domain.RecommendModeSurprise,
 			}
 			require.NoError(t, producer.PublishUserInteracted(context.Background(), interaction))
 			require.Len(t, w.messages, 1)
@@ -114,8 +115,22 @@ func TestPublishUserInteracted(t *testing.T) {
 			assert.Equal(t, "p_1", payload.PostID)
 			assert.Equal(t, tt.kind, payload.Kind)
 			assert.Equal(t, tt.weight, payload.Weight)
+			assert.Equal(t, domain.RecommendModeSurprise, payload.Mode, "the feed mode travels in the event")
 		})
 	}
+}
+
+func TestPublishUserInteractedOmitsModeWhenEmpty(t *testing.T) {
+	w := &fakeWriter{}
+	producer := newTestProducer(t, w)
+
+	interaction := &domain.PostInteraction{UserID: "u_1", PostID: "p_1", Kind: domain.PostInteractionView}
+	require.NoError(t, producer.PublishUserInteracted(context.Background(), interaction))
+
+	var payload domain.UserInteractedPayload
+	require.NoError(t, json.Unmarshal(w.messages[0].Value, &payload))
+	assert.Empty(t, payload.Mode)
+	assert.NotContains(t, string(w.messages[0].Value), `"mode"`, "unattributed interactions omit the field")
 }
 
 func TestPublishDeadLetter(t *testing.T) {

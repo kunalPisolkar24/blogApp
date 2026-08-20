@@ -99,6 +99,28 @@ var (
 		Help:      "Feed requests served from the recency fallback on cold start.",
 	})
 
+	// RecommendFeedServedTotal counts recommendation feed responses by
+	// mode (default, surprise). The denominator for the engagement ratio
+	// (interactions after a feed / feeds served).
+	RecommendFeedServedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "content",
+		Subsystem: "recommend",
+		Name:      "feed_served_total",
+		Help:      "Recommendation feed responses served, by mode.",
+	}, []string{"mode"})
+
+	// RecommendFeedInteractionTotal counts interactions (view, like, save)
+	// that followed a recommendation feed, by feed mode and interaction
+	// kind. Interactions without a feed attribution (opened directly, or
+	// from a non-recommended list) are not counted, keeping the per-mode
+	// ratio clean.
+	RecommendFeedInteractionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "content",
+		Subsystem: "recommend",
+		Name:      "feed_interaction_total",
+		Help:      "Interactions on recommended posts, by feed mode and kind.",
+	}, []string{"mode", "kind"})
+
 	// PostsCreated, PostsUpdated, PostsDeleted count post mutations.
 	PostsCreated = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "content",
