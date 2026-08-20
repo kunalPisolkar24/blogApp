@@ -13,7 +13,9 @@ export const paginatedPostListKeyArgs = (args: Record<string, unknown> | null) =
   const page = args.page ?? 1;
   const limit = args.limit ?? "";
   const tag = args.tag ?? "";
-  return `tag:${String(tag)}|page:${String(page)}|limit:${String(limit)}`;
+  const mode = args.mode ?? "";
+  const seed = args.seed ?? "";
+  return `tag:${String(tag)}|mode:${String(mode)}|seed:${String(seed)}|page:${String(page)}|limit:${String(limit)}`;
 };
 
 export const mergePaginatedPostLists = (
@@ -70,6 +72,7 @@ export const postQueryFieldPolicies: Record<string, FieldPolicy> = {
   post: postFieldPolicy(),
   posts: paginatedPostListPolicy(),
   postsByTag: paginatedPostListPolicy(),
+  recommendedPosts: paginatedPostListPolicy(),
   searchPosts: {
     keyArgs: ["query", ["page"], ["limit"]],
     merge: false,

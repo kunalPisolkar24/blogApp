@@ -88,6 +88,17 @@ var (
 		Help:      "AI circuit breaker state per domain (0 closed, 1 open, 2 half-open).",
 	}, []string{"domain"})
 
+	// RecommendColdStartTotal counts feed requests served from the recency
+	// fallback because the AI returned an empty result for a user with no
+	// interaction profile yet. Degraded calls (AI failure or open breaker)
+	// are counted by AIFallbackEngaged instead.
+	RecommendColdStartTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "content",
+		Subsystem: "recommend",
+		Name:      "cold_start_total",
+		Help:      "Feed requests served from the recency fallback on cold start.",
+	})
+
 	// PostsCreated, PostsUpdated, PostsDeleted count post mutations.
 	PostsCreated = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "content",

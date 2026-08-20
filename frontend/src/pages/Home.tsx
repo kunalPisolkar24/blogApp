@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { StickyNavbar } from "@/widgets";
-import { BlogList } from "@/features/blog";
+import { BlogList, ForYouList } from "@/features/blog";
 import { SearchBar } from "@/features/search";
 import { ErrorBoundary } from "@/app/providers/ErrorBoundary";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { X } from "lucide-react";
 
 const Home: React.FC = () => {
@@ -52,7 +53,24 @@ const Home: React.FC = () => {
         )}
 
         <ErrorBoundary>
-          <BlogList filterTag={selectedTag || undefined} />
+          {selectedTag ? (
+            <BlogList filterTag={selectedTag} />
+          ) : (
+            <div className="mx-auto w-full max-w-[88rem] px-4 pt-8 sm:px-5 lg:px-6">
+              <Tabs defaultValue="latest">
+                <TabsList>
+                  <TabsTrigger value="latest">Latest</TabsTrigger>
+                  <TabsTrigger value="for-you">For You</TabsTrigger>
+                </TabsList>
+                <TabsContent value="latest">
+                  <BlogList />
+                </TabsContent>
+                <TabsContent value="for-you">
+                  <ForYouList />
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
         </ErrorBoundary>
       </main>
     </div>

@@ -32,6 +32,7 @@ type Documents = {
     "\n  mutation GeneratePostContent($prompt: String!) {\n    generatePostContent(prompt: $prompt) {\n      title\n      body\n      summary\n      tags\n    }\n  }\n": typeof types.GeneratePostContentDocument,
     "\n  query MyPosts($page: Int, $limit: Int) {\n    me {\n      id\n      posts(page: $page, limit: $limit) {\n        ...PaginatedPostFields\n      }\n    }\n  }\n  \n": typeof types.MyPostsDocument,
     "\n  query SearchPosts($query: String!, $page: Int, $limit: Int) {\n    searchPosts(query: $query, page: $page, limit: $limit) {\n      hits {\n        ...PostCardFields\n      }\n      total\n    }\n  }\n  \n": typeof types.SearchPostsDocument,
+    "\n  query RecommendedPosts(\n    $page: Int\n    $limit: Int\n    $mode: RecommendMode\n    $seed: Int\n  ) {\n    recommendedPosts(page: $page, limit: $limit, mode: $mode, seed: $seed) {\n      ...PaginatedPostFields\n    }\n  }\n  \n": typeof types.RecommendedPostsDocument,
     "fragment UserCore on User {\n  id\n  username\n  email\n  name\n  bio\n  avatarUrl\n  bannerUrl\n  createdAt\n}": typeof types.UserCoreFragmentDoc,
     "query Me {\n  me {\n    ...UserCore\n  }\n}": typeof types.MeDocument,
     "mutation Signin($email: String!, $password: String!) {\n  signin(email: $email, password: $password) {\n    token\n    user {\n      ...UserCore\n    }\n  }\n}": typeof types.SigninDocument,
@@ -57,6 +58,7 @@ const documents: Documents = {
     "\n  mutation GeneratePostContent($prompt: String!) {\n    generatePostContent(prompt: $prompt) {\n      title\n      body\n      summary\n      tags\n    }\n  }\n": types.GeneratePostContentDocument,
     "\n  query MyPosts($page: Int, $limit: Int) {\n    me {\n      id\n      posts(page: $page, limit: $limit) {\n        ...PaginatedPostFields\n      }\n    }\n  }\n  \n": types.MyPostsDocument,
     "\n  query SearchPosts($query: String!, $page: Int, $limit: Int) {\n    searchPosts(query: $query, page: $page, limit: $limit) {\n      hits {\n        ...PostCardFields\n      }\n      total\n    }\n  }\n  \n": types.SearchPostsDocument,
+    "\n  query RecommendedPosts(\n    $page: Int\n    $limit: Int\n    $mode: RecommendMode\n    $seed: Int\n  ) {\n    recommendedPosts(page: $page, limit: $limit, mode: $mode, seed: $seed) {\n      ...PaginatedPostFields\n    }\n  }\n  \n": types.RecommendedPostsDocument,
     "fragment UserCore on User {\n  id\n  username\n  email\n  name\n  bio\n  avatarUrl\n  bannerUrl\n  createdAt\n}": types.UserCoreFragmentDoc,
     "query Me {\n  me {\n    ...UserCore\n  }\n}": types.MeDocument,
     "mutation Signin($email: String!, $password: String!) {\n  signin(email: $email, password: $password) {\n    token\n    user {\n      ...UserCore\n    }\n  }\n}": types.SigninDocument,
@@ -150,6 +152,10 @@ export function graphql(source: "\n  query MyPosts($page: Int, $limit: Int) {\n 
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query SearchPosts($query: String!, $page: Int, $limit: Int) {\n    searchPosts(query: $query, page: $page, limit: $limit) {\n      hits {\n        ...PostCardFields\n      }\n      total\n    }\n  }\n  \n"): (typeof documents)["\n  query SearchPosts($query: String!, $page: Int, $limit: Int) {\n    searchPosts(query: $query, page: $page, limit: $limit) {\n      hits {\n        ...PostCardFields\n      }\n      total\n    }\n  }\n  \n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query RecommendedPosts(\n    $page: Int\n    $limit: Int\n    $mode: RecommendMode\n    $seed: Int\n  ) {\n    recommendedPosts(page: $page, limit: $limit, mode: $mode, seed: $seed) {\n      ...PaginatedPostFields\n    }\n  }\n  \n"): (typeof documents)["\n  query RecommendedPosts(\n    $page: Int\n    $limit: Int\n    $mode: RecommendMode\n    $seed: Int\n  ) {\n    recommendedPosts(page: $page, limit: $limit, mode: $mode, seed: $seed) {\n      ...PaginatedPostFields\n    }\n  }\n  \n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

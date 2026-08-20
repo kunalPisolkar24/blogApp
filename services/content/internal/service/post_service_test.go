@@ -10,7 +10,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/kunalPisolkar24/topos/services/content/internal/cache"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
+	"github.com/kunalPisolkar24/topos/services/content/internal/metrics"
 	"github.com/kunalPisolkar24/topos/services/content/internal/testutil"
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -655,6 +657,7 @@ func TestSearchPostsRepoError(t *testing.T) {
 }
 
 func TestRecommendedPostsRanksDropsMissingExcludesOwn(t *testing.T) {
+	before := promtestutil.ToFloat64(metrics.RecommendColdStartTotal)
 	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
 		assert.Equal(t, "u_1", userID)
 		assert.Equal(t, 0, offset)
@@ -681,9 +684,11 @@ func TestRecommendedPostsRanksDropsMissingExcludesOwn(t *testing.T) {
 	assert.Equal(t, "p_1", result.Posts[1].ID)
 	assert.Equal(t, 4, int(result.TotalPosts), "total reflects the rankable set")
 	assert.Equal(t, 1, result.TotalPages, "totalPages derives from the AI total")
+	assert.Equal(t, before, promtestutil.ToFloat64(metrics.RecommendColdStartTotal), "a populated feed is not a cold start")
 }
 
 func TestRecommendedPostsColdStartFallsBackToRecency(t *testing.T) {
+	before := promtestutil.ToFloat64(metrics.RecommendColdStartTotal)
 	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
 		return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
 	}}
@@ -703,9 +708,11 @@ func TestRecommendedPostsColdStartFallsBackToRecency(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Posts, 2)
 	assert.Equal(t, int64(2), result.TotalPosts, "fallback totals come from the repository")
+	assert.Equal(t, before+1, promtestutil.ToFloat64(metrics.RecommendColdStartTotal), "an empty AI result must count as a cold start")
 }
 
 func TestRecommendedPostsAIErrorFallsBackToRecency(t *testing.T) {
+	before := promtestutil.ToFloat64(metrics.RecommendColdStartTotal)
 	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
 		return nil, errors.New("ai down")
 	}}
@@ -719,6 +726,7 @@ func TestRecommendedPostsAIErrorFallsBackToRecency(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Posts, 1)
 	assert.Equal(t, "p_1", result.Posts[0].ID)
+	assert.Equal(t, before, promtestutil.ToFloat64(metrics.RecommendColdStartTotal), "an AI failure is degradation, not a cold start")
 }
 
 func TestRecommendedPostsPaginationNormalized(t *testing.T) {

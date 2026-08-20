@@ -124,6 +124,21 @@ export const handlers = [
     }),
   ),
 
+  gql.query("RecommendedPosts", ({ request, variables }) =>
+    HttpResponse.json(
+      isAuthenticated(request)
+        ? {
+            data: {
+              recommendedPosts: listPosts(
+                variables?.page ?? 1,
+                variables?.limit ?? 6,
+              ),
+            },
+          }
+        : { errors: [{ message: "unauthorized" }] },
+    ),
+  ),
+
   gql.mutation("CreatePost", ({ variables }) =>
     HttpResponse.json({
       data: { createPost: createPost(variables?.input) },

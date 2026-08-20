@@ -147,6 +147,12 @@ describe("paginatedPostListKeyArgs", () => {
     const result = paginatedPostListKeyArgs({ tag: "alpha" });
     expect(result).toContain("tag:alpha");
   });
+
+  it("includes mode and seed in key args", () => {
+    const result = paginatedPostListKeyArgs({ mode: "SURPRISE", seed: 42 });
+    expect(result).toContain("mode:SURPRISE");
+    expect(result).toContain("seed:42");
+  });
 });
 
 describe("mergePaginatedPostLists edge cases", () => {
