@@ -178,6 +178,25 @@ func TestPostRepositoryPagination(t *testing.T) {
 	assert.Equal(t, 2, page.TotalPages)
 }
 
+func TestPostRepositoryFindAllExceptAuthor(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	repo := NewMongoPostRepository(startMongo(t, ctx))
+
+	_, err := repo.Create(ctx, &domain.Post{Title: "Mine", Slug: "mine", AuthorID: "u_1"})
+	require.NoError(t, err)
+	_, err = repo.Create(ctx, &domain.Post{Title: "Theirs", Slug: "theirs", AuthorID: "u_2"})
+	require.NoError(t, err)
+
+	page, err := repo.FindAllExceptAuthor(ctx, "u_1", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, page.Posts, 1, "own post excluded")
+	assert.Equal(t, "u_2", page.Posts[0].AuthorID)
+	assert.Equal(t, int64(1), page.TotalPosts)
+	assert.Equal(t, 1, page.TotalPages)
+}
+
 func TestTagRepository(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

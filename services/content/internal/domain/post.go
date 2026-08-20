@@ -57,6 +57,10 @@ type PostRepository interface {
 	UpdateSummary(ctx context.Context, id string, summary string, status PostStatus) error
 	Delete(ctx context.Context, id string) error
 	FindAll(ctx context.Context, page, limit int) (*PaginatedPosts, error)
+	// FindAllExceptAuthor is the recency-ordered list excluding one
+	// author, used by the personalized feed's cold-start fallback so a
+	// user never sees their own posts there either.
+	FindAllExceptAuthor(ctx context.Context, authorID string, page, limit int) (*PaginatedPosts, error)
 	FindByID(ctx context.Context, id string) (*Post, error)
 	FindBySlug(ctx context.Context, slug string) (*Post, error)
 	FindByIDs(ctx context.Context, ids []string) ([]*Post, error)

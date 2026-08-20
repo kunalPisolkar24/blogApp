@@ -165,6 +165,61 @@ func (e MessageRole) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type RecommendMode string
+
+const (
+	RecommendModeDefault  RecommendMode = "DEFAULT"
+	RecommendModeSurprise RecommendMode = "SURPRISE"
+)
+
+var AllRecommendMode = []RecommendMode{
+	RecommendModeDefault,
+	RecommendModeSurprise,
+}
+
+func (e RecommendMode) IsValid() bool {
+	switch e {
+	case RecommendModeDefault, RecommendModeSurprise:
+		return true
+	}
+	return false
+}
+
+func (e RecommendMode) String() string {
+	return string(e)
+}
+
+func (e *RecommendMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RecommendMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RecommendMode", str)
+	}
+	return nil
+}
+
+func (e RecommendMode) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RecommendMode) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RecommendMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type SummaryStatus string
 
 const (

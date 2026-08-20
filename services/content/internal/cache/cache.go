@@ -14,17 +14,22 @@ import (
 )
 
 const (
-	PostsTTL    = time.Minute
-	PostTTL     = 5 * time.Minute
-	TagsTTL     = 5 * time.Minute
-	SearchTTL   = 2 * time.Minute
-	RelatedTTL  = 2 * time.Minute
-	SeenViewTTL = 24 * time.Hour
+	PostsTTL   = time.Minute
+	PostTTL    = 5 * time.Minute
+	TagsTTL    = 5 * time.Minute
+	SearchTTL  = 2 * time.Minute
+	RelatedTTL = 2 * time.Minute
+	// RecommendTTL is short because a user's interest profile changes
+	// as they interact; the content service has no invalidation signal
+	// for it, so freshness is bounded by the TTL.
+	RecommendTTL = 30 * time.Second
+	SeenViewTTL  = 24 * time.Hour
 
-	PostsPattern   = "posts:*"
-	TagsPattern    = "tags:*"
-	SearchPattern  = "search:*"
-	RelatedPattern = "related:*"
+	PostsPattern     = "posts:*"
+	TagsPattern      = "tags:*"
+	SearchPattern    = "search:*"
+	RelatedPattern   = "related:*"
+	RecommendPattern = "recommend:*"
 
 	// dialTimeout bounds the initial connection handshake.
 	dialTimeout = 2 * time.Second
@@ -294,6 +299,10 @@ func KeySearch(query string, page, limit int) string {
 
 func KeyRelated(postID string, limit int) string {
 	return fmt.Sprintf("related:%s:l:%d", postID, limit)
+}
+
+func KeyRecommended(userID string, mode string, seed uint32, page, limit int) string {
+	return fmt.Sprintf("recommend:u:%s:m:%s:s:%d:p:%d:l:%d", userID, mode, seed, page, limit)
 }
 
 func KeySeenView(userID, postID string) string {

@@ -237,3 +237,21 @@ func derefStr(v *string) string {
 	}
 	return *v
 }
+
+// recommendModeToDomain maps the GraphQL enum to the domain mode. The
+// schema default is DEFAULT, so a nil (unspecified) mode means default.
+func recommendModeToDomain(mode *model.RecommendMode) domain.RecommendMode {
+	if mode != nil && *mode == model.RecommendModeSurprise {
+		return domain.RecommendModeSurprise
+	}
+	return domain.RecommendModeDefault
+}
+
+// seedToUint32 converts the optional seed argument to the unsigned value
+// the AI service expects, treating a missing or negative seed as 0.
+func seedToUint32(seed *int) uint32 {
+	if seed == nil || *seed < 0 {
+		return 0
+	}
+	return uint32(*seed)
+}

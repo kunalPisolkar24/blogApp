@@ -105,6 +105,40 @@ func TestQueryResolverSearchPosts(t *testing.T) {
 	assert.Equal(t, "Hello", result.Hits[0].Title)
 }
 
+func TestQueryResolverRecommendedPosts(t *testing.T) {
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		assert.Equal(t, "u_1", userID)
+		assert.Equal(t, 0, offset)
+		assert.Equal(t, 10, limit)
+		assert.Equal(t, domain.RecommendModeSurprise, mode)
+		assert.Equal(t, uint32(42), seed)
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 3}, nil
+	}}
+	postRepo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_1", Title: "Hello", AuthorID: "u_2"}}, nil
+	}}
+	postSvc := service.NewPostService(postRepo, &testutil.MockTagRepository{}, ai, nil, nil)
+	resolver := NewResolver(postSvc, service.NewTagService(&testutil.MockTagRepository{}, nil), service.NewChatService(&testutil.MockChatRepository{}, &testutil.MockAIService{}), service.NewPostInteractionService(&testutil.MockPostInteractionRepository{}, &testutil.MockEventPublisher{}, nil))
+
+	mode, seed := model.RecommendModeSurprise, 42
+	result, err := resolver.Query().RecommendedPosts(authenticatedContext("u_1"), intPtr(1), intPtr(10), &mode, &seed)
+
+	require.NoError(t, err)
+	require.Len(t, result.Posts, 1)
+	assert.Equal(t, "p_1", result.Posts[0].ID)
+	assert.Equal(t, "Hello", result.Posts[0].Title)
+	assert.Equal(t, 3, result.TotalPosts)
+}
+
+func TestQueryResolverRecommendedPostsUnauthorized(t *testing.T) {
+	resolver, _, _ := newTestResolver(t, nil, nil)
+
+	_, err := resolver.Query().RecommendedPosts(context.Background(), nil, nil, nil, nil)
+
+	require.Error(t, err)
+	assert.Equal(t, "unauthorized", err.(*gqlerror.Error).Message)
+}
+
 func TestQueryResolverTags(t *testing.T) {
 	tagRepo := &testutil.MockTagRepository{SearchFn: func(ctx context.Context, query string, limit int) ([]*domain.Tag, error) {
 		assert.Equal(t, "go", query)

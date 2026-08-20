@@ -654,6 +654,109 @@ func TestSearchPostsRepoError(t *testing.T) {
 	assert.ErrorIs(t, err, wantErr)
 }
 
+func TestRecommendedPostsRanksDropsMissingExcludesOwn(t *testing.T) {
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		assert.Equal(t, "u_1", userID)
+		assert.Equal(t, 0, offset)
+		assert.Equal(t, 10, limit)
+		assert.Equal(t, domain.RecommendModeSurprise, mode)
+		assert.Equal(t, uint32(42), seed)
+		return &domain.SearchResult{PostIDs: []string{"p_2", "mine", "missing", "p_1"}, Total: 4}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		assert.Equal(t, []string{"p_2", "mine", "missing", "p_1"}, ids)
+		return []*domain.Post{
+			{ID: "p_1", Title: "First", AuthorID: "u_2"},
+			{ID: "p_2", Title: "Second", AuthorID: "u_2"},
+			{ID: "mine", Title: "Mine", AuthorID: "u_1"},
+		}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	result, err := s.RecommendedPosts(context.Background(), "u_1", 1, 10, domain.RecommendModeSurprise, 42)
+
+	require.NoError(t, err)
+	require.Len(t, result.Posts, 2)
+	assert.Equal(t, "p_2", result.Posts[0].ID, "posts keep the AI rank order")
+	assert.Equal(t, "p_1", result.Posts[1].ID)
+	assert.Equal(t, 4, int(result.TotalPosts), "total reflects the rankable set")
+	assert.Equal(t, 1, result.TotalPages, "totalPages derives from the AI total")
+}
+
+func TestRecommendedPostsColdStartFallsBackToRecency(t *testing.T) {
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		return &domain.SearchResult{PostIDs: nil, Total: 0}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindAllExceptAuthorFn: func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
+		assert.Equal(t, "u_1", authorID)
+		return &domain.PaginatedPosts{
+			Posts:      []*domain.Post{{ID: "p_1"}, {ID: "p_2"}},
+			TotalPages: 1,
+			TotalPosts: 2,
+			Page:       page,
+		}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	result, err := s.RecommendedPosts(context.Background(), "u_1", 1, 10, domain.RecommendModeDefault, 0)
+
+	require.NoError(t, err)
+	require.Len(t, result.Posts, 2)
+	assert.Equal(t, int64(2), result.TotalPosts, "fallback totals come from the repository")
+}
+
+func TestRecommendedPostsAIErrorFallsBackToRecency(t *testing.T) {
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		return nil, errors.New("ai down")
+	}}
+	repo := &testutil.MockPostRepository{FindAllExceptAuthorFn: func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPosts, error) {
+		return &domain.PaginatedPosts{Posts: []*domain.Post{{ID: "p_1"}}, TotalPosts: 1, TotalPages: 1, Page: page}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	result, err := s.RecommendedPosts(context.Background(), "u_1", 1, 10, domain.RecommendModeDefault, 0)
+
+	require.NoError(t, err)
+	require.Len(t, result.Posts, 1)
+	assert.Equal(t, "p_1", result.Posts[0].ID)
+}
+
+func TestRecommendedPostsPaginationNormalized(t *testing.T) {
+	var gotOffset, gotLimit int
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		gotOffset, gotLimit = offset, limit
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 1}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_1", AuthorID: "u_2"}}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	_, err := s.RecommendedPosts(context.Background(), "u_1", 0, 500, domain.RecommendModeDefault, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 0, gotOffset, "page 1 starts at offset 0")
+	assert.Equal(t, 100, gotLimit, "limit clamps to the maximum")
+}
+
+func TestRecommendedPostsCached(t *testing.T) {
+	calls := 0
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		calls++
+		return &domain.SearchResult{PostIDs: []string{"p_1"}, Total: 1}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{{ID: "p_1", AuthorID: "u_2"}}, nil
+	}}
+	s := newSearchService(t, ai, repo, newMemCache(t))
+
+	_, err := s.RecommendedPosts(context.Background(), "u_1", 1, 10, domain.RecommendModeDefault, 0)
+	require.NoError(t, err)
+	_, err = s.RecommendedPosts(context.Background(), "u_1", 1, 10, domain.RecommendModeDefault, 0)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, calls, "second read should hit the cache")
+}
+
 func TestRelatedPostsRanksAndDropsMissing(t *testing.T) {
 	ai := &testutil.MockAIService{RelatedPostsFn: func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error) {
 		assert.Equal(t, "p_1", postID)
