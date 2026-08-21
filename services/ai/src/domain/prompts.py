@@ -51,6 +51,29 @@ REWRITE_QUERY_PROMPT = (
     "with no explanation, no quotes, and no punctuation at the end."
 )
 
+JUDGE_RELEVANCE_PROMPT = (
+    "You are a retrieval relevance judge. Given a user's question and "
+    "numbered blog post excerpts, decide whether the excerpts contain "
+    "information that helps answer the question. Return ONLY a raw JSON "
+    'object: {"relevant": true or false, "score": a 0.0-1.0 relevance '
+    "score}. No explanation, no markdown."
+)
+
+
+def judge_user_prompt(query: str, contexts: list[tuple[str, str]]) -> str:
+    """Assemble the judge prompt from the question and retrieved excerpts.
+
+    ``contexts`` is a list of (title, body) excerpts numbered in order,
+    matching how they were retrieved.
+    """
+    if contexts:
+        excerpts = "\n\n".join(
+            f"[{index}] {title}\n{body}"
+            for index, (title, body) in enumerate(contexts, start=1)
+        )
+        return f"Question: {query}\n\nExcerpts:\n{excerpts}"
+    return f"Question: {query}\n\nExcerpts: (none)"
+
 
 def rewrite_query_user_prompt(query: str, history: list[tuple[str, str]]) -> str:
     """Assemble the rewrite prompt from recent turns and the question.

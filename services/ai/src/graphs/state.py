@@ -54,6 +54,11 @@ class ChatState(TypedDict):
     # Request entry points; thread_id empty means the legacy stateless path.
     query: str
     thread_id: str
+    top_k: int
+
+    # How many retrieval rounds have run for this turn; the conditional
+    # edge after the judge reads it to enforce the rewrite budget.
+    retrieval_rounds: int
 
     # Conversation history; accumulates across turns (and compaction rewrites it).
     messages: Annotated[list[ChatMessage], add]

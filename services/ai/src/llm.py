@@ -13,6 +13,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt
 from src.config import settings
 from src.domain.prompts import (
     CHAT_SYSTEM_PROMPT,
+    JUDGE_RELEVANCE_PROMPT,
     POST_PROMPT,
     REWRITE_QUERY_PROMPT,
     SUMMARY_PROMPT,
@@ -305,6 +306,8 @@ class FakeLLMClient:
 
     _REWRITE_QUERY = "how do langgraph checkpoints persist conversation state"
 
+    _JUDGE_VERDICT = '{"relevant": true, "score": 0.9}'
+
     def __init__(self) -> None:
         self._responses = {
             SUMMARY_PROMPT: self._SUMMARY,
@@ -312,6 +315,7 @@ class FakeLLMClient:
             POST_PROMPT: self._POST,
             CHAT_SYSTEM_PROMPT: self._CHAT_ANSWER,
             REWRITE_QUERY_PROMPT: self._REWRITE_QUERY,
+            JUDGE_RELEVANCE_PROMPT: self._JUDGE_VERDICT,
         }
 
     @traceable(run_type="llm")
