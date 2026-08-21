@@ -120,6 +120,22 @@ This needs real embeddings, so run it against the `compose.local.yml` stack
 cites the expected posts for grounded rows and reports (without failing) any
 negative rows it still cites.
 
+### Recommender evals
+
+`scripts/run_reco_evals.py` scores the personalized feed (`RecommendFeed`) in
+DEFAULT and SURPRISE modes on precision@k against interaction-history topics,
+tag diversity, and seen-ratio (recommended ≠ already seen). The dataset — a
+fixed multi-topic corpus plus synthetic users with held-out interactions —
+lives in `scripts/reco_eval_data.py`. Run against the service-level stack:
+
+```bash
+make eval-reco-baseline   # record reco_eval_baseline.json (gitignored)
+make eval-reco            # re-run; exits non-zero on regression vs baseline
+```
+
+This is a local gate on purpose: run it before/after recommender changes. No
+CI wiring. See issue #163.
+
 ## Observability
 
 - **Metrics**: Prometheus endpoint on `:12666` — RPC counters/durations
