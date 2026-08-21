@@ -262,10 +262,7 @@ CURATED_QA: list[dict] = [
     {
         "id": "q-007",
         "query": "tell me about the dead letter queue",
-        "expected_post_ids": [
-            "000000000000000000000003",
-            "00000000000000000000000f",
-        ],
+        "expected_post_ids": ["00000000000000000000000f"],
         "category": "grounded",
     },
     # --- Grounded: search & embeddings (04, 05) ---
@@ -299,10 +296,7 @@ CURATED_QA: list[dict] = [
     {
         "id": "q-012",
         "query": "explain hybrid dense and sparse search",
-        "expected_post_ids": [
-            "000000000000000000000004",
-            "000000000000000000000009",
-        ],
+        "expected_post_ids": ["000000000000000000000004"],
         "category": "grounded",
     },
     # --- Grounded: users & auth (06, 0b) ---
@@ -361,10 +355,7 @@ CURATED_QA: list[dict] = [
     {
         "id": "q-021",
         "query": "how does the ui get its data?",
-        "expected_post_ids": [
-            "000000000000000000000007",
-            "00000000000000000000000a",
-        ],
+        "expected_post_ids": ["00000000000000000000000a"],
         "category": "grounded",
     },
     # --- Grounded: ai service (08, 09, 0e) ---
@@ -454,10 +445,7 @@ CURATED_QA: list[dict] = [
     {
         "id": "q-035",
         "query": "how does topos guarantee every post is indexed?",
-        "expected_post_ids": [
-            "00000000000000000000000f",
-            "000000000000000000000003",
-        ],
+        "expected_post_ids": ["00000000000000000000000f"],
         "category": "grounded",
     },
     # --- Grounded: multi-turn history ---

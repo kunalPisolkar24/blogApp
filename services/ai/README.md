@@ -115,6 +115,11 @@ make eval-verify   # indexes the corpus and asserts expected posts are retrieved
 This needs real embeddings, so run it against the `compose.local.yml` stack
 (Qdrant + Ollama), not the fake-embedding path.
 
+`scripts/verify_eval_chat.py` validates citations end-to-end via `ChatAnswer`
+(`make eval-verify-chat`). With `AI_LLM_MODE=real` it checks the assistant
+cites the expected posts for grounded rows and reports (without failing) any
+negative rows it still cites.
+
 ## Observability
 
 - **Metrics**: Prometheus endpoint on `:12666` — RPC counters/durations
