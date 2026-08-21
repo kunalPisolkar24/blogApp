@@ -104,6 +104,17 @@ account; example ids are deterministic, so re-running the upload is
 idempotent. Set `LANGSMITH_PROJECT` to ingest real chat runs (best-effort:
 runs that expose a query and cited post ids become examples). See issue #160.
 
+`scripts/verify_eval_dataset.py` checks the curated corpus is actually
+retrievable by the service (grounding validation). Bring up the service-level
+stack first, then:
+
+```bash
+make eval-verify   # indexes the corpus and asserts expected posts are retrieved
+```
+
+This needs real embeddings, so run it against the `compose.local.yml` stack
+(Qdrant + Ollama), not the fake-embedding path.
+
 ## Observability
 
 - **Metrics**: Prometheus endpoint on `:12666` — RPC counters/durations

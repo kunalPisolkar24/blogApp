@@ -13,6 +13,15 @@ corpus below is authored once and versioned alongside the questions. A future
 evaluation run indexes these exact posts and checks that the assistant cites
 the expected ones.
 
+Post ids
+--------
+In production, content post ids are MongoDB 24-character hex ObjectIds. The
+ai-service pads them to 32 chars to form Qdrant point ids and strips the pad
+back on read, so the ids returned by ``SearchPosts`` / cited by ``ChatAnswer``
+are exactly these 24-hex strings. Every ``post_id`` here follows that format;
+an evaluation run must index exactly these ids so cited ids line up with
+``expected_post_ids``.
+
 Row categories
 --------------
 * ``grounded``     -- a real question about the platform; expects one or more
@@ -33,11 +42,11 @@ from __future__ import annotations
 # dataset. Changing it creates a new versioned dataset.
 DATASET_NAME = "topos-chat-eval"
 
-# Fixed corpus. ``post_id`` values are stable strings: an evaluation run must
-# index exactly these ids so cited ids line up with ``expected_post_ids``.
+# Fixed corpus. ``post_id`` values are 24-hex (MongoDB ObjectId style), matching
+# how production content post ids look and how the ai-service returns them.
 CORPUS: list[dict] = [
     {
-        "post_id": "eval-001",
+        "post_id": "000000000000000000000001",
         "title": "Storing blog content in MongoDB",
         "body": (
             "Topos stores all blog content in MongoDB. Posts, tags, chats and "
@@ -49,7 +58,7 @@ CORPUS: list[dict] = [
         "tags": ["mongodb", "storage", "content"],
     },
     {
-        "post_id": "eval-002",
+        "post_id": "000000000000000000000002",
         "title": "Caching with Redis",
         "body": (
             "The content service caches posts, tags, search and related results "
@@ -60,7 +69,7 @@ CORPUS: list[dict] = [
         "tags": ["redis", "cache", "performance"],
     },
     {
-        "post_id": "eval-003",
+        "post_id": "000000000000000000000003",
         "title": "Event streaming with Kafka",
         "body": (
             "Post mutations are published to the Kafka posts topic. Background "
@@ -72,7 +81,7 @@ CORPUS: list[dict] = [
         "tags": ["kafka", "events", "workers"],
     },
     {
-        "post_id": "eval-004",
+        "post_id": "000000000000000000000004",
         "title": "Vector search in Qdrant",
         "body": (
             "Semantic search and related posts run on Qdrant with hybrid dense "
@@ -83,7 +92,7 @@ CORPUS: list[dict] = [
         "tags": ["qdrant", "vector", "search"],
     },
     {
-        "post_id": "eval-005",
+        "post_id": "000000000000000000000005",
         "title": "Embeddings with Ollama",
         "body": (
             "Posts and chat queries are embedded with Ollama running the "
@@ -94,7 +103,7 @@ CORPUS: list[dict] = [
         "tags": ["ollama", "embeddings", "model"],
     },
     {
-        "post_id": "eval-006",
+        "post_id": "000000000000000000000006",
         "title": "User accounts in Postgres",
         "body": (
             "The user service stores accounts, profiles and JWTs in Postgres. "
@@ -105,7 +114,7 @@ CORPUS: list[dict] = [
         "tags": ["postgres", "users", "database"],
     },
     {
-        "post_id": "eval-007",
+        "post_id": "000000000000000000000007",
         "title": "GraphQL federation gateway",
         "body": (
             "The frontend talks only to the Apollo Router gateway at "
@@ -116,7 +125,7 @@ CORPUS: list[dict] = [
         "tags": ["graphql", "gateway", "federation"],
     },
     {
-        "post_id": "eval-008",
+        "post_id": "000000000000000000000008",
         "title": "Content service in Go",
         "body": (
             "The content service is a Go GraphQL subgraph with Kafka workers. It "
@@ -127,7 +136,7 @@ CORPUS: list[dict] = [
         "tags": ["go", "content", "graphql"],
     },
     {
-        "post_id": "eval-009",
+        "post_id": "000000000000000000000009",
         "title": "AI service over gRPC",
         "body": (
             "The AI service is a Python gRPC service on port 50051. It produces "
@@ -138,7 +147,7 @@ CORPUS: list[dict] = [
         "tags": ["ai", "grpc", "python"],
     },
     {
-        "post_id": "eval-010",
+        "post_id": "00000000000000000000000a",
         "title": "Frontend with React and Vite",
         "body": (
             "The frontend is a React and Vite single-page app using shadcn/ui "
@@ -149,7 +158,7 @@ CORPUS: list[dict] = [
         "tags": ["frontend", "react", "vite"],
     },
     {
-        "post_id": "eval-011",
+        "post_id": "00000000000000000000000b",
         "title": "Authentication with JWTs",
         "body": (
             "The user service issues and validates JSON Web Tokens (JWTs) for "
@@ -160,7 +169,7 @@ CORPUS: list[dict] = [
         "tags": ["auth", "jwt", "security"],
     },
     {
-        "post_id": "eval-012",
+        "post_id": "00000000000000000000000c",
         "title": "Recommendations and taste profiles",
         "body": (
             "RecommendFeed builds a per-user interest profile in the Qdrant "
@@ -172,7 +181,7 @@ CORPUS: list[dict] = [
         "tags": ["recommendations", "personalization", "profile"],
     },
     {
-        "post_id": "eval-013",
+        "post_id": "00000000000000000000000d",
         "title": "Related posts",
         "body": (
             "The RelatedPosts RPC finds posts similar to an already-indexed post "
@@ -183,7 +192,7 @@ CORPUS: list[dict] = [
         "tags": ["related", "vector", "search"],
     },
     {
-        "post_id": "eval-014",
+        "post_id": "00000000000000000000000e",
         "title": "AI summaries and tags",
         "body": (
             "When a post is created the AI service writes a three-sentence "
@@ -194,7 +203,7 @@ CORPUS: list[dict] = [
         "tags": ["summarization", "tags", "ai"],
     },
     {
-        "post_id": "eval-015",
+        "post_id": "00000000000000000000000f",
         "title": "Reliable indexing with the dead-letter queue",
         "body": (
             "If AI summary or vector indexing fails, the event lands on the "
@@ -212,231 +221,250 @@ CORPUS: list[dict] = [
 #   expected_post_ids -- corpus post ids that should be cited ([] for negatives)
 #   category          -- grounded | gibberish | out_of_scope
 #   history           -- optional prior turns as (role, content); empty by default
-CORPUS_IDS = {post["post_id"] for post in CORPUS}
-
 CURATED_QA: list[dict] = [
-    # --- Grounded: storage & content (eval-001, eval-002, eval-003) ---
+    # --- Grounded: storage & content (01, 02, 03) ---
     {
         "id": "q-001",
         "query": "where does topos store blog posts?",
-        "expected_post_ids": ["eval-001"],
+        "expected_post_ids": ["000000000000000000000001"],
         "category": "grounded",
     },
     {
         "id": "q-002",
         "query": "what database holds the chat messages?",
-        "expected_post_ids": ["eval-001"],
+        "expected_post_ids": ["000000000000000000000001"],
         "category": "grounded",
     },
     {
         "id": "q-003",
         "query": "how does the platform cache content?",
-        "expected_post_ids": ["eval-002"],
+        "expected_post_ids": ["000000000000000000000002"],
         "category": "grounded",
     },
     {
         "id": "q-004",
         "query": "what happens to reads if redis goes down?",
-        "expected_post_ids": ["eval-002"],
+        "expected_post_ids": ["000000000000000000000002"],
         "category": "grounded",
     },
     {
         "id": "q-005",
         "query": "what is kafka used for in topos?",
-        "expected_post_ids": ["eval-003"],
+        "expected_post_ids": ["000000000000000000000003"],
         "category": "grounded",
     },
     {
         "id": "q-006",
         "query": "how are ai summaries triggered?",
-        "expected_post_ids": ["eval-003"],
+        "expected_post_ids": ["000000000000000000000003"],
         "category": "grounded",
     },
     {
         "id": "q-007",
         "query": "tell me about the dead letter queue",
-        "expected_post_ids": ["eval-003", "eval-015"],
+        "expected_post_ids": [
+            "000000000000000000000003",
+            "00000000000000000000000f",
+        ],
         "category": "grounded",
     },
-    # --- Grounded: search & embeddings (eval-004, eval-005) ---
+    # --- Grounded: search & embeddings (04, 05) ---
     {
         "id": "q-008",
         "query": "how does semantic search work?",
-        "expected_post_ids": ["eval-004"],
+        "expected_post_ids": ["000000000000000000000004"],
         "category": "grounded",
     },
     {
         "id": "q-009",
         "query": "what vector database powers related posts?",
-        "expected_post_ids": ["eval-004", "eval-013"],
+        "expected_post_ids": [
+            "000000000000000000000004",
+            "00000000000000000000000d",
+        ],
         "category": "grounded",
     },
     {
         "id": "q-010",
         "query": "what embedding model does topos use?",
-        "expected_post_ids": ["eval-005"],
+        "expected_post_ids": ["000000000000000000000005"],
         "category": "grounded",
     },
     {
         "id": "q-011",
         "query": "how are chat queries turned into vectors?",
-        "expected_post_ids": ["eval-005"],
+        "expected_post_ids": ["000000000000000000000005"],
         "category": "grounded",
     },
     {
         "id": "q-012",
         "query": "explain hybrid dense and sparse search",
-        "expected_post_ids": ["eval-004", "eval-009"],
+        "expected_post_ids": [
+            "000000000000000000000004",
+            "000000000000000000000009",
+        ],
         "category": "grounded",
     },
-    # --- Grounded: users & auth (eval-006, eval-011) ---
+    # --- Grounded: users & auth (06, 0b) ---
     {
         "id": "q-013",
         "query": "where are user accounts stored?",
-        "expected_post_ids": ["eval-006"],
+        "expected_post_ids": ["000000000000000000000006"],
         "category": "grounded",
     },
     {
         "id": "q-014",
         "query": "does topos use a primary database with replicas?",
-        "expected_post_ids": ["eval-006"],
+        "expected_post_ids": ["000000000000000000000006"],
         "category": "grounded",
     },
     {
         "id": "q-015",
         "query": "how does authentication work?",
-        "expected_post_ids": ["eval-011"],
+        "expected_post_ids": ["00000000000000000000000b"],
         "category": "grounded",
     },
     {
         "id": "q-016",
         "query": "what are jwt tokens used for?",
-        "expected_post_ids": ["eval-011"],
+        "expected_post_ids": ["00000000000000000000000b"],
         "category": "grounded",
     },
     {
         "id": "q-017",
         "query": "which service issues the jwt?",
-        "expected_post_ids": ["eval-006", "eval-011"],
+        "expected_post_ids": [
+            "000000000000000000000006",
+            "00000000000000000000000b",
+        ],
         "category": "grounded",
     },
-    # --- Grounded: gateway & frontend (eval-007, eval-010) ---
+    # --- Grounded: gateway & frontend (07, 0a) ---
     {
         "id": "q-018",
         "query": "what does the graphql gateway do?",
-        "expected_post_ids": ["eval-007"],
+        "expected_post_ids": ["000000000000000000000007"],
         "category": "grounded",
     },
     {
         "id": "q-019",
         "query": "which port does the gateway listen on?",
-        "expected_post_ids": ["eval-007"],
+        "expected_post_ids": ["000000000000000000000007"],
         "category": "grounded",
     },
     {
         "id": "q-020",
         "query": "what framework is the frontend built with?",
-        "expected_post_ids": ["eval-010"],
+        "expected_post_ids": ["00000000000000000000000a"],
         "category": "grounded",
     },
     {
         "id": "q-021",
         "query": "how does the ui get its data?",
-        "expected_post_ids": ["eval-007", "eval-010"],
+        "expected_post_ids": [
+            "000000000000000000000007",
+            "00000000000000000000000a",
+        ],
         "category": "grounded",
     },
-    # --- Grounded: ai service (eval-008, eval-009, eval-014) ---
+    # --- Grounded: ai service (08, 09, 0e) ---
     {
         "id": "q-022",
         "query": "what does the ai service do?",
-        "expected_post_ids": ["eval-009"],
+        "expected_post_ids": ["000000000000000000000009"],
         "category": "grounded",
     },
     {
         "id": "q-023",
         "query": "what protocol does the ai service speak?",
-        "expected_post_ids": ["eval-009"],
+        "expected_post_ids": ["000000000000000000000009"],
         "category": "grounded",
     },
     {
         "id": "q-024",
         "query": "how are post summaries generated?",
-        "expected_post_ids": ["eval-014", "eval-003"],
+        "expected_post_ids": [
+            "00000000000000000000000e",
+            "000000000000000000000003",
+        ],
         "category": "grounded",
     },
     {
         "id": "q-025",
         "query": "how many tags does the ai extract per post?",
-        "expected_post_ids": ["eval-014"],
+        "expected_post_ids": ["00000000000000000000000e"],
         "category": "grounded",
     },
     {
         "id": "q-026",
         "query": "what service owns posts and tags?",
-        "expected_post_ids": ["eval-008"],
+        "expected_post_ids": ["000000000000000000000008"],
         "category": "grounded",
     },
     {
         "id": "q-027",
         "query": "is the content service written in go?",
-        "expected_post_ids": ["eval-008"],
+        "expected_post_ids": ["000000000000000000000008"],
         "category": "grounded",
     },
     {
         "id": "q-028",
         "query": "which service runs the grpc endpoints?",
-        "expected_post_ids": ["eval-009"],
+        "expected_post_ids": ["000000000000000000000009"],
         "category": "grounded",
     },
-    # --- Grounded: recommendations (eval-012, eval-013) ---
+    # --- Grounded: recommendations (0c, 0d) ---
     {
         "id": "q-029",
         "query": "how are recommendations personalized?",
-        "expected_post_ids": ["eval-012"],
+        "expected_post_ids": ["00000000000000000000000c"],
         "category": "grounded",
     },
     {
         "id": "q-030",
         "query": "what weights are given to likes versus views?",
-        "expected_post_ids": ["eval-012"],
+        "expected_post_ids": ["00000000000000000000000c"],
         "category": "grounded",
     },
     {
         "id": "q-031",
         "query": "what does surprise mode do?",
-        "expected_post_ids": ["eval-012"],
+        "expected_post_ids": ["00000000000000000000000c"],
         "category": "grounded",
     },
     {
         "id": "q-032",
         "query": "how are related posts found?",
-        "expected_post_ids": ["eval-013"],
+        "expected_post_ids": ["00000000000000000000000d"],
         "category": "grounded",
     },
     {
         "id": "q-033",
         "query": "does related posts re-embed the post at read time?",
-        "expected_post_ids": ["eval-013"],
+        "expected_post_ids": ["00000000000000000000000d"],
         "category": "grounded",
     },
-    # --- Grounded: reliability (eval-015) ---
+    # --- Grounded: reliability (0f) ---
     {
         "id": "q-034",
         "query": "what happens if vector indexing fails?",
-        "expected_post_ids": ["eval-015"],
+        "expected_post_ids": ["00000000000000000000000f"],
         "category": "grounded",
     },
     {
         "id": "q-035",
         "query": "how does topos guarantee every post is indexed?",
-        "expected_post_ids": ["eval-015", "eval-003"],
+        "expected_post_ids": [
+            "00000000000000000000000f",
+            "000000000000000000000003",
+        ],
         "category": "grounded",
     },
     # --- Grounded: multi-turn history ---
     {
         "id": "q-036",
         "query": "what stores the posts then?",
-        "expected_post_ids": ["eval-001"],
+        "expected_post_ids": ["000000000000000000000001"],
         "category": "grounded",
         "history": [
             ("user", "what is topos?"),
@@ -446,7 +474,7 @@ CURATED_QA: list[dict] = [
     {
         "id": "q-037",
         "query": "and how does it search them?",
-        "expected_post_ids": ["eval-004"],
+        "expected_post_ids": ["000000000000000000000004"],
         "category": "grounded",
         "history": [
             ("user", "where are posts kept?"),
@@ -456,7 +484,10 @@ CURATED_QA: list[dict] = [
     {
         "id": "q-038",
         "query": "so the ai service does the embeddings?",
-        "expected_post_ids": ["eval-009", "eval-005"],
+        "expected_post_ids": [
+            "000000000000000000000009",
+            "000000000000000000000005",
+        ],
         "category": "grounded",
         "history": [
             ("user", "what generates summaries?"),

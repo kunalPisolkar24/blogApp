@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local eval-verify load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -33,6 +33,12 @@ eval-dataset:
 
 eval-dataset-local:
 	poetry run python scripts/build_eval_dataset.py --local-only
+
+# Verify the curated corpus is actually retrievable by the running service.
+# Requires the service-level stack:
+#   docker compose -f services/ai/compose.local.yml up -d --build
+eval-verify:
+	poetry run python scripts/verify_eval_dataset.py
 
 lint:
 	poetry run ruff check .
