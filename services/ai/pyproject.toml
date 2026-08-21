@@ -24,6 +24,9 @@ dependencies = [
     "snowballstemmer (>=2.2.0,<3.0.0)",
     "langgraph (>=1.2.11,<2.0.0)",
     "langgraph-checkpoint-postgres (>=3.1.2,<4.0.0)",
+    # The checkpoint saver pulls in bare psycopg, which needs libpq at
+    # runtime; the binary extra ships its own and works in slim images.
+    "psycopg[binary] (>=3.2.0,<4.0.0)",
     "langsmith (>=0.11.1,<0.12.0)"
 ]
 

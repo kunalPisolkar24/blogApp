@@ -7,6 +7,7 @@ x-ai-service-env: &ai-service-env
   LLM_MODEL: ${AI_LIGHTNING_MODEL:-lightning-ai/gpt-oss-20b}
   LLM_MODE: ${AI_LLM_MODE:-fake}
   LLM_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
+  CHECKPOINT_DB_URL: ${AI_CHECKPOINT_DB_URL:-postgresql://ai_checkpointer:ai_checkpointer_pass@ai-postgres:5432/ai_checkpoints}
   QDRANT_URL: ${AI_QDRANT_URL:-http://qdrant:6333}
   QDRANT_API_KEY: ${AI_QDRANT_API_KEY:-}
   QDRANT_VECTOR_SIZE: ${AI_QDRANT_VECTOR_SIZE:-1024}
@@ -21,6 +22,27 @@ include:
   - path: infra/embedding.yml
 
 services:
+  ai-postgres:
+    image: postgres:16-alpine
+    container_name: ${AI_POSTGRES_CONTAINER:-prod-ai-postgres}
+    restart: unless-stopped
+    ports:
+      - "${AI_POSTGRES_EXT_PORT:-5433}:5432"
+    environment:
+      - POSTGRES_USER=${AI_POSTGRES_USER:-ai_checkpointer}
+      - POSTGRES_PASSWORD=${AI_POSTGRES_PASSWORD:-ai_checkpointer_pass}
+      - POSTGRES_DB=${AI_POSTGRES_DB:-ai_checkpoints}
+    volumes:
+      - ai_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AI_POSTGRES_USER:-ai_checkpointer} -d ${AI_POSTGRES_DB:-ai_checkpoints}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+
   ai-service:
     build:
       context: .
@@ -38,6 +60,8 @@ services:
         condition: service_healthy
       embedding-model-init:
         condition: service_completed_successfully
+      ai-postgres:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -57,6 +81,9 @@ services:
       start_period: 10s
     networks:
       - app-network
+
+volumes:
+  ai_postgres_data:
 
 networks:
   app-network:
