@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "lightning-ai/gpt-oss-20b"
     LLM_TIMEOUT_SECONDS: int = 60
+    # LangGraph checkpoint store (Postgres). Empty keeps graphs on the
+    # in-memory checkpointer, so local dev and tests need no database.
+    CHECKPOINT_DB_URL: str = ""
+    # LangSmith tracing on LLM calls; the SDK reads these same names from
+    # the environment directly.
+    LANGCHAIN_TRACING: bool = False
+    LANGCHAIN_API_KEY: str = ""
+    LANGCHAIN_PROJECT: str = "topos-ai"
     MAX_POST_CHARS: int = 5000
     MAX_INPUT_CHARS: int = 5000
     MAX_BODY_CHARS: int = 3000

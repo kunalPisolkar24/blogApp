@@ -147,7 +147,7 @@ def upload_to_langsmith(rows: list[dict], dataset_name: str) -> None:
     except ImportError as exc:  # pragma: no cover - depends on optional dep
         raise SystemExit(
             "langsmith is not installed. Add it with "
-            "`poetry add --group dev langsmith`, or run with --local-only."
+            "`poetry add langsmith`, or run with --local-only."
         ) from exc
 
     api_key = os.environ.get("LANGSMITH_API_KEY")
