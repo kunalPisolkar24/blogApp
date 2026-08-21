@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -25,6 +25,14 @@ integration:
 
 integration-clean:
 	docker image rm -f topos-ai:integration || true
+
+# --- Evaluation Dataset ---
+
+eval-dataset:
+	poetry run python scripts/build_eval_dataset.py
+
+eval-dataset-local:
+	poetry run python scripts/build_eval_dataset.py --local-only
 
 lint:
 	poetry run ruff check .
