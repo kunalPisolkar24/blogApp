@@ -39,6 +39,12 @@ LLM_TOKENS = Counter(
     ["method", "token_type"],
 )
 
+QUERY_REWRITES = Counter(
+    "query_rewrites_total",
+    "Outcomes of the chat graph's query rewrite node",
+    ["outcome"],
+)
+
 EMBEDDING_REQUESTS = Counter(
     "embedding_requests_total",
     "Total number of embedding provider calls",
