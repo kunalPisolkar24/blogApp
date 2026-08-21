@@ -43,6 +43,31 @@ CHAT_SYSTEM_PROMPT = (
     "not find any relevant posts. Keep the answer concise and helpful."
 )
 
+REWRITE_QUERY_PROMPT = (
+    "You are a search query rewriter. Rewrite the user's question into a "
+    "short, self-contained search query: fix typos and spelling, expand "
+    "vague wording into specific terms, and resolve pronouns or references "
+    "using the conversation so far. Return ONLY the rewritten query text "
+    "with no explanation, no quotes, and no punctuation at the end."
+)
+
+
+def rewrite_query_user_prompt(query: str, history: list[tuple[str, str]]) -> str:
+    """Assemble the rewrite prompt from recent turns and the question.
+
+    ``history`` is a list of (role, content) turns, most recent last;
+    it lets follow-up questions like \"what about its pricing?\" resolve
+    to a standalone query.
+    """
+    parts: list[str] = []
+    if history:
+        transcript = "\n".join(
+            f"{role.capitalize()}: {content}" for role, content in history
+        )
+        parts.append(f"Conversation so far:\n{transcript}")
+    parts.append(f"Question: {query}")
+    return "\n\n".join(parts)
+
 
 def chat_user_prompt(
     query: str, history: list[tuple[str, str]], contexts: list[tuple[str, str]]

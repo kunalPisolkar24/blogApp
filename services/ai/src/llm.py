@@ -14,6 +14,7 @@ from src.config import settings
 from src.domain.prompts import (
     CHAT_SYSTEM_PROMPT,
     POST_PROMPT,
+    REWRITE_QUERY_PROMPT,
     SUMMARY_PROMPT,
     TAGS_PROMPT,
 )
@@ -302,12 +303,15 @@ class FakeLLMClient:
         "Related posts reuse the stored vector at read time. [2]"
     )
 
+    _REWRITE_QUERY = "how do langgraph checkpoints persist conversation state"
+
     def __init__(self) -> None:
         self._responses = {
             SUMMARY_PROMPT: self._SUMMARY,
             TAGS_PROMPT: self._TAGS,
             POST_PROMPT: self._POST,
             CHAT_SYSTEM_PROMPT: self._CHAT_ANSWER,
+            REWRITE_QUERY_PROMPT: self._REWRITE_QUERY,
         }
 
     @traceable(run_type="llm")
