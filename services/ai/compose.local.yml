@@ -98,6 +98,9 @@ services:
       - LLM_MODEL=${AI_LIGHTNING_MODEL:-lightning-ai/gpt-oss-20b}
       - LLM_MODE=${AI_LLM_MODE:-fake}
       - LLM_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-60}
+      - LANGCHAIN_TRACING=${AI_LANGCHAIN_TRACING:-false}
+      - LANGCHAIN_API_KEY=${AI_LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=${AI_LANGCHAIN_PROJECT:-topos-ai}
       - CHECKPOINT_DB_URL=${AI_CHECKPOINT_DB_URL:-postgresql://ai_checkpointer:ai_checkpointer_pass@ai-postgres:5432/ai_checkpoints}
       - QDRANT_URL=${AI_QDRANT_URL:-http://qdrant:6333}
       - QDRANT_API_KEY=${AI_QDRANT_API_KEY:-}
