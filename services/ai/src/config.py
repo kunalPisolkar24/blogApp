@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # LangGraph checkpoint store (Postgres). Empty keeps graphs on the
     # in-memory checkpointer, so local dev and tests need no database.
     CHECKPOINT_DB_URL: str = ""
+    # Attempts, 5s apart, before failing startup when the checkpoint
+    # store is unreachable.
+    CHECKPOINT_STARTUP_RETRIES: int = 12
     # LangSmith tracing on LLM calls; the SDK reads these same names from
     # the environment directly.
     LANGCHAIN_TRACING: bool = False
