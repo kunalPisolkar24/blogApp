@@ -85,6 +85,41 @@ make load-test       # k6 load tests against a fake-LLM container
 make load-test-search   # k6 search load test (seeds posts, checks gibberish is filtered)
 ```
 
+## Evaluation dataset
+
+`scripts/build_eval_dataset.py` builds the chat evaluation dataset
+(`topos-chat-eval`) used to measure how prompt or retrieval changes affect
+citation quality. It merges a curated set (authored in
+`scripts/eval_data.py`: ~50 questions with expected cited post ids, plus
+gibberish and out-of-scope negatives) with optional real chat traces pulled
+from LangSmith.
+
+```bash
+make eval-dataset-local   # write the local JSONL artifact only (no account needed)
+make eval-dataset         # also upload to LangSmith when LANGSMITH_API_KEY is set
+```
+
+The local artifact (`eval_dataset.jsonl`) is reproducible with no LangSmith
+account; example ids are deterministic, so re-running the upload is
+idempotent. Set `LANGSMITH_PROJECT` to ingest real chat runs (best-effort:
+runs that expose a query and cited post ids become examples). See issue #160.
+
+`scripts/verify_eval_dataset.py` checks the curated corpus is actually
+retrievable by the service (grounding validation). Bring up the service-level
+stack first, then:
+
+```bash
+make eval-verify   # indexes the corpus and asserts expected posts are retrieved
+```
+
+This needs real embeddings, so run it against the `compose.local.yml` stack
+(Qdrant + Ollama), not the fake-embedding path.
+
+`scripts/verify_eval_chat.py` validates citations end-to-end via `ChatAnswer`
+(`make eval-verify-chat`). With `AI_LLM_MODE=real` it checks the assistant
+cites the expected posts for grounded rows and reports (without failing) any
+negative rows it still cites.
+
 ## Observability
 
 - **Metrics**: Prometheus endpoint on `:12666` — RPC counters/durations

@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local eval-verify eval-verify-chat load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -25,6 +25,26 @@ integration:
 
 integration-clean:
 	docker image rm -f topos-ai:integration || true
+
+# --- Evaluation Dataset ---
+
+eval-dataset:
+	poetry run python scripts/build_eval_dataset.py
+
+eval-dataset-local:
+	poetry run python scripts/build_eval_dataset.py --local-only
+
+# Verify the curated corpus is actually retrievable by the running service.
+# Requires the service-level stack:
+#   docker compose -f services/ai/compose.local.yml up -d --build
+eval-verify:
+	poetry run python scripts/verify_eval_dataset.py
+
+# Validate citations end-to-end via ChatAnswer (real or fake LLM). Requires the
+# service-level stack; set AI_LLM_MODE=real with LIGHTNING_AI_API_KEY /
+# AI_LIGHTNING_MODEL for a real-LLM run.
+eval-verify-chat:
+	poetry run python scripts/verify_eval_chat.py
 
 lint:
 	poetry run ruff check .
