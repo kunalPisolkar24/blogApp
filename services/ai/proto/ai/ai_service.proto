@@ -124,6 +124,9 @@ message ChatAnswerRequest {
   string query = 1;
   repeated ChatMessage history = 2;
   uint32 top_k = 3;
+  // thread_id groups a conversation for checkpointed sessions. Empty
+  // keeps the request stateless.
+  string thread_id = 4;
 }
 
 message ChatChunk {

@@ -183,14 +183,16 @@ class ChatMessage(_message.Message):
     def __init__(self, role: _Optional[str] = ..., content: _Optional[str] = ...) -> None: ...
 
 class ChatAnswerRequest(_message.Message):
-    __slots__ = ("query", "history", "top_k")
+    __slots__ = ("query", "history", "top_k", "thread_id")
     QUERY_FIELD_NUMBER: _ClassVar[int]
     HISTORY_FIELD_NUMBER: _ClassVar[int]
     TOP_K_FIELD_NUMBER: _ClassVar[int]
+    THREAD_ID_FIELD_NUMBER: _ClassVar[int]
     query: str
     history: _containers.RepeatedCompositeFieldContainer[ChatMessage]
     top_k: int
-    def __init__(self, query: _Optional[str] = ..., history: _Optional[_Iterable[_Union[ChatMessage, _Mapping]]] = ..., top_k: _Optional[int] = ...) -> None: ...
+    thread_id: str
+    def __init__(self, query: _Optional[str] = ..., history: _Optional[_Iterable[_Union[ChatMessage, _Mapping]]] = ..., top_k: _Optional[int] = ..., thread_id: _Optional[str] = ...) -> None: ...
 
 class ChatChunk(_message.Message):
     __slots__ = ("delta", "done", "cited_post_ids", "error")

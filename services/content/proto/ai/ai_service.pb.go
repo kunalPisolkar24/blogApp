@@ -1140,10 +1140,13 @@ func (x *ChatMessage) GetContent() string {
 }
 
 type ChatAnswerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Query         string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	History       []*ChatMessage         `protobuf:"bytes,2,rep,name=history,proto3" json:"history,omitempty"`
-	TopK          uint32                 `protobuf:"varint,3,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Query   string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	History []*ChatMessage         `protobuf:"bytes,2,rep,name=history,proto3" json:"history,omitempty"`
+	TopK    uint32                 `protobuf:"varint,3,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	// thread_id groups a conversation for checkpointed sessions. Empty
+	// keeps the request stateless.
+	ThreadId      string `protobuf:"bytes,4,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1197,6 +1200,13 @@ func (x *ChatAnswerRequest) GetTopK() uint32 {
 		return x.TopK
 	}
 	return 0
+}
+
+func (x *ChatAnswerRequest) GetThreadId() string {
+	if x != nil {
+		return x.ThreadId
+	}
+	return ""
 }
 
 type ChatChunk struct {
@@ -1636,11 +1646,12 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x06vector\x18\x01 \x03(\x02R\x06vector\";\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"i\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"\x86\x01\n" +
 	"\x11ChatAnswerRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12)\n" +
 	"\ahistory\x18\x02 \x03(\v2\x0f.ai.ChatMessageR\ahistory\x12\x13\n" +
-	"\x05top_k\x18\x03 \x01(\rR\x04topK\"q\n" +
+	"\x05top_k\x18\x03 \x01(\rR\x04topK\x12\x1b\n" +
+	"\tthread_id\x18\x04 \x01(\tR\bthreadId\"q\n" +
 	"\tChatChunk\x12\x14\n" +
 	"\x05delta\x18\x01 \x01(\tR\x05delta\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12$\n" +
