@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     CHAT_MAX_TOP_K: int = 10
     CHAT_MAX_HISTORY_TURNS: int = 6
     CHAT_MAX_CONTEXT_CHARS: int = 12000
+    # Retrieval rounds per chat turn; a failing relevance verdict loops
+    # back through rewrite_query until this budget is spent.
+    CHAT_MAX_RETRIEVAL_ROUNDS: int = 2
 
     EMBEDDING_MODE: Literal["fake", "ollama"] = "fake"
     EMBEDDING_URL: str = "http://embedding-service:11434"
