@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local eval-verify eval-verify-chat load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local eval-verify eval-verify-chat eval-reco eval-reco-baseline load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -45,6 +45,15 @@ eval-verify:
 # AI_LIGHTNING_MODEL for a real-LLM run.
 eval-verify-chat:
 	poetry run python scripts/verify_eval_chat.py
+
+# Recommender evals (precision@k, tag diversity, seen-ratio) against the live
+# service-level stack (compose.local.yml). Record a baseline first, then use
+# eval-reco as the local regression gate before/after recommender changes.
+eval-reco-baseline:
+	poetry run python scripts/run_reco_evals.py --update-baseline
+
+eval-reco:
+	poetry run python scripts/run_reco_evals.py
 
 lint:
 	poetry run ruff check .

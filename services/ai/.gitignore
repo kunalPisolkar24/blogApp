@@ -17,3 +17,4 @@ src/generated/*
 !src/generated/*.pyi
 .venv
 eval_dataset.jsonl
+reco_eval_baseline.json
