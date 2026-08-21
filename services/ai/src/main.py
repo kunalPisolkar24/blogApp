@@ -4,12 +4,18 @@ import signal
 
 import grpc
 from grpc_health.v1._async import HealthServicer
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from prometheus_client import start_http_server
 
 from src.api.server import create_server
 from src.api.service import AIService
 from src.config import settings
 from src.embeddings import FakeEmbeddingClient, OllamaEmbeddingClient
+from src.graphs.checkpointer import (
+    build_checkpointer,
+    close_checkpointer,
+    start_checkpointer,
+)
 from src.llm import FakeLLMClient, LLMClient
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
@@ -53,6 +59,24 @@ async def _ensure_search_ready(search: SearchStore) -> None:
             await asyncio.sleep(5)
 
 
+async def _ensure_checkpointer_ready(saver: BaseCheckpointSaver) -> None:
+    """Wait for the checkpoint store with a short backoff instead of
+    crashing on a transient startup blip (e.g. Postgres still booting)."""
+    for attempt in range(1, settings.CHECKPOINT_STARTUP_RETRIES + 1):
+        try:
+            await start_checkpointer(saver)
+            return
+        except Exception:
+            if attempt == settings.CHECKPOINT_STARTUP_RETRIES:
+                raise
+            logger.warning(
+                "checkpoint store not ready, retrying (%d/%d)",
+                attempt,
+                settings.CHECKPOINT_STARTUP_RETRIES,
+            )
+            await asyncio.sleep(5)
+
+
 async def serve() -> None:
     setup_logging()
     setup_tracing()
@@ -74,12 +98,16 @@ async def serve() -> None:
     )
     await _ensure_search_ready(search)
 
+    checkpointer = build_checkpointer()
+    await _ensure_checkpointer_ready(checkpointer)
+
     server, health_servicer = await create_server(AIService(llm, search, embeddings))
     handle_graceful_shutdown(server, health_servicer)
     try:
         await server.start()
         await server.wait_for_termination()
     finally:
+        await close_checkpointer(checkpointer)
         await llm.close()
         await search.close()
         await embeddings.close()
