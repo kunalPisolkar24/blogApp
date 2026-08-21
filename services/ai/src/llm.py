@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
+from langsmith import traceable
 from tenacity import retry, retry_if_exception, stop_after_attempt
 
 from src.config import settings
@@ -177,6 +178,7 @@ class LLMClient:
             payload["stream_options"] = {"include_usage": True}
         return payload
 
+    @traceable(run_type="llm")
     async def generate_completion(self, system: str, user: str) -> str:
         payload = self._payload(system, user, stream=False)
         headers = {
@@ -203,6 +205,7 @@ class LLMClient:
             metrics.LLM_REQUESTS.labels(status=status).inc()
         return result
 
+    @traceable(run_type="llm")
     async def generate_stream(self, system: str, user: str) -> AsyncIterator[str]:
         """Stream completion deltas from the provider.
 
@@ -307,9 +310,11 @@ class FakeLLMClient:
             CHAT_SYSTEM_PROMPT: self._CHAT_ANSWER,
         }
 
+    @traceable(run_type="llm")
     async def generate_completion(self, system: str, user: str) -> str:
         return self._responses.get(system, self._SUMMARY)
 
+    @traceable(run_type="llm")
     async def generate_stream(self, system: str, user: str) -> AsyncIterator[str]:
         """Emit the canned answer word by word so streaming is exercised."""
         answer = self._responses.get(system, self._SUMMARY)

@@ -17,6 +17,7 @@ from src.graphs.checkpointer import (
     start_checkpointer,
 )
 from src.llm import FakeLLMClient, LLMClient
+from src.observability.langsmith import setup_langsmith
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
 from src.vector import MemoryIndex, SearchIndex, SearchStore
@@ -80,6 +81,7 @@ async def _ensure_checkpointer_ready(saver: BaseCheckpointSaver) -> None:
 async def serve() -> None:
     setup_logging()
     setup_tracing()
+    setup_langsmith()
     logger.info("AI service starting")
 
     start_http_server(settings.METRICS_PORT)
