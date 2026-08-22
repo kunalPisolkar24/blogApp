@@ -402,7 +402,7 @@ func TestMutationResolverCreateChatUnauthorized(t *testing.T) {
 }
 
 func TestMutationResolverAskChat(t *testing.T) {
-	ai := &testutil.MockAIService{ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+	ai := &testutil.MockAIService{ChatAnswerFn: func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 		return &domain.ChatAnswer{Content: "Topos is a blog platform.", CitedPostIDs: []string{"p_1"}}, nil
 	}}
 	repo := &testutil.MockChatRepository{UserID: "u_1"}

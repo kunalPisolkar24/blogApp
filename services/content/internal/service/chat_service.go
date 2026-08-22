@@ -105,7 +105,7 @@ func (s *ChatService) AskChat(ctx context.Context, chatID, userID, query string)
 		return nil, err
 	}
 
-	answer, err := s.ai.ChatAnswer(ctx, query, history, chatTopK)
+	answer, err := s.ai.ChatAnswer(ctx, chatID, query, history, chatTopK)
 	if err != nil {
 		return nil, err
 	}

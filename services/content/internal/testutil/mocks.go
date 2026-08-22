@@ -144,7 +144,7 @@ type MockAIService struct {
 	SearchPostsFn       func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
 	RelatedPostsFn      func(ctx context.Context, postID string, limit int) (*domain.SearchResult, error)
 	RelatedPostsBatchFn func(ctx context.Context, postIDs []string, limit int) (map[string]*domain.SearchResult, error)
-	ChatAnswerFn        func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
+	ChatAnswerFn        func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error)
 	UpdateUserProfileFn func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error
 	RecommendFeedFn     func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error)
 	DeleteUserProfileFn func(ctx context.Context, userID string) error
@@ -207,9 +207,9 @@ func (m *MockAIService) RelatedPostsBatch(ctx context.Context, postIDs []string,
 	return map[string]*domain.SearchResult{}, nil
 }
 
-func (m *MockAIService) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+func (m *MockAIService) ChatAnswer(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 	if m.ChatAnswerFn != nil {
-		return m.ChatAnswerFn(ctx, query, history, topK)
+		return m.ChatAnswerFn(ctx, threadID, query, history, topK)
 	}
 	return &domain.ChatAnswer{Content: "answer"}, nil
 }

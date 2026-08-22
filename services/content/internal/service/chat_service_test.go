@@ -108,7 +108,7 @@ func TestDeleteChatForbidden(t *testing.T) {
 
 func TestAskChatPersistsBothMessages(t *testing.T) {
 	ai := &testutil.MockAIService{
-		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+		ChatAnswerFn: func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 			assert.Equal(t, "what is topos?", query)
 			assert.Equal(t, 5, topK)
 			return &domain.ChatAnswer{Content: "Topos is a blog platform.", CitedPostIDs: []string{"p_1"}}, nil
@@ -139,7 +139,8 @@ func TestAskChatPersistsBothMessages(t *testing.T) {
 
 func TestAskChatBuildsHistoryFromRecentTurns(t *testing.T) {
 	ai := &testutil.MockAIService{
-		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+		ChatAnswerFn: func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+			assert.Equal(t, "c_1", threadID)
 			assert.Equal(t, []domain.ChatTurn{
 				{Role: domain.ChatMessageRoleUser, Content: "first"},
 				{Role: domain.ChatMessageRoleAssistant, Content: "answer"},
@@ -171,7 +172,7 @@ func TestAskChatBuildsHistoryFromRecentTurns(t *testing.T) {
 func TestAskChatFailsWhenAIErrors(t *testing.T) {
 	aiErr := errors.New("ai down")
 	ai := &testutil.MockAIService{
-		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+		ChatAnswerFn: func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 			return nil, aiErr
 		},
 	}
@@ -194,7 +195,7 @@ func TestAskChatFailsWhenAIErrors(t *testing.T) {
 
 func TestAskChatRollsBackUserMessageWhenAssistantPersistFails(t *testing.T) {
 	ai := &testutil.MockAIService{
-		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+		ChatAnswerFn: func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 			return &domain.ChatAnswer{Content: "ok"}, nil
 		},
 	}
@@ -221,7 +222,7 @@ func TestAskChatRollsBackUserMessageWhenAssistantPersistFails(t *testing.T) {
 
 func TestAskChatToleratesFailedRollback(t *testing.T) {
 	ai := &testutil.MockAIService{
-		ChatAnswerFn: func(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+		ChatAnswerFn: func(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 			return &domain.ChatAnswer{Content: "ok"}, nil
 		},
 	}

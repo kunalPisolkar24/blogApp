@@ -215,10 +215,10 @@ func (c *resilientClient) RelatedPostsBatch(ctx context.Context, postIDs []strin
 	)
 }
 
-func (c *resilientClient) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+func (c *resilientClient) ChatAnswer(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 	return degraded(c.breaker(domainChat), "chat",
-		func() (*domain.ChatAnswer, error) { return c.primary.ChatAnswer(ctx, query, history, topK) },
-		func() (*domain.ChatAnswer, error) { return c.fallback.ChatAnswer(ctx, query, history, topK) },
+		func() (*domain.ChatAnswer, error) { return c.primary.ChatAnswer(ctx, threadID, query, history, topK) },
+		func() (*domain.ChatAnswer, error) { return c.fallback.ChatAnswer(ctx, threadID, query, history, topK) },
 	)
 }
 
@@ -415,14 +415,15 @@ func (c *grpcClient) RelatedPostsBatch(ctx context.Context, postIDs []string, li
 // ChatAnswer streams the AI response over gRPC and collects the full
 // answer plus the cited post ids. A mid-stream error reported by the
 // service fails the call so nothing incomplete is persisted.
-func (c *grpcClient) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+func (c *grpcClient) ChatAnswer(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
 	defer cancel()
 
 	req := &pb.ChatAnswerRequest{
-		Query:   query,
-		History: mapTurnsToProto(history),
-		TopK:    uint32(topK),
+		ThreadId: threadID,
+		Query:    query,
+		History:  mapTurnsToProto(history),
+		TopK:     uint32(topK),
 	}
 
 	stream, err := c.client.ChatAnswer(ctx, req)
