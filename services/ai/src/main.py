@@ -11,7 +11,7 @@ from src.api.server import create_server
 from src.api.service import AIService
 from src.config import settings
 from src.embeddings import FakeEmbeddingClient, OllamaEmbeddingClient
-from src.graphs.chat_graph import build_chat_graph
+from src.graphs.chat_graph import ChatGraphs, build_chat_graph
 from src.graphs.checkpointer import (
     build_checkpointer,
     close_checkpointer,
@@ -120,8 +120,11 @@ async def serve() -> None:
         llm, search, embeddings, post_fetcher=post_fetcher
     )
     logger.info("chat graphs compiled for sessions and stateless runs")
+    chat_graphs = ChatGraphs(sessioned=_session_graph, stateless=_stateless_graph)
 
-    server, health_servicer = await create_server(AIService(llm, search, embeddings))
+    server, health_servicer = await create_server(
+        AIService(llm, search, embeddings, chat_graphs=chat_graphs)
+    )
     handle_graceful_shutdown(server, health_servicer)
     try:
         await server.start()

@@ -4,12 +4,15 @@ import json
 import logging
 import re
 
+from langgraph.config import get_stream_writer
 from langsmith import traceable
 
 from src.config import settings
 from src.domain.prompts import (
+    CHAT_SYSTEM_PROMPT,
     JUDGE_RELEVANCE_PROMPT,
     REWRITE_QUERY_PROMPT,
+    chat_user_prompt,
     judge_user_prompt,
     rewrite_query_user_prompt,
 )
@@ -22,6 +25,7 @@ from src.graphs.retrieval import (
     fuse_context,
 )
 from src.graphs.state import (
+    AnswerOutput,
     ChatMessage,
     ChatState,
     JudgeOutput,
@@ -39,7 +43,7 @@ from src.graphs.tools import (
 )
 from src.llm import LLMError, LLMProvider
 from src.observability import metrics
-from src.vector import SearchStore
+from src.vector import RetrievedPost, SearchStore
 
 logger = logging.getLogger(__name__)
 
@@ -278,3 +282,77 @@ async def _execute(registry: dict[str, ToolHandler], request) -> str:
     except Exception as exc:  # noqa: BLE001 - a broken tool must not fail the turn
         logger.warning("tool %s failed: %s", request.name, exc)
         return format_tool_error(request.name, str(exc))
+
+
+_CITATION_RE = re.compile(r"\[(\d+)\]")
+
+
+def cited_post_ids(answer: str, posts: list[RetrievedPost]) -> list[str]:
+    """Map the [n] markers in an answer back to the retrieved post ids.
+
+    Markers outside the retrieved range are ignored. When the answer
+    cites nothing, every retrieved post is cited so the client can still
+    surface the sources it was grounded in.
+    """
+    cited: list[str] = []
+    for match in _CITATION_RE.finditer(answer):
+        index = int(match.group(1)) - 1
+        if 0 <= index < len(posts):
+            post_id = posts[index].post_id
+            if post_id not in cited:
+                cited.append(post_id)
+    if not cited:
+        cited = [post.post_id for post in posts]
+    return cited
+
+
+def make_answer(llm: LLMProvider):
+    """Build the ``answer`` node bound to an LLM provider."""
+
+    @traceable(run_type="chain")
+    async def answer(state: ChatState) -> AnswerOutput:
+        """Generate the grounded answer, streaming deltas out of the graph.
+
+        History is every persisted turn before this one; the current
+        question was appended by ``start_turn``. Deltas reach the RPC
+        layer through the custom stream writer while the full text is
+        recorded as an assistant turn and cited ids resolve against the
+        fused retrieval context.
+        """
+        query = state["query"]
+        messages = state.get("messages", [])
+        history = [(message.role, message.content) for message in messages[:-1]][
+            -settings.CHAT_MAX_HISTORY_TURNS :
+        ]
+        contexts = state.get("retrieved", [])
+
+        writer = get_stream_writer()
+        parts: list[str] = []
+        async for delta in llm.generate_stream(
+            CHAT_SYSTEM_PROMPT,
+            chat_user_prompt(
+                query, history, [(post.title, post.body) for post in contexts]
+            ),
+        ):
+            parts.append(delta)
+            writer(delta)
+
+        answer_text = "".join(parts)
+        cited = cited_post_ids(answer_text, contexts)
+        logger.info(
+            "chat answered",
+            extra={
+                "completion_chars": len(answer_text),
+                "contexts": len(contexts),
+                "cited_posts": len(cited),
+            },
+        )
+        writer({"cited_post_ids": cited})
+
+        return AnswerOutput(
+            answer=answer_text,
+            messages=[ChatMessage(role="assistant", content=answer_text)],
+            cited_post_ids=cited,
+        )
+
+    return answer

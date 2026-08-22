@@ -100,3 +100,5 @@ class ToolLoopOutput(TypedDict):
 
 class AnswerOutput(TypedDict):
     answer: str
+    messages: list[ChatMessage]
+    cited_post_ids: list[str]

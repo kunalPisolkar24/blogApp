@@ -19,6 +19,11 @@ class FakeLLM:
             raise self.error
         return self.response
 
+    async def generate_tool_completion(self, messages, tools):
+        from src.llm import CompletionReply
+
+        return CompletionReply(content=None)
+
     async def generate_stream(self, system: str, user: str):
         self.stream_calls.append((system, user))
         if self.error is not None:

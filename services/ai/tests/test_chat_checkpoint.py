@@ -45,9 +45,16 @@ async def test_session_resumes_messages_across_calls(graph_factory) -> None:
         {"query": "second question", "top_k": 1}, graph_config_for("chat-1")
     )
 
-    assert [m.content for m in result["messages"]] == [
+    # Assistant answers are recorded too; the questions prove resumption.
+    assert [m.content for m in result["messages"] if m.role == "user"] == [
         "first question",
         "second question",
+    ]
+    assert [m.role for m in result["messages"]] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
     ]
 
 
@@ -59,7 +66,7 @@ async def test_threads_are_isolated_from_each_other(graph_factory) -> None:
         {"query": "theirs", "top_k": 1}, graph_config_for("thread-b")
     )
 
-    assert [m.content for m in other["messages"]] == ["theirs"]
+    assert [m.content for m in other["messages"] if m.role == "user"] == ["theirs"]
 
 
 async def test_stateless_graph_never_accumulates(graph_factory) -> None:
@@ -69,7 +76,7 @@ async def test_stateless_graph_never_accumulates(graph_factory) -> None:
     second = await stateless.ainvoke({"query": "two", "top_k": 1})
 
     # Each run starts fresh; nothing carries over between calls.
-    assert [m.content for m in second["messages"]] == ["two"]
+    assert [m.content for m in second["messages"] if m.role == "user"] == ["two"]
 
 
 def test_graph_config_for_maps_thread_ids() -> None:

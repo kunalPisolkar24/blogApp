@@ -102,7 +102,7 @@ async def test_sessions_resume_through_postgres_factory(
             )
         finally:
             await close_checkpointer(saver)
-        return [m.content for m in result["messages"]]
+        return [m.content for m in result["messages"] if m.role == "user"]
 
     try:
         first = await run_turn("first question", thread_id="chat-resume")

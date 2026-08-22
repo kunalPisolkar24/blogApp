@@ -12,21 +12,21 @@ import grpc
 from src.config import settings
 from src.domain.models import GeneratedPost
 from src.domain.prompts import (
-    CHAT_SYSTEM_PROMPT,
     POST_PROMPT,
     SUMMARY_PROMPT,
     TAGS_PROMPT,
-    chat_user_prompt,
     post_user_prompt,
 )
 from src.domain.sanitize import sanitize_post_html
 from src.domain.text import clean_html
 from src.embeddings import EmbeddingError, EmbeddingProvider
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
+from src.graphs.chat_graph import ChatGraphs, graphs_for_request
+from src.graphs.state import ChatMessage
 from src.llm import LLMError, LLMProvider, estimate_tokens
 from src.observability import metrics
 from src.observability.tracing import get_span_ids
-from src.vector import RetrievedPost, SearchStore
+from src.vector import SearchStore
 
 logger = logging.getLogger(__name__)
 access_logger = logging.getLogger("access")
@@ -54,29 +54,6 @@ def _extract_json(raw: str) -> str:
     """Strip markdown code fences around a JSON response."""
     match = re.search(r"```(?:json)?\s*(.+?)\s*```", raw, re.DOTALL)
     return match.group(1).strip() if match else raw.strip()
-
-
-CITATION_RE = re.compile(r"\[(\d+)\]")
-
-
-def _cited_post_ids(answer: str, contexts: list[RetrievedPost]) -> list[str]:
-    """Map the [n] markers in an answer back to the retrieved post ids.
-
-    The model is instructed to cite excerpts by their bracketed number;
-    markers outside the retrieved range are ignored. When the answer cites
-    nothing, every retrieved post is cited so the client can still surface
-    the sources it was grounded in.
-    """
-    cited: list[str] = []
-    for match in CITATION_RE.finditer(answer):
-        index = int(match.group(1)) - 1
-        if 0 <= index < len(contexts):
-            post_id = contexts[index].post_id
-            if post_id not in cited:
-                cited.append(post_id)
-    if not cited:
-        cited = [post.post_id for post in contexts]
-    return cited
 
 
 def _interaction_weight(kind: int) -> float | None:
@@ -298,11 +275,16 @@ def rpc_metrics(
 
 class AIService(ai_service_pb2_grpc.AIServiceServicer):
     def __init__(
-        self, llm: LLMProvider, search: SearchStore, embeddings: EmbeddingProvider
+        self,
+        llm: LLMProvider,
+        search: SearchStore,
+        embeddings: EmbeddingProvider,
+        chat_graphs: ChatGraphs | None = None,
     ) -> None:
         self._llm = llm
         self._search = search
         self._embeddings = embeddings
+        self._chat_graphs = chat_graphs
 
     @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
@@ -547,13 +529,18 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         request: ai_service_pb2.ChatAnswerRequest,
         context: grpc.aio.ServicerContext,
     ) -> AsyncIterator[ai_service_pb2.ChatChunk]:
-        """Ground a question in the indexed posts and stream the answer.
+        """Run the grounded chat graph and stream its answer deltas.
 
-        The query is embedded through the same path exposed by the Embed
-        RPC, then the top-k closest posts are retrieved and handed to the
-        LLM as numbered excerpts. The final chunk carries the post ids the
-        model actually cited.
+        The graph rewrites, retrieves with judging, optionally calls
+        tools, and generates the answer; answer-node deltas stream out of
+        langgraph's custom channel. A thread id resumes the checkpointed
+        session; without one the stateless variant runs and the caller's
+        history seeds the conversation. The final chunk carries the post
+        ids the model actually cited.
         """
+        if self._chat_graphs is None:
+            raise RuntimeError("chat graphs are not configured")
+
         query = request.query.strip()
         if not query:
             raise ValidationError("query must be a non-empty string")
@@ -565,37 +552,43 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         if top_k > settings.CHAT_MAX_TOP_K:
             raise ValidationError(f"top_k must be <= {settings.CHAT_MAX_TOP_K}")
 
-        history: list[tuple[str, str]] = []
-        for message in request.history:
-            role = message.role.strip()
-            if role not in ("user", "assistant"):
-                raise ValidationError(f"unsupported history role: {role!r}")
-            if len(message.content) > settings.MAX_INPUT_CHARS:
-                raise TooLargeError(settings.MAX_INPUT_CHARS)
-            if message.content.strip():
-                history.append((role, message.content.strip()))
-        history = history[-settings.CHAT_MAX_HISTORY_TURNS :]
+        inputs: dict[str, Any] = {"query": query, "top_k": top_k}
+        if request.thread_id:
+            # The checkpoint holds this session's turns.
+            graph, config = graphs_for_request(self._chat_graphs, request.thread_id)
+        else:
+            graph, config = (
+                self._chat_graphs.stateless,
+                None,
+            )
+            history: list[ChatMessage] = []
+            for message in request.history:
+                role = message.role.strip()
+                if role not in ("user", "assistant"):
+                    raise ValidationError(f"unsupported history role: {role!r}")
+                if len(message.content) > settings.MAX_INPUT_CHARS:
+                    raise TooLargeError(settings.MAX_INPUT_CHARS)
+                if message.content.strip():
+                    history.append(
+                        ChatMessage(role=role, content=message.content.strip())
+                    )
+            inputs["messages"] = history[-settings.CHAT_MAX_HISTORY_TURNS :]
 
-        contexts = await self._retrieve_context(query, top_k)
-        system = CHAT_SYSTEM_PROMPT
-        user = chat_user_prompt(
-            query, history, [(post.title, post.body) for post in contexts]
-        )
+        cited: list[str] = []
+        completion_chars = 0
+        async for payload in graph.astream(inputs, config=config, stream_mode="custom"):
+            if isinstance(payload, str):
+                completion_chars += len(payload)
+                yield ai_service_pb2.ChatChunk(delta=payload)
+            elif isinstance(payload, dict):
+                cited = payload.get("cited_post_ids", [])
 
-        answer_parts: list[str] = []
-        async for delta in self._llm.generate_stream(system, user):
-            answer_parts.append(delta)
-            yield ai_service_pb2.ChatChunk(delta=delta)
-
-        answer = "".join(answer_parts)
-        cited = _cited_post_ids(answer, contexts)
         access_logger.info(
             "chat completed",
             extra={
-                "prompt_tokens_est": estimate_tokens(system + user),
-                "completion_tokens_est": estimate_tokens(answer),
-                "contexts": len(contexts),
+                "completion_tokens_est": estimate_tokens("x" * completion_chars),
                 "cited_posts": len(cited),
+                "thread_id": request.thread_id,
             },
         )
         yield ai_service_pb2.ChatChunk(done=True, cited_post_ids=cited)
@@ -603,20 +596,3 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
     async def _embed(self, text: str) -> list[float]:
         """Embed a single text through the provider backing the Embed RPC."""
         return (await self._embeddings.embed([text]))[0]
-
-    async def _retrieve_context(self, query: str, top_k: int) -> list[RetrievedPost]:
-        """Embed the query and fetch its nearest posts as grounding context.
-
-        Body lengths are capped by the shared context budget so the
-        prompt stays well inside the LLM's window regardless of top_k.
-        """
-        vector = await self._embed(query)
-        posts = await self._search.retrieve_by_vector(vector, top_k)
-        budget = settings.CHAT_MAX_CONTEXT_CHARS
-        per_post = budget // len(posts) if posts else budget
-        return [
-            RetrievedPost(
-                post_id=post.post_id, title=post.title, body=post.body[:per_post]
-            )
-            for post in posts
-        ]
