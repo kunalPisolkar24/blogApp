@@ -39,6 +39,21 @@ class ToolCall:
     result: str  # result excerpt fed back to the model
 
 
+class MessageReplacement(list):
+    """Marker list written by the compaction node: merge_messages swaps
+    the whole conversation for this content instead of appending."""
+
+
+def merge_messages(
+    current: list[ChatMessage], incoming: list[ChatMessage]
+) -> list[ChatMessage]:
+    """Append new turns, or replace everything when the writer signals
+    a compaction through MessageReplacement."""
+    if isinstance(incoming, MessageReplacement):
+        return list(incoming)
+    return list(current) + list(incoming)
+
+
 def merge_retrieved(
     current: list[RetrievedPost], incoming: list[RetrievedPost]
 ) -> list[RetrievedPost]:
@@ -61,7 +76,7 @@ class ChatState(TypedDict):
     retrieval_rounds: int
 
     # Conversation history; accumulates across turns (and compaction rewrites it).
-    messages: Annotated[list[ChatMessage], add]
+    messages: Annotated[list[ChatMessage], merge_messages]
 
     # Searchable form of the query; last rewrite wins.
     rewritten_query: str

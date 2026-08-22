@@ -45,6 +45,11 @@ QUERY_REWRITES = Counter(
     ["outcome"],
 )
 
+CHAT_COMPACTS = Counter(
+    "chat_compactions_total",
+    "Times older chat turns were folded into a rolling summary",
+)
+
 EMBEDDING_REQUESTS = Counter(
     "embedding_requests_total",
     "Total number of embedding provider calls",
