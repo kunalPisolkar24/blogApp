@@ -10,9 +10,11 @@ from langsmith import traceable
 from src.config import settings
 from src.domain.prompts import (
     CHAT_SYSTEM_PROMPT,
+    HISTORY_SUMMARY_PROMPT,
     JUDGE_RELEVANCE_PROMPT,
     REWRITE_QUERY_PROMPT,
     chat_user_prompt,
+    history_summary_user_prompt,
     judge_user_prompt,
     rewrite_query_user_prompt,
 )
@@ -29,6 +31,7 @@ from src.graphs.state import (
     ChatMessage,
     ChatState,
     JudgeOutput,
+    MessageReplacement,
     RelevanceVerdict,
     RetrieveOutput,
     RewriteQueryOutput,
@@ -356,3 +359,52 @@ def make_answer(llm: LLMProvider):
         )
 
     return answer
+
+
+def make_compact_history(llm: LLMProvider):
+    """Build the ``compact_history`` node bound to an LLM provider."""
+
+    @traceable(run_type="chain")
+    async def compact_history(state: ChatState) -> dict:
+        """Fold older turns into a rolling summary turn.
+
+        Runs every turn but acts only once the conversation outgrows
+        CHAT_MAX_HISTORY_TURNS: everything older than the kept window is
+        summarized (re-summarizing any earlier summary so no information
+        is lost across compactions) and replaces those turns in state.
+        A failed or empty summary skips compaction — history is kept
+        intact rather than truncated blind.
+        """
+        messages = state.get("messages", [])
+        keep = settings.CHAT_MAX_HISTORY_TURNS
+        if len(messages) <= keep:
+            return {}
+
+        folded, tail = messages[:-keep], list(messages[-keep:])
+        prior_summary = "\n".join(
+            message.content for message in folded if message.role == "summary"
+        )
+        turns = [(message.role, message.content) for message in folded]
+
+        try:
+            summary = await llm.generate_completion(
+                HISTORY_SUMMARY_PROMPT,
+                history_summary_user_prompt(prior_summary, turns),
+            )
+        except LLMError as exc:
+            logger.warning("history compaction failed, keeping turns: %s", exc)
+            return {}
+
+        summary = summary.strip()
+        if not summary:
+            logger.warning("history compaction produced nothing; keeping turns")
+            return {}
+
+        metrics.CHAT_COMPACTS.inc()
+        return {
+            "messages": MessageReplacement(
+                [ChatMessage(role="summary", content=summary)] + tail
+            )
+        }
+
+    return compact_history

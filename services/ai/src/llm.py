@@ -13,6 +13,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt
 from src.config import settings
 from src.domain.prompts import (
     CHAT_SYSTEM_PROMPT,
+    HISTORY_SUMMARY_PROMPT,
     JUDGE_RELEVANCE_PROMPT,
     POST_PROMPT,
     REWRITE_QUERY_PROMPT,
@@ -385,6 +386,11 @@ class FakeLLMClient:
 
     _JUDGE_VERDICT = '{"relevant": true, "score": 0.9}'
 
+    _HISTORY_SUMMARY = (
+        "The user explored Topos blog features; key facts and post "
+        "references from earlier turns remain noted here."
+    )
+
     def __init__(self, tool_replies: list[CompletionReply] | None = None) -> None:
         self._responses = {
             SUMMARY_PROMPT: self._SUMMARY,
@@ -393,6 +399,7 @@ class FakeLLMClient:
             CHAT_SYSTEM_PROMPT: self._CHAT_ANSWER,
             REWRITE_QUERY_PROMPT: self._REWRITE_QUERY,
             JUDGE_RELEVANCE_PROMPT: self._JUDGE_VERDICT,
+            HISTORY_SUMMARY_PROMPT: self._HISTORY_SUMMARY,
         }
         # Scripted tool-phase replies consumed in order; tests stay
         # deterministic by queueing exactly what the loop should see.

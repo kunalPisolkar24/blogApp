@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from src.embeddings import EmbeddingProvider
 from src.graphs.nodes import (
     make_answer,
+    make_compact_history,
     make_judge_relevance,
     make_retrieve,
     make_rewrite_query,
@@ -30,7 +31,8 @@ def build_chat_graph(
 ):
     """Compile the grounded chat graph.
 
-    rewrite → retrieve → judge, looping back through a fresh rewrite on
+    start → compact → rewrite → retrieve → judge, looping back through
+    a fresh rewrite on
     a failing relevance verdict until the retrieval budget is spent; a
     passing (or spent) verdict hands off to the tool loop, where the
     model may request further lookups. ``post_fetcher`` upgrades the
@@ -40,6 +42,7 @@ def build_chat_graph(
     """
     builder = StateGraph(ChatState)
     builder.add_node("start_turn", start_turn)
+    builder.add_node("compact_history", make_compact_history(llm))
     builder.add_node("rewrite_query", make_rewrite_query(llm))
     builder.add_node("retrieve", make_retrieve(search, embeddings))
     builder.add_node("judge_relevance", make_judge_relevance(llm))
@@ -50,7 +53,8 @@ def build_chat_graph(
     builder.add_node("tool_loop", make_tool_loop(llm, tool_registry))
     builder.add_node("answer", make_answer(llm))
     builder.add_edge(START, "start_turn")
-    builder.add_edge("start_turn", "rewrite_query")
+    builder.add_edge("start_turn", "compact_history")
+    builder.add_edge("compact_history", "rewrite_query")
     builder.add_edge("rewrite_query", "retrieve")
     builder.add_edge("retrieve", "judge_relevance")
     builder.add_conditional_edges(

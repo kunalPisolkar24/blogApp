@@ -51,6 +51,28 @@ REWRITE_QUERY_PROMPT = (
     "with no explanation, no quotes, and no punctuation at the end."
 )
 
+HISTORY_SUMMARY_PROMPT = (
+    "You are a conversation summarizer. Condense the provided chat turns "
+    "into a short paragraph that preserves every fact, decision, name, "
+    "preference, and blog post reference the participants established. "
+    "Write it as context for continuing the conversation. Return ONLY the "
+    "summary text with no preamble."
+)
+
+
+def history_summary_user_prompt(
+    prior_summary: str, turns: list[tuple[str, str]]
+) -> str:
+    """Assemble the compaction prompt from older turns and any summary
+    produced by earlier compactions."""
+    parts: list[str] = []
+    if prior_summary:
+        parts.append(f"Summary so far:\n{prior_summary}")
+    transcript = "\n".join(f"{role.capitalize()}: {content}" for role, content in turns)
+    parts.append(f"Turns to condense:\n{transcript}")
+    return "\n\n".join(parts)
+
+
 JUDGE_RELEVANCE_PROMPT = (
     "You are a retrieval relevance judge. Given a user's question and "
     "numbered blog post excerpts, decide whether the excerpts contain "
