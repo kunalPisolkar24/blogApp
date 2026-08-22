@@ -54,11 +54,20 @@ def merge_messages(
     return list(current) + list(incoming)
 
 
+class RetrievedReplacement(list):
+    """Marker list written at turn start: merge_retrieved swaps the
+    grounding context for this content instead of appending."""
+
+
 def merge_retrieved(
-    current: list[RetrievedPost], incoming: list[RetrievedPost]
+    current: list[RetrievedPost],
+    incoming: RetrievedReplacement | list[RetrievedPost],
 ) -> list[RetrievedPost]:
-    """Accumulate retrieved posts across rewrite-loop iterations,
-    keeping the first occurrence of every post id."""
+    """Accumulate retrieved posts across rewrite-loop iterations of one
+    turn (deduplicated by post id); a turn-start reset replaces the
+    whole context so later turns never cite stale grounding."""
+    if isinstance(incoming, RetrievedReplacement):
+        return list(incoming)
     seen = {post.post_id for post in current}
     return current + [post for post in incoming if post.post_id not in seen]
 

@@ -115,3 +115,35 @@ async def test_sessions_resume_through_postgres_factory(
     assert first == ["first question"]
     assert second == ["first question", "second question"]
     assert other == ["unrelated"]
+
+
+async def test_chatanswer_sessions_over_grpc(checkpoint_service) -> None:
+    """The served ChatAnswer path runs against real Postgres + Qdrant:
+    two sequential turns on one thread_id complete cleanly, and a
+    different thread id gets its own independent stream."""
+    from src.generated import ai_service_pb2 as pb
+
+    def ask(query: str, thread_id: str) -> list[str]:
+        deltas: list[str] = []
+        done_cited: list[str] | None = None
+        chunks = checkpoint_service.stub.ChatAnswer(
+            pb.ChatAnswerRequest(query=query, thread_id=thread_id, top_k=1)
+        )
+        for chunk in chunks:
+            if chunk.delta:
+                deltas.append(chunk.delta)
+            if chunk.done:
+                done_cited = list(chunk.cited_post_ids)
+        assert deltas, "expected streamed deltas"
+        assert done_cited is not None, "stream never completed"
+        return done_cited
+
+    first = ask("what is in the posts?", thread_id="grpc-session-1")
+    second = ask("and anything else?", thread_id="grpc-session-1")
+    other = ask("separate conversation", thread_id="grpc-session-2")
+
+    # Fake-mode answers carry no markers, so every grounded context ends
+    # up cited; each stream must still resolve its citation list.
+    assert isinstance(first, list)
+    assert isinstance(second, list)
+    assert isinstance(other, list)

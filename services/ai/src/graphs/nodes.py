@@ -33,6 +33,7 @@ from src.graphs.state import (
     JudgeOutput,
     MessageReplacement,
     RelevanceVerdict,
+    RetrievedReplacement,
     RetrieveOutput,
     RewriteQueryOutput,
     ToolCall,
@@ -53,8 +54,14 @@ logger = logging.getLogger(__name__)
 
 async def start_turn(state: ChatState) -> dict:
     """Open the turn by joining the user's question into the persisted
-    conversation history; later turns resume from it via thread_id."""
-    return {"messages": [ChatMessage(role="user", content=state["query"])]}
+    conversation history; later turns resume from it via thread_id.
+
+    Per-turn scratch (grounding context) resets here so sessions never
+    cite stale posts from earlier questions."""
+    return {
+        "messages": [ChatMessage(role="user", content=state["query"])],
+        "retrieved": RetrievedReplacement([]),
+    }
 
 
 def make_rewrite_query(llm: LLMProvider):
