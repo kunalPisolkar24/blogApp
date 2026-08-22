@@ -42,7 +42,7 @@ threshold failures cause the Make target to fail.
 | `generate-related` | `IndexPost` (seed) + `RelatedPosts` | seeds 6 posts plus an identical-text twin each, so every post has a guaranteed nearest neighbour; asserts results, twin on top, self excluded |
 | `generate-recommend` | `UpdateUserProfile` (seed) + `RecommendFeed` | seeds the shared recommend corpus (6 tagged posts plus a twin for each of the 3 posts the user interacts with), then requests default feeds; asserts the feed ranks the user's taste, never returns seen posts, and a profile-less user gets an empty feed |
 | `generate-surprise` | `UpdateUserProfile` (seed) + `RecommendFeed` (surprise) | same corpus, but requests surprise feeds; asserts the feed ranks posts, never returns seen posts, the same seed gives the same order, and a profile-less user gets an empty feed |
-| `generate-chat` | `IndexPost` (seed) + `ChatAnswer` (stream) | seeds the same 6-post corpus, then streams grounded answers; asserts the stream completes with cited posts, gibberish every 10th iteration must cite nothing (fake embeddings only) |
+| `generate-chat` | `IndexPost` (seed) + `ChatAnswer` (stream) | seeds the same 6-post corpus, then streams grounded answers; every VU owns one persistent `thread_id` session, so turns chain through the checkpointed graph and exercise history compaction under load; asserts each stream completes with a citations array (the graph rewrites queries before hybrid retrieval, so the old uncited-gibberish premise no longer holds) |
 | `mixed` (default) | all three | weighted mix, `WEIGHTS` env tunable |
 
 ## Store and embedding modes
@@ -129,7 +129,9 @@ make -C services/ai load-test WEIGHTS=post:70,summary:20,tags:10 DURATION=1m
   `SURPRISE_P95`/`SURPRISE_P99`; chat via `CHAT_P95`/`CHAT_P99`)
 - `summary_duration` / `tags_duration` / `post_duration` — per-RPC custom trends
 - `chat_duration` — streaming chat latency trend, thresholded via
-  `CHAT_P95`/`CHAT_P99` (an LLM answer per call dominates)
+  `CHAT_P95`/`CHAT_P99` (an LLM answer per call dominates; checkpointed
+  sessions ride the same envelope, so the thresholds measure the
+  per-turn cost of persistence too)
 - `checks` — every RPC must return gRPC status OK (0); `generate-search` also
   asserts relevant queries return results and gibberish returns none
   (gibberish only binds with fake embeddings, see "Store and embedding modes");

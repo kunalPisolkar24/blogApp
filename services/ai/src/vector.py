@@ -219,7 +219,14 @@ class SearchIndex:
 
     async def search(self, query: str, offset: int, limit: int) -> SearchResult:
         dense = (await self._embeddings.embed([query]))[0]
-        post_ids = await self._rank_window(dense, sparse_embed(query), None)
+        # Same threshold as retrieve_by_vector so unrelated queries cannot
+        # surface weak-similarity posts through the hybrid channel.
+        post_ids = await self._rank_window(
+            dense,
+            sparse_embed(query),
+            None,
+            dense_score_threshold=settings.SEARCH_DENSE_SCORE_THRESHOLD,
+        )
         return SearchResult(
             post_ids=post_ids[offset : offset + limit], total=len(post_ids)
         )

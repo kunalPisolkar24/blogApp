@@ -4,7 +4,9 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
 from src.graphs.chat_graph import build_chat_graph, graph_config_for
+from src.graphs.state import ChatMessage
 from src.llm import FakeLLMClient
+from src.vector import SearchResult
 
 
 class StubEmbeddings:
@@ -82,3 +84,65 @@ async def test_stateless_graph_never_accumulates(graph_factory) -> None:
 def test_graph_config_for_maps_thread_ids() -> None:
     assert graph_config_for("") is None
     assert graph_config_for("chat-9") == {"configurable": {"thread_id": "chat-9"}}
+
+
+def test_checkpoint_serde_preserves_state_dataclasses() -> None:
+    """Every custom type stored in ChatState channels must survive the
+    checkpoint serializer: a missing msgpack allowlist entry silently
+    degrades stored objects to raw dicts when a session reloads."""
+    from src.graphs.checkpointer import build_checkpointer
+    from src.vector import RetrievedPost
+
+    saver = build_checkpointer()
+    blob, checksum = saver.serde.dumps_typed(
+        [
+            ("messages", 1, [ChatMessage(role="user", content="hi")]),
+            (
+                "retrieved",
+                1,
+                [RetrievedPost(post_id="a", title="t", body="b")],
+            ),
+            ("judge", 1, None),
+        ]
+    )
+    loaded = {
+        name: value for name, _, value in saver.serde.loads_typed((blob, checksum))
+    }
+
+    assert isinstance(loaded["messages"][0], ChatMessage)
+    assert isinstance(loaded["retrieved"][0], RetrievedPost)
+
+
+async def test_sessions_do_not_inherit_stale_grounding() -> None:
+    """A later turn's citations must reflect only its own retrieval:
+    turn 2 on the same thread retrieves different posts and must not
+    see turn 1's context merged in."""
+
+    class RoundStore:
+        def __init__(self) -> None:
+            from src.vector import RetrievedPost as RP
+
+            self.rounds = [
+                [RP(post_id="a", title="t a", body="b a")],
+                [RP(post_id="b", title="t b", body="b b")],
+            ]
+
+        async def retrieve_by_vector(self, vector, top_k):
+            return self.rounds.pop(0) if self.rounds else []
+
+        async def search(self, query: str, offset: int, limit: int):
+            return SearchResult(post_ids=[], total=0)
+
+        async def get_posts(self, post_ids):
+            return []
+
+    store = RoundStore()
+    graph = build_chat_graph(FakeLLMClient(), store, StubEmbeddings())
+    config = {"configurable": {"thread_id": "grounding-thread"}}
+
+    first = await graph.ainvoke({"query": "first topic", "top_k": 1}, config)
+    second = await graph.ainvoke({"query": "second topic", "top_k": 1}, config)
+
+    assert [p.post_id for p in first["retrieved"]] == ["a"]
+    assert [p.post_id for p in second["retrieved"]] == ["b"]
+    assert [m.role for m in second["messages"]] == ["user", "assistant"]

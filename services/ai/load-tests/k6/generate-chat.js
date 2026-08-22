@@ -46,14 +46,6 @@ const QUESTIONS = [
     'what is cache invalidation with redis',
 ];
 
-// Queries that share no words with the corpus; under fake embeddings the
-// score threshold filters them out and no citations are expected.
-const GIBBERISH_QUERIES = [
-    'x7k9l2m4n6p8q1r3',
-    'zyzzyvas unrhythmical',
-    'q1w2e3r4t5y6u7i8o9p0',
-];
-
 const chatDuration = new Trend('chat_duration', true);
 
 export function setup() {
@@ -73,56 +65,54 @@ export function setup() {
     }
 }
 
-function askChat(query) {
+function askChat(query, threadId) {
     // Server streaming is event based: handlers only run while the
     // default function awaits, so the whole call is wrapped in a promise.
     const stream = new grpc.Stream(client, 'ai.AIService/ChatAnswer');
     return new Promise((resolve) => {
-        let cited = [];
+        let cited = null;
+        let sawDone = false;
         stream.on('data', (chunk) => {
             if (chunk.done) {
+                sawDone = true;
                 cited = chunk.citedPostIds || [];
             }
         });
         stream.on('error', (err) => {
-            resolve({ ok: false, cited, error: err.message });
+            resolve({ ok: false, sawDone, cited, error: err.message });
         });
         stream.on('end', () => {
-            resolve({ ok: true, cited });
+            resolve({ ok: true, sawDone, cited });
         });
-        stream.write({ query, topK: 5 });
+        stream.write({ query, topK: 5, threadId });
     });
 }
 
 export default async function () {
     ensureConnected();
     const iter = __ITER;
-    const isGibberish = iter % 10 === 9;
-    const query = isGibberish
-        ? GIBBERISH_QUERIES[Math.floor(iter / 10) % GIBBERISH_QUERIES.length]
-        : QUESTIONS[iter % QUESTIONS.length];
+    // Every VU owns one persistent conversation: iterations chain into a
+    // growing checkpointed session (thread_id), which also drives history
+    // compaction under sustained load.
+    const threadId = 'chat-vu-' + __VU;
+    const query = QUESTIONS[iter % QUESTIONS.length];
 
     const start = Date.now();
-    const outcome = await askChat(query);
+    const outcome = await askChat(query, threadId);
     chatDuration.add(Date.now() - start);
 
     check(outcome, {
         'chat stream completes': (r) => r.ok,
+        'chat stream reports citations': (r) => r.ok && r.sawDone && Array.isArray(r.cited),
     });
 
-    // Fake embeddings are exact-match only and the chat retrieval channel
-    // is dense-only, so a natural question never scores above the threshold
-    // and citations are empty. Under real embeddings the answer must be
-    // grounded in the seeded corpus, so the citation check only binds in
-    // ollama mode (the smoke script covers the real-LLM case separately).
+    // The graph rewrites queries before hybrid retrieval, so even
+    // unrelated input lands somewhere in the corpus and resolves
+    // citations through the fallback; there is no stateless-era
+    // "uncited" case left to assert. Grounding quality is covered by
+    // the eval suites instead.
     const embeddingMode = __ENV.EMBEDDING_MODE || 'fake';
-    if (isGibberish) {
-        if (embeddingMode === 'fake') {
-            check(outcome, {
-                'gibberish query yields no citations': (r) => r.ok && r.cited.length === 0,
-            });
-        }
-    } else if (embeddingMode === 'ollama') {
+    if (embeddingMode === 'ollama') {
         check(outcome, {
             'chat cites retrieved posts': (r) => r.ok && r.cited.length > 0,
         });

@@ -17,7 +17,8 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from src.config import settings
-from src.graphs.state import ChatMessage, RelevanceVerdict
+from src.graphs.state import ChatMessage, RelevanceVerdict, ToolCall
+from src.vector import RetrievedPost
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +28,18 @@ POOL_MIN_SIZE = 1
 POOL_MAX_SIZE = 10
 POOL_OPEN_TIMEOUT_SECONDS = 30.0
 
-# Our checkpointed dataclasses must be explicitly allowed; without this
-# langgraph warns on every load and will block them in a future release,
-# degrading stored objects to raw dicts.
-_SERDE = JsonPlusSerializer(allowed_msgpack_modules={ChatMessage, RelevanceVerdict})
+# Every custom dataclass stored in ChatState channels must be explicitly
+# allowed; anything missing is silently degraded to a raw dict when a
+# checkpoint is reloaded (and will be hard-blocked by langgraph's strict
+# msgpack mode in a future release).
+_SERDE = JsonPlusSerializer(
+    allowed_msgpack_modules={
+        ChatMessage,
+        RelevanceVerdict,
+        RetrievedPost,
+        ToolCall,
+    }
+)
 
 
 def build_checkpointer() -> BaseCheckpointSaver:
