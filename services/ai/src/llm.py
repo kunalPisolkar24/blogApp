@@ -45,6 +45,27 @@ class TokenUsage:
         return (self.prompt_tokens or 0) + (self.completion_tokens or 0)
 
 
+@dataclass(frozen=True)
+class ToolRequest:
+    """One tool invocation requested by the model."""
+
+    id: str
+    name: str
+    arguments: str  # raw JSON arguments, parsed by the caller
+
+
+@dataclass(frozen=True)
+class CompletionReply:
+    """A chat completion that may ask for tools before finishing.
+
+    ``content`` can carry prose alongside the requests (the provider
+    emits both when it narrates before calling a tool).
+    """
+
+    content: str | None
+    tool_requests: tuple[ToolRequest, ...] = ()
+
+
 def estimate_tokens(text: str) -> int:
     """Rough token count (chars / 4) used when the provider omits usage."""
     return len(text) // 4
@@ -90,6 +111,12 @@ class LLMProvider(Protocol):
     async def generate_completion(self, system: str, user: str) -> str: ...
 
     def generate_stream(self, system: str, user: str) -> AsyncIterator[str]: ...
+
+    async def generate_tool_completion(
+        self, messages: list[dict], tools: list[dict]
+    ) -> CompletionReply:
+        """Run an OpenAI-style tool-calling completion over a transcript."""
+        ...
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -246,6 +273,56 @@ class LLMClient:
             metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
             metrics.LLM_REQUESTS.labels(status=status).inc()
 
+    @traceable(run_type="llm")
+    async def generate_tool_completion(
+        self, messages: list[dict], tools: list[dict]
+    ) -> CompletionReply:
+        """Run an OpenAI-style tool-calling completion over a transcript.
+
+        The reply may carry prose alongside its tool requests; the
+        provider's non-standard ``reasoning_content`` field is ignored.
+        """
+        payload = {
+            "model": settings.LLM_MODEL,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+            "temperature": 0.7,
+            "max_tokens": 2048,
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.LLM_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        start = time.perf_counter()
+        status = "error"
+        try:
+            data = await self._post(payload, headers)
+            message = data["choices"][0]["message"]
+            status = "success"
+            _record_tokens(
+                _parse_usage(data.get("usage")),
+                method="tools",
+                prompt_chars=sum(len(str(m.get("content") or "")) for m in messages),
+                completion_chars=len(message.get("content") or ""),
+            )
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
+            raise LLMError(str(exc)) from exc
+        finally:
+            metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
+            metrics.LLM_REQUESTS.labels(status=status).inc()
+
+        requests = tuple(
+            ToolRequest(
+                id=call["id"],
+                name=call.get("function", {}).get("name", ""),
+                arguments=call.get("function", {}).get("arguments", "{}"),
+            )
+            for call in message.get("tool_calls") or []
+        )
+        return CompletionReply(content=message.get("content"), tool_requests=requests)
+
     @retry(
         stop=stop_after_attempt(MAX_ATTEMPTS),
         wait=_wait_for_retry,
@@ -308,7 +385,7 @@ class FakeLLMClient:
 
     _JUDGE_VERDICT = '{"relevant": true, "score": 0.9}'
 
-    def __init__(self) -> None:
+    def __init__(self, tool_replies: list[CompletionReply] | None = None) -> None:
         self._responses = {
             SUMMARY_PROMPT: self._SUMMARY,
             TAGS_PROMPT: self._TAGS,
@@ -317,10 +394,20 @@ class FakeLLMClient:
             REWRITE_QUERY_PROMPT: self._REWRITE_QUERY,
             JUDGE_RELEVANCE_PROMPT: self._JUDGE_VERDICT,
         }
+        # Scripted tool-phase replies consumed in order; tests stay
+        # deterministic by queueing exactly what the loop should see.
+        self._tool_replies = list(tool_replies or [])
 
     @traceable(run_type="llm")
     async def generate_completion(self, system: str, user: str) -> str:
         return self._responses.get(system, self._SUMMARY)
+
+    async def generate_tool_completion(
+        self, messages: list[dict], tools: list[dict]
+    ) -> CompletionReply:
+        if self._tool_replies:
+            return self._tool_replies.pop(0)
+        return CompletionReply(content=self._SUMMARY)
 
     @traceable(run_type="llm")
     async def generate_stream(self, system: str, user: str) -> AsyncIterator[str]:

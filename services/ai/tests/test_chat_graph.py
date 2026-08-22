@@ -10,6 +10,7 @@ from src.graphs.nodes import (
     route_after_judge,
 )
 from src.graphs.state import RelevanceVerdict
+from src.llm import CompletionReply
 from src.vector import RetrievedPost, SearchResult
 
 
@@ -36,6 +37,11 @@ class ScriptedLLM:
                 else '{"relevant": true, "score": 1.0}'
             )
         raise AssertionError(f"unexpected prompt: {system}")
+
+    async def generate_tool_completion(
+        self, messages: list[dict], tools: list[dict]
+    ) -> CompletionReply:
+        return CompletionReply(content="grounded enough")
 
     async def generate_stream(self, system: str, user: str):
         raise AssertionError("chat graph does not stream yet")
