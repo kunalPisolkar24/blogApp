@@ -44,8 +44,7 @@ class ScriptedLLM:
         return CompletionReply(content="grounded enough")
 
     async def generate_stream(self, system: str, user: str):
-        raise AssertionError("chat graph does not stream yet")
-        yield ""
+        yield "streamed answer"
 
 
 class StubEmbeddings:
