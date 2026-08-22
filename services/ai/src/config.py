@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     CHAT_MAX_RETRIEVAL_ROUNDS: int = 2
     # Tool invocations the agent may execute within one chat turn.
     CHAT_MAX_TOOL_CALLS: int = 6
+    # Content service bridge for full post bodies (get_post_body tool);
+    # empty token keeps the tool on its placeholder response.
+    CONTENT_SERVICE_URL: str = "http://content-service:4002"
+    CONTENT_INTERNAL_TOKEN: str = ""
     # Multi-source grounding: per-source weights feed the weighted
     # reciprocal-rank fusion; concurrency bounds the parallel fan-out.
     CHAT_DENSE_SOURCE_WEIGHT: float = 1.0

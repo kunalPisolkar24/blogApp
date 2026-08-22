@@ -65,6 +65,9 @@ func validateConfig(cfg config.Config) error {
 	if cfg.JwtSecret == "" {
 		return errors.New("JWT_SECRET is required")
 	}
+	if cfg.InternalToken == "" {
+		return errors.New("INTERNAL_TOKEN is required")
+	}
 	return nil
 }
 
@@ -104,6 +107,14 @@ func newHandler(cfg config.Config, resolver *graph.Resolver, mongoClient *mongo.
 	mux.Handle("/", playground.Handler("GraphQL playground", queryPath))
 	mux.HandleFunc("/health", healthHandler(mongoClient, producer))
 	mux.Handle("/metrics", promhttp.Handler())
+	if resolver != nil && resolver.PostService != nil {
+		mux.Handle(
+			"GET /internal/posts/{id}",
+			middleware.InternalAuthMiddleware(cfg.InternalToken)(
+				internalPostBodyHandler(resolver.PostService),
+			),
+		)
+	}
 	return middleware.RequestIDMiddleware(mux)
 }
 

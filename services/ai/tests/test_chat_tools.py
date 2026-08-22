@@ -230,3 +230,37 @@ async def test_graph_routes_through_tool_loop_to_end() -> None:
     )
 
     assert result["tool_calls"] == []
+
+
+async def test_graph_tool_loop_uses_post_fetcher_for_bodies() -> None:
+    """With a PostFetcher wired through build_chat_graph, the model's
+    get_post_body request returns the real full body."""
+    from src.posts import FakePostFetcher
+
+    llm = RecordingFakeLLM(
+        [
+            _tool_reply(
+                (
+                    ToolRequest(
+                        id="c1", name="get_post_body", arguments='{"post_id": "a"}'
+                    ),
+                )
+            ),
+            _tool_reply(content="done"),
+        ]
+    )
+    fake_fetcher = FakePostFetcher({"a": "the real full body"})
+    graph = build_chat_graph(llm, GraphStore(), StubEmbeddingsGraph(), fake_fetcher)
+
+    result = await graph.ainvoke({"query": "tell me more", "thread_id": "", "top_k": 1})
+
+    assert result["tool_calls"][0].result == "the real full body"
+    assert fake_fetcher.fetched == ["a"]
+
+
+def test_placeholder_body_without_fetcher_still_works() -> None:
+    registry = make_tool_registry(StubStore([]))
+    import asyncio
+
+    result = asyncio.run(registry["get_post_body"](post_id="abc"))
+    assert "not available yet" in result
