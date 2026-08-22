@@ -14,6 +14,13 @@ from src.domain.prompts import (
     rewrite_query_user_prompt,
 )
 from src.embeddings import EmbeddingProvider
+from src.graphs.retrieval import (
+    DenseSource,
+    HybridSource,
+    RetrievalSource,
+    fan_out,
+    fuse_context,
+)
 from src.graphs.state import (
     ChatState,
     JudgeOutput,
@@ -23,7 +30,7 @@ from src.graphs.state import (
 )
 from src.llm import LLMError, LLMProvider
 from src.observability import metrics
-from src.vector import RetrievedPost, SearchStore
+from src.vector import SearchStore
 
 logger = logging.getLogger(__name__)
 
@@ -66,34 +73,35 @@ def make_rewrite_query(llm: LLMProvider):
     return rewrite_query
 
 
-def _cap_bodies(posts: list[RetrievedPost]) -> list[RetrievedPost]:
-    """Split the shared context budget evenly across retrieved posts."""
-    budget = settings.CHAT_MAX_CONTEXT_CHARS
-    per_post = budget // len(posts) if posts else budget
-    return [
-        RetrievedPost(post_id=post.post_id, title=post.title, body=post.body[:per_post])
-        for post in posts
-    ]
-
-
 def make_retrieve(search: SearchStore, embeddings: EmbeddingProvider):
-    """Build the ``retrieve`` node bound to the search and embedding providers."""
+    """Build the ``retrieve`` node bound to the search and embedding providers.
+
+    Grounding fans out over a dense and a hybrid source in parallel; #154
+    adds a full-post-body source through the reserved ``body_fetcher``
+    slot once the content-service bridge exists.
+    """
+    sources: list[RetrievalSource] = [
+        DenseSource(search, embeddings),
+        HybridSource(search),
+    ]
 
     @traceable(run_type="chain")
     async def retrieve(state: ChatState) -> RetrieveOutput:
-        """Embed the (rewritten) query and fetch grounding posts.
+        """Fetch grounding posts from every source and fuse them.
 
-        Uses the rewrite when one exists; failures propagate because a
-        turn without any grounding attempt is not worth continuing.
+        Uses the rewrite when one exists. Source failures degrade to the
+        remaining sources inside the fan-out; a total retrieval failure
+        propagates because a turn without any grounding attempt is not
+        worth continuing.
         """
         query = state.get("rewritten_query") or state["query"]
         top_k = state.get("top_k") or settings.CHAT_TOP_K_DEFAULT
 
-        vector = (await embeddings.embed([query]))[0]
-        posts = await search.retrieve_by_vector(vector, top_k)
+        fetched = await fan_out(sources, query, top_k)
+        rankings = [(source.weight, posts) for source, posts in fetched]
 
         return RetrieveOutput(
-            retrieved=_cap_bodies(posts),
+            retrieved=fuse_context(rankings),
             retrieval_rounds=state.get("retrieval_rounds", 0) + 1,
         )
 

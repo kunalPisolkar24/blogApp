@@ -10,7 +10,7 @@ from src.graphs.nodes import (
     route_after_judge,
 )
 from src.graphs.state import RelevanceVerdict
-from src.vector import RetrievedPost
+from src.vector import RetrievedPost, SearchResult
 
 
 class ScriptedLLM:
@@ -48,17 +48,30 @@ class StubEmbeddings:
 
 
 class StubSearch:
-    """Search stub serving a scripted list of results per call."""
+    """Search stub serving scripted results for the dense and hybrid channels."""
 
-    def __init__(self, rounds: list[list[RetrievedPost]]) -> None:
-        self.rounds = list(rounds)
+    def __init__(
+        self,
+        dense_rounds: list[list[RetrievedPost]],
+        hybrid_rounds: list[list[str]] | None = None,
+    ) -> None:
+        self.dense_rounds = list(dense_rounds)
+        self.hybrid_rounds = list(hybrid_rounds or [])
         self.calls: list[tuple[str, int]] = []
 
     async def retrieve_by_vector(
         self, vector: list[float], top_k: int
     ) -> list[RetrievedPost]:
-        self.calls.append(("query", top_k))
-        return self.rounds.pop(0) if self.rounds else []
+        self.calls.append(("dense", top_k))
+        return self.dense_rounds.pop(0) if self.dense_rounds else []
+
+    async def search(self, query: str, offset: int, limit: int):
+        self.calls.append(("hybrid", limit))
+        post_ids = self.hybrid_rounds.pop(0) if self.hybrid_rounds else []
+        return SearchResult(post_ids=post_ids, total=len(post_ids))
+
+    async def get_posts(self, post_ids: list[str]) -> list[RetrievedPost]:
+        return [_post(post_id) for post_id in post_ids]
 
 
 def _post(post_id: str) -> RetrievedPost:
@@ -88,7 +101,7 @@ async def test_judge_falls_open_on_unparseable_reply() -> None:
 
 
 async def test_retrieve_prefers_rewritten_query_and_counts_rounds() -> None:
-    search = StubSearch([[_post("a")]])
+    search = StubSearch(dense_rounds=[[_post("a")]])
     node = make_retrieve(search, StubEmbeddings())
     state = {
         "query": "raw question",
@@ -99,7 +112,7 @@ async def test_retrieve_prefers_rewritten_query_and_counts_rounds() -> None:
 
     result = await node(state)
 
-    assert search.calls == [("query", 3)]
+    assert sorted(search.calls) == [("dense", 3), ("hybrid", 3)]
     assert [post.post_id for post in result["retrieved"]] == ["a"]
     assert result["retrieval_rounds"] == 2
 
