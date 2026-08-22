@@ -62,7 +62,7 @@ func (a *NoopAI) RelatedPostsBatch(_ context.Context, postIDs []string, _ int) (
 
 // ChatAnswer degrades to a short notice without citations so chat remains
 // available while the AI service is down.
-func (a *NoopAI) ChatAnswer(_ context.Context, _ string, _ []domain.ChatTurn, _ int) (*domain.ChatAnswer, error) {
+func (a *NoopAI) ChatAnswer(_ context.Context, _, _ string, _ []domain.ChatTurn, _ int) (*domain.ChatAnswer, error) {
 	return &domain.ChatAnswer{
 		Content:      "Chat is currently unavailable in fallback mode.",
 		CitedPostIDs: nil,

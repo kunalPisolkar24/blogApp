@@ -67,7 +67,7 @@ func (s *stubAI) RelatedPostsBatch(ctx context.Context, postIDs []string, limit 
 	return results, nil
 }
 
-func (s *stubAI) ChatAnswer(ctx context.Context, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
+func (s *stubAI) ChatAnswer(ctx context.Context, threadID, query string, history []domain.ChatTurn, topK int) (*domain.ChatAnswer, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -213,7 +213,7 @@ func TestResilientClientBreakersArePerDomain(t *testing.T) {
 		client.breaker(domainGeneration).recordFailure()
 	}
 
-	_, err := client.ChatAnswer(context.Background(), "q", nil, 5)
+	_, err := client.ChatAnswer(context.Background(), "c_1", "q", nil, 5)
 	require.NoError(t, err, "an open generation breaker must not block chat")
 
 	_, err = client.GenerateTags(context.Background(), "t", "b")
@@ -319,7 +319,7 @@ func TestResilientClientChatFallsBackOnOpenBreaker(t *testing.T) {
 		client.breaker(domainChat).recordFailure()
 	}
 
-	answer, err := client.ChatAnswer(context.Background(), "q", nil, 5)
+	answer, err := client.ChatAnswer(context.Background(), "c_1", "q", nil, 5)
 	require.NoError(t, err)
 	assert.Equal(t, "answer", answer.Content)
 }

@@ -18,6 +18,7 @@ import (
 type fakeAIServiceServer struct {
 	pb.UnimplementedAIServiceServer
 	summaryErr error
+	chatReq    *pb.ChatAnswerRequest
 }
 
 func (f *fakeAIServiceServer) GenerateSummary(ctx context.Context, req *pb.ContentRequest) (*pb.ContentResponse, error) {
@@ -33,6 +34,17 @@ func (f *fakeAIServiceServer) GenerateTags(ctx context.Context, req *pb.ContextR
 
 func (f *fakeAIServiceServer) GeneratePost(ctx context.Context, req *pb.PostGenerationRequest) (*pb.PostGenerationResponse, error) {
 	return &pb.PostGenerationResponse{Title: "t", Body: "b", Summary: "s", Tags: []string{"go"}}, nil
+}
+
+func (f *fakeAIServiceServer) ChatAnswer(
+	req *pb.ChatAnswerRequest,
+	stream pb.AIService_ChatAnswerServer,
+) error {
+	f.chatReq = req
+	if err := stream.Send(&pb.ChatChunk{Delta: "answer "}); err != nil {
+		return err
+	}
+	return stream.Send(&pb.ChatChunk{Delta: "text", Done: true, CitedPostIds: []string{"p_9"}})
 }
 
 func (f *fakeAIServiceServer) RelatedPosts(ctx context.Context, req *pb.RelatedRequest) (*pb.RelatedResponse, error) {
@@ -175,4 +187,19 @@ func TestGRPCClientDeleteUserProfile(t *testing.T) {
 	err := client.DeleteUserProfile(context.Background(), "u_1")
 
 	require.NoError(t, err)
+}
+
+func TestGRPCClientChatAnswerSendsThreadId(t *testing.T) {
+	server := &fakeAIServiceServer{}
+	client := newTestGRPCClient(t, server)
+
+	answer, err := client.ChatAnswer(context.Background(), "chat-123", "q", nil, 5)
+	require.NoError(t, err)
+
+	assert.Equal(t, "answer text", answer.Content)
+	assert.Equal(t, []string{"p_9"}, answer.CitedPostIDs)
+	require.NotNil(t, server.chatReq, "server did not receive a ChatAnswer request")
+	assert.Equal(t, "chat-123", server.chatReq.ThreadId)
+	assert.Equal(t, "q", server.chatReq.Query)
+	assert.Equal(t, uint32(5), server.chatReq.TopK)
 }

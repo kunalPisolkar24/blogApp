@@ -38,7 +38,7 @@ type AIService interface {
 	// one RPC, keyed by the requested post id, so list pages do not
 	// fire one AI call per post.
 	RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*SearchResult, error)
-	ChatAnswer(ctx context.Context, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
+	ChatAnswer(ctx context.Context, threadID, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
 	// UpdateUserProfile folds an interaction into the user's interest
 	// profile so future feeds can be ranked by it.
 	UpdateUserProfile(ctx context.Context, userID, postID string, kind PostInteractionKind) error
