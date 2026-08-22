@@ -111,6 +111,7 @@ services:
       - DB_NAME=${CONTENT_DB_NAME:-blog_content}
       - REDIS_ADDR=${CONTENT_REDIS_ADDR:-local-content-redis:6379}
       - JWT_SECRET=${CONTENT_JWT_SECRET:-local-dev-secret}
+      - INTERNAL_TOKEN=${CONTENT_INTERNAL_TOKEN:-local-internal-secret}
       - AI_SERVICE_URL=${CONTENT_AI_SERVICE_URL:-ai-service:50051}
       - KAFKA_BROKERS=${CONTENT_KAFKA_BROKERS:-kafka-1:9092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-posts}

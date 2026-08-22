@@ -17,22 +17,35 @@ from src.vector import SearchStore
 
 
 def build_chat_graph(
-    llm: LLMProvider, search: SearchStore, embeddings: EmbeddingProvider
+    llm: LLMProvider,
+    search: SearchStore,
+    embeddings: EmbeddingProvider,
+    post_fetcher=None,
 ):
     """Compile the grounded chat graph.
 
     rewrite → retrieve → judge, looping back through a fresh rewrite on
     a failing relevance verdict until the retrieval budget is spent; a
     passing (or spent) verdict hands off to the tool loop, where the
-    model may request further lookups. The streaming answer node lands
-    with #156 and takes over the tool loop's END edge, after which #155
-    compiles this graph with the checkpointer.
+    model may request further lookups. ``post_fetcher`` upgrades the
+    get_post_body tool from its placeholder to real full bodies. The
+    streaming answer node lands with #156 and takes over the tool loop's
+    END edge, after which #155 compiles this graph with the checkpointer.
     """
     builder = StateGraph(ChatState)
     builder.add_node("rewrite_query", make_rewrite_query(llm))
     builder.add_node("retrieve", make_retrieve(search, embeddings))
     builder.add_node("judge_relevance", make_judge_relevance(llm))
-    builder.add_node("tool_loop", make_tool_loop(llm, make_tool_registry(search)))
+    builder.add_node(
+        "tool_loop",
+        make_tool_loop(
+            llm,
+            make_tool_registry(
+                search,
+                body_fetcher=post_fetcher.fetch_body if post_fetcher else None,
+            ),
+        ),
+    )
     builder.add_edge(START, "rewrite_query")
     builder.add_edge("rewrite_query", "retrieve")
     builder.add_edge("retrieve", "judge_relevance")

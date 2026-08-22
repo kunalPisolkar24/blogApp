@@ -21,6 +21,7 @@ type Config struct {
 	JwtSecret                        string
 	JwtIssuer                        string
 	JwtAudience                      string
+	InternalToken                    string
 	AIServiceURL                     string
 	KafkaBrokers                     []string
 	KafkaTopic                       string
@@ -54,6 +55,7 @@ func LoadConfig() Config {
 		JwtSecret:                        getEnv("JWT_SECRET", ""),
 		JwtIssuer:                        getEnv("JWT_ISSUER", "user-service"),
 		JwtAudience:                      getEnv("JWT_AUDIENCE", "topos"),
+		InternalToken:                    getEnv("INTERNAL_TOKEN", ""),
 		AIServiceURL:                     getEnv("AI_SERVICE_URL", "ai-service:50051"),
 		KafkaBrokers:                     splitAndTrim(getEnv("KAFKA_BROKERS", "kafka-1:9092")),
 		KafkaTopic:                       getEnv("KAFKA_TOPIC", "posts"),

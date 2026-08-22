@@ -21,6 +21,7 @@ x-content-env: &content-env
   MONGO_URI: ${CONTENT_MONGO_URI:-mongodb://root:${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}@content-mongo-mongos-0:27017,content-mongo-mongos-1:27017/blog_content?authSource=admin}
   DB_NAME: ${CONTENT_DB_NAME:-blog_content}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required}
   JWT_ISSUER: ${JWT_ISSUER:-user-service}
   JWT_AUDIENCE: ${JWT_AUDIENCE:-topos}
   REDIS_MASTER_NAME: ${REDIS_MASTER_NAME:-mymaster}
