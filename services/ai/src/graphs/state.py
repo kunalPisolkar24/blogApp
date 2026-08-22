@@ -96,7 +96,6 @@ class JudgeOutput(TypedDict):
 
 class ToolLoopOutput(TypedDict):
     tool_calls: list[ToolCall]
-    messages: list[ChatMessage]
 
 
 class AnswerOutput(TypedDict):

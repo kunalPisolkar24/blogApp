@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     # Retrieval rounds per chat turn; a failing relevance verdict loops
     # back through rewrite_query until this budget is spent.
     CHAT_MAX_RETRIEVAL_ROUNDS: int = 2
+    # Tool invocations the agent may execute within one chat turn.
+    CHAT_MAX_TOOL_CALLS: int = 6
     # Multi-source grounding: per-source weights feed the weighted
     # reciprocal-rank fusion; concurrency bounds the parallel fan-out.
     CHAT_DENSE_SOURCE_WEIGHT: float = 1.0

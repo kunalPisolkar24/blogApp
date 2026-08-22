@@ -27,6 +27,14 @@ from src.graphs.state import (
     RelevanceVerdict,
     RetrieveOutput,
     RewriteQueryOutput,
+    ToolCall,
+    ToolLoopOutput,
+)
+from src.graphs.tools import (
+    TOOL_AGENT_PROMPT,
+    TOOL_SCHEMAS,
+    ToolHandler,
+    format_tool_error,
 )
 from src.llm import LLMError, LLMProvider
 from src.observability import metrics
@@ -176,3 +184,90 @@ def route_after_judge(state: ChatState) -> str:
     ):
         return "rewrite_query"
     return "answer"
+
+
+def make_tool_loop(llm: LLMProvider, registry: dict[str, ToolHandler]):
+    """Build the ``tool_loop`` node bound to an LLM provider and tools."""
+
+    @traceable(run_type="chain")
+    async def tool_loop(state: ChatState) -> ToolLoopOutput:
+        """Let the model request grounded lookups before the answer phase.
+
+        The agent transcript lives only inside this node: state keeps the
+        executed ``ToolCall`` records (which the answer prompt reads) but
+        not the tool wire format, so conversation compaction never sees
+        tool protocol messages.
+        """
+        context = "\n\n".join(
+            f"[{index}] {post.post_id}: {post.title}\n{post.body}"
+            for index, post in enumerate(state.get("retrieved", []), start=1)
+        )
+        user_content = f"Question: {state['query']}"
+        if context:
+            user_content += f"\n\nRetrieved posts:\n{context}"
+        transcript: list[dict] = [
+            {"role": "system", "content": TOOL_AGENT_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+
+        executed: list[ToolCall] = []
+        while len(executed) < settings.CHAT_MAX_TOOL_CALLS:
+            reply = await llm.generate_tool_completion(transcript, TOOL_SCHEMAS)
+            if not reply.tool_requests:
+                break
+
+            transcript.append(
+                {
+                    "role": "assistant",
+                    "content": reply.content or "",
+                    "tool_calls": [
+                        {
+                            "id": request.id,
+                            "type": "function",
+                            "function": {
+                                "name": request.name,
+                                "arguments": request.arguments,
+                            },
+                        }
+                        for request in reply.tool_requests
+                    ],
+                }
+            )
+            for request in reply.tool_requests:
+                result = await _execute(registry, request)
+                transcript.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": request.id,
+                        "content": result,
+                    }
+                )
+                executed.append(
+                    ToolCall(
+                        name=request.name,
+                        arguments=request.arguments,
+                        result=result,
+                    )
+                )
+
+        return ToolLoopOutput(tool_calls=executed)
+
+    return tool_loop
+
+
+async def _execute(registry: dict[str, ToolHandler], request) -> str:
+    """Run one tool request; failures become results the model can read."""
+    handler = registry.get(request.name)
+    if handler is None:
+        return format_tool_error(request.name, "unknown tool")
+
+    try:
+        arguments = json.loads(request.arguments or "{}")
+        if not isinstance(arguments, dict):
+            raise TypeError("arguments must be a JSON object")
+        return await handler(**arguments)
+    except (ValueError, TypeError):
+        return format_tool_error(request.name, "bad arguments")
+    except Exception as exc:  # noqa: BLE001 - a broken tool must not fail the turn
+        logger.warning("tool %s failed: %s", request.name, exc)
+        return format_tool_error(request.name, str(exc))
