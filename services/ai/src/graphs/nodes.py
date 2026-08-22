@@ -22,6 +22,7 @@ from src.graphs.retrieval import (
     fuse_context,
 )
 from src.graphs.state import (
+    ChatMessage,
     ChatState,
     JudgeOutput,
     RelevanceVerdict,
@@ -41,6 +42,12 @@ from src.observability import metrics
 from src.vector import SearchStore
 
 logger = logging.getLogger(__name__)
+
+
+async def start_turn(state: ChatState) -> dict:
+    """Open the turn by joining the user's question into the persisted
+    conversation history; later turns resume from it via thread_id."""
+    return {"messages": [ChatMessage(role="user", content=state["query"])]}
 
 
 def make_rewrite_query(llm: LLMProvider):

@@ -11,6 +11,7 @@ from src.api.server import create_server
 from src.api.service import AIService
 from src.config import settings
 from src.embeddings import FakeEmbeddingClient, OllamaEmbeddingClient
+from src.graphs.chat_graph import build_chat_graph
 from src.graphs.checkpointer import (
     build_checkpointer,
     close_checkpointer,
@@ -20,6 +21,7 @@ from src.llm import FakeLLMClient, LLMClient
 from src.observability.langsmith import setup_langsmith
 from src.observability.logging import setup_logging
 from src.observability.tracing import setup_tracing
+from src.posts import PostFetcher
 from src.vector import MemoryIndex, SearchIndex, SearchStore
 
 logger = logging.getLogger(__name__)
@@ -102,6 +104,22 @@ async def serve() -> None:
 
     checkpointer = build_checkpointer()
     await _ensure_checkpointer_ready(checkpointer)
+
+    # Both graph variants share nodes; serving code (#156) picks per
+    # request: checkpointed sessions resume by thread_id, empty thread
+    # ids stay stateless.
+    post_fetcher = PostFetcher() if settings.CONTENT_INTERNAL_TOKEN else None
+    _session_graph = build_chat_graph(
+        llm,
+        search,
+        embeddings,
+        post_fetcher=post_fetcher,
+        checkpointer=checkpointer,
+    )
+    _stateless_graph = build_chat_graph(
+        llm, search, embeddings, post_fetcher=post_fetcher
+    )
+    logger.info("chat graphs compiled for sessions and stateless runs")
 
     server, health_servicer = await create_server(AIService(llm, search, embeddings))
     handle_graceful_shutdown(server, health_servicer)
