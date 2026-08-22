@@ -308,6 +308,32 @@ class SearchIndex:
             )
         return posts
 
+    async def get_posts(self, post_ids: list[str]) -> list[RetrievedPost]:
+        """Fetch stored posts by id, in the order requested.
+
+        Unknown ids are skipped; used to hydrate ranked id lists (hybrid
+        search, recommendations) into full grounding context.
+        """
+        if not post_ids:
+            return []
+        records = await self._client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION,
+            ids=[_point_id(post_id) for post_id in post_ids],
+            with_payload=True,
+        )
+        payload_by_id = {
+            _post_id_from_point(record.id): record.payload or {} for record in records
+        }
+        return [
+            RetrievedPost(
+                post_id=post_id,
+                title=payload_by_id[post_id].get("title", ""),
+                body=payload_by_id[post_id].get("body", ""),
+            )
+            for post_id in post_ids
+            if post_id in payload_by_id
+        ]
+
     async def update_user_profile(
         self, user_id: str, post_id: str, weight: float
     ) -> None:
@@ -747,6 +773,17 @@ class MemoryIndex:
             for post, score in scored[:top_k]
             if score >= settings.SEARCH_DENSE_SCORE_THRESHOLD
         ]
+
+    async def get_posts(self, post_ids: list[str]) -> list[RetrievedPost]:
+        """Mirror SearchIndex.get_posts over in-memory posts."""
+        posts = []
+        for post_id in post_ids:
+            stored = self._posts.get(post_id)
+            if stored is not None:
+                posts.append(
+                    RetrievedPost(post_id=post_id, title=stored.title, body=stored.body)
+                )
+        return posts
 
     async def update_user_profile(
         self, user_id: str, post_id: str, weight: float

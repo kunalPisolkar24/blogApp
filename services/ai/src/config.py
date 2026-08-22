@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # Retrieval rounds per chat turn; a failing relevance verdict loops
     # back through rewrite_query until this budget is spent.
     CHAT_MAX_RETRIEVAL_ROUNDS: int = 2
+    # Multi-source grounding: per-source weights feed the weighted
+    # reciprocal-rank fusion; concurrency bounds the parallel fan-out.
+    CHAT_DENSE_SOURCE_WEIGHT: float = 1.0
+    CHAT_HYBRID_SOURCE_WEIGHT: float = 0.8
+    CHAT_RETRIEVAL_CONCURRENCY: int = 2
 
     EMBEDDING_MODE: Literal["fake", "ollama"] = "fake"
     EMBEDDING_URL: str = "http://embedding-service:11434"
