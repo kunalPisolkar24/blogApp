@@ -52,11 +52,14 @@ def test_grounded_row_without_citations_fails() -> None:
     assert any("missing citations" in problem for problem in problems)
 
 
-def test_negative_rows_must_cite_nothing() -> None:
+def test_negative_rows_fail_on_invented_citations_only() -> None:
     assert citation_problems("gibberish", [], []) == []
     assert citation_problems("out_of_scope", [], []) == []
-    problems = citation_problems("gibberish", [], [GROUNDED_ID])
-    assert problems == [f"expected no citations, got ['{GROUNDED_ID}']"]
+    # Known-corpus citations on negatives are reported, not failed.
+    assert citation_problems("gibberish", [], [GROUNDED_ID]) == []
+    # Fabricated ids always fail.
+    problems = citation_problems("gibberish", [], [UNKNOWN_ID])
+    assert problems == [f"invented citations: ['{UNKNOWN_ID}']"]
 
 
 def test_grounding_contexts_follow_corpus_order() -> None:

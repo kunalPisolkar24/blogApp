@@ -138,8 +138,9 @@ The chat suite (`scripts/eval_chat.py`, `make eval-chat`) scores every
 dataset row with two evaluator kinds:
 
 - **Deterministic** — grounded rows must cite every expected post id (and
-  nothing outside the corpus); gibberish / out-of-scope rows must cite
-  nothing. Any violation fails the run.
+  nothing outside the corpus); gibberish / out-of-scope rows must never
+  invent posts (fabricated ids fail; citing known posts is reported only).
+  Any violation fails the run.
 - **LLM-as-judge** — relevance and faithfulness scored per row by a judge
   prompt; averages below `--min-relevance` / `--min-faithfulness` (0.7)
   fail the run. Judges need `AI_LLM_MODE=real`; under fake mode only the

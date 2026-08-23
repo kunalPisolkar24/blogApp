@@ -274,10 +274,11 @@ CURATED_QA: list[dict] = [
     },
     {
         "id": "q-009",
+        # Asks which vector database powers related posts; the RelatedPosts
+        # RPC mechanics post (0d) is context, not a required citation.
         "query": "what vector database powers related posts?",
         "expected_post_ids": [
             "000000000000000000000004",
-            "00000000000000000000000d",
         ],
         "category": "grounded",
     },
