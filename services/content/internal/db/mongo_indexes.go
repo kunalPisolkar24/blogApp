@@ -105,6 +105,25 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		return fmt.Errorf("create post_interactions indexes: %w", err)
 	}
 
+	draftIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("status_createdAt"),
+		},
+		{
+			Keys:    bson.D{{Key: "authorId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("authorId_createdAt"),
+		},
+		{
+			Keys:    bson.D{{Key: "approvalId", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("approval_id_unique"),
+		},
+	}
+
+	if _, err := db.Collection("post_drafts").Indexes().CreateMany(ctx, draftIndexes); err != nil {
+		return fmt.Errorf("create post_drafts indexes: %w", err)
+	}
+
 	return nil
 }
 

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -24,6 +25,9 @@ const (
 	summaryTimeout = 30 * time.Second
 	tagsTimeout    = 15 * time.Second
 	postTimeout    = 60 * time.Second
+	draftTimeout   = 60 * time.Second
+	approveTimeout = 30 * time.Second
+	rejectTimeout  = 10 * time.Second
 	indexTimeout   = 15 * time.Second
 	deleteTimeout  = 10 * time.Second
 	searchTimeout  = 10 * time.Second
@@ -164,6 +168,25 @@ func (c *resilientClient) GeneratePost(ctx context.Context, prompt string) (*dom
 	return noFallback(c.breaker(domainGeneration), "post", func() (*domain.GeneratedPost, error) {
 		return c.primary.GeneratePost(ctx, prompt)
 	})
+}
+
+func (c *resilientClient) GeneratePostDraft(ctx context.Context, prompt string) (*domain.GeneratedDraft, error) {
+	return noFallback(c.breaker(domainGeneration), "post_draft", func() (*domain.GeneratedDraft, error) {
+		return c.primary.GeneratePostDraft(ctx, prompt)
+	})
+}
+
+func (c *resilientClient) ApprovePost(ctx context.Context, approvalID string, review *domain.DraftReview) (*domain.GeneratedPost, error) {
+	return noFallback(c.breaker(domainGeneration), "post_approve", func() (*domain.GeneratedPost, error) {
+		return c.primary.ApprovePost(ctx, approvalID, review)
+	})
+}
+
+func (c *resilientClient) RejectPost(ctx context.Context, approvalID string, reason string) error {
+	_, err := noFallback(c.breaker(domainGeneration), "post_reject", func() (*struct{}, error) {
+		return nil, c.primary.RejectPost(ctx, approvalID, reason)
+	})
+	return err
 }
 
 func (c *resilientClient) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {
@@ -328,6 +351,66 @@ func (c *grpcClient) GeneratePost(ctx context.Context, prompt string) (*domain.G
 		Summary: resp.Summary,
 		Tags:    resp.Tags,
 	}, nil
+}
+
+func (c *grpcClient) GeneratePostDraft(ctx context.Context, prompt string) (*domain.GeneratedDraft, error) {
+	ctx, cancel := context.WithTimeout(ctx, draftTimeout)
+	defer cancel()
+
+	resp, err := c.client.GeneratePostDraft(ctx, &pb.PostGenerationRequest{Prompt: prompt})
+	if err != nil {
+		return nil, err
+	}
+	return &domain.GeneratedDraft{
+		GeneratedPost: domain.GeneratedPost{
+			Title:   resp.Title,
+			Body:    resp.Body,
+			Summary: resp.Summary,
+			Tags:    resp.Tags,
+		},
+		ApprovalID: resp.ApprovalId,
+	}, nil
+}
+
+func (c *grpcClient) ApprovePost(ctx context.Context, approvalID string, review *domain.DraftReview) (*domain.GeneratedPost, error) {
+	ctx, cancel := context.WithTimeout(ctx, approveTimeout)
+	defer cancel()
+
+	req := &pb.ApprovePostRequest{ApprovalId: approvalID}
+	if review != nil {
+		if review.Title != nil {
+			req.Title = proto.String(*review.Title)
+		}
+		if review.Body != nil {
+			req.Body = proto.String(*review.Body)
+		}
+		if review.Summary != nil {
+			req.Summary = proto.String(*review.Summary)
+		}
+		req.Tags = review.Tags
+	}
+
+	resp, err := c.client.ApprovePost(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.GeneratedPost{
+		Title:   resp.Title,
+		Body:    resp.Body,
+		Summary: resp.Summary,
+		Tags:    resp.Tags,
+	}, nil
+}
+
+func (c *grpcClient) RejectPost(ctx context.Context, approvalID string, reason string) error {
+	ctx, cancel := context.WithTimeout(ctx, rejectTimeout)
+	defer cancel()
+
+	_, err := c.client.RejectPost(ctx, &pb.RejectPostRequest{
+		ApprovalId: approvalID,
+		Reason:     reason,
+	})
+	return err
 }
 
 func (c *grpcClient) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {

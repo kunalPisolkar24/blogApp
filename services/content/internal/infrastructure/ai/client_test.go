@@ -34,6 +34,18 @@ func (s *stubAI) GeneratePost(ctx context.Context, prompt string) (*domain.Gener
 	return nil, s.err
 }
 
+func (s *stubAI) GeneratePostDraft(ctx context.Context, prompt string) (*domain.GeneratedDraft, error) {
+	return nil, s.err
+}
+
+func (s *stubAI) ApprovePost(ctx context.Context, approvalID string, review *domain.DraftReview) (*domain.GeneratedPost, error) {
+	return nil, s.err
+}
+
+func (s *stubAI) RejectPost(ctx context.Context, approvalID string, reason string) error {
+	return s.err
+}
+
 func (s *stubAI) IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error {
 	return s.err
 }

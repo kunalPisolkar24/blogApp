@@ -139,6 +139,9 @@ type MockAIService struct {
 	GenerateSummaryFn   func(ctx context.Context, text string) (string, error)
 	GenerateTagsFn      func(ctx context.Context, title, body string) ([]string, error)
 	GeneratePostFn      func(ctx context.Context, prompt string) (*domain.GeneratedPost, error)
+	GenerateDraftFn     func(ctx context.Context, prompt string) (*domain.GeneratedDraft, error)
+	ApprovePostFn       func(ctx context.Context, approvalID string, review *domain.DraftReview) (*domain.GeneratedPost, error)
+	RejectPostFn        func(ctx context.Context, approvalID string, reason string) error
 	IndexPostFn         func(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
 	DeletePostFn        func(ctx context.Context, postID string) error
 	SearchPostsFn       func(ctx context.Context, query string, offset, limit int) (*domain.SearchResult, error)
@@ -163,6 +166,27 @@ func (m *MockAIService) GenerateTags(ctx context.Context, title, body string) ([
 		return m.GenerateTagsFn(ctx, title, body)
 	}
 	return nil, nil
+}
+
+func (m *MockAIService) GeneratePostDraft(ctx context.Context, prompt string) (*domain.GeneratedDraft, error) {
+	if m.GenerateDraftFn != nil {
+		return m.GenerateDraftFn(ctx, prompt)
+	}
+	return &domain.GeneratedDraft{ApprovalID: "approval-1"}, nil
+}
+
+func (m *MockAIService) ApprovePost(ctx context.Context, approvalID string, review *domain.DraftReview) (*domain.GeneratedPost, error) {
+	if m.ApprovePostFn != nil {
+		return m.ApprovePostFn(ctx, approvalID, review)
+	}
+	return &domain.GeneratedPost{}, nil
+}
+
+func (m *MockAIService) RejectPost(ctx context.Context, approvalID string, reason string) error {
+	if m.RejectPostFn != nil {
+		return m.RejectPostFn(ctx, approvalID, reason)
+	}
+	return nil
 }
 
 func (m *MockAIService) GeneratePost(ctx context.Context, prompt string) (*domain.GeneratedPost, error) {
@@ -455,6 +479,69 @@ func (m *MockSummaryProcessor) SetPostSummary(ctx context.Context, id, summary s
 	m.SummaryStatus = status
 	if m.SetFn != nil {
 		return m.SetFn(ctx, id, summary, status)
+	}
+	return nil
+}
+
+type MockPostDraftRepository struct {
+	CreateFn                  func(ctx context.Context, draft *domain.PostDraft) (*domain.PostDraft, error)
+	FindByIDFn                func(ctx context.Context, id string) (*domain.PostDraft, error)
+	FindPendingExceptAuthorFn func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPostDrafts, error)
+	FindByAuthorFn            func(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPostDrafts, error)
+	TransitionStatusFn        func(ctx context.Context, id string, from []domain.DraftStatus, to domain.DraftStatus) (*domain.PostDraft, error)
+	UpdateFn                  func(ctx context.Context, draft *domain.PostDraft) (*domain.PostDraft, error)
+	DeleteFn                  func(ctx context.Context, id string) error
+
+	TransitionCalls int
+}
+
+func (m *MockPostDraftRepository) Create(ctx context.Context, draft *domain.PostDraft) (*domain.PostDraft, error) {
+	if m.CreateFn != nil {
+		return m.CreateFn(ctx, draft)
+	}
+	draft.ID = "draft-created"
+	return draft, nil
+}
+
+func (m *MockPostDraftRepository) FindByID(ctx context.Context, id string) (*domain.PostDraft, error) {
+	if m.FindByIDFn != nil {
+		return m.FindByIDFn(ctx, id)
+	}
+	return &domain.PostDraft{ID: id}, nil
+}
+
+func (m *MockPostDraftRepository) FindPendingExceptAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPostDrafts, error) {
+	if m.FindPendingExceptAuthorFn != nil {
+		return m.FindPendingExceptAuthorFn(ctx, authorID, page, limit)
+	}
+	return &domain.PaginatedPostDrafts{}, nil
+}
+
+func (m *MockPostDraftRepository) FindByAuthor(ctx context.Context, authorID string, page, limit int) (*domain.PaginatedPostDrafts, error) {
+	if m.FindByAuthorFn != nil {
+		return m.FindByAuthorFn(ctx, authorID, page, limit)
+	}
+	return &domain.PaginatedPostDrafts{}, nil
+}
+
+func (m *MockPostDraftRepository) TransitionStatus(ctx context.Context, id string, from []domain.DraftStatus, to domain.DraftStatus) (*domain.PostDraft, error) {
+	m.TransitionCalls++
+	if m.TransitionStatusFn != nil {
+		return m.TransitionStatusFn(ctx, id, from, to)
+	}
+	return &domain.PostDraft{ID: id, Status: to}, nil
+}
+
+func (m *MockPostDraftRepository) Update(ctx context.Context, draft *domain.PostDraft) (*domain.PostDraft, error) {
+	if m.UpdateFn != nil {
+		return m.UpdateFn(ctx, draft)
+	}
+	return draft, nil
+}
+
+func (m *MockPostDraftRepository) Delete(ctx context.Context, id string) error {
+	if m.DeleteFn != nil {
+		return m.DeleteFn(ctx, id)
 	}
 	return nil
 }

@@ -31,6 +31,20 @@ func (a *NoopAI) GeneratePost(_ context.Context, _ string) (*domain.GeneratedPos
 	return nil, domain.ErrAICircuitOpen
 }
 
+// Draft workflow paths have no safe local equivalent either: there is
+// nothing to review without the real generation workflow.
+func (a *NoopAI) GeneratePostDraft(_ context.Context, _ string) (*domain.GeneratedDraft, error) {
+	return nil, domain.ErrAICircuitOpen
+}
+
+func (a *NoopAI) ApprovePost(_ context.Context, _ string, _ *domain.DraftReview) (*domain.GeneratedPost, error) {
+	return nil, domain.ErrAICircuitOpen
+}
+
+func (a *NoopAI) RejectPost(_ context.Context, _, _ string) error {
+	return domain.ErrAICircuitOpen
+}
+
 // IndexPost and DeletePost no-op in fallback mode: search simply has no
 // index while the AI service is down.
 func (a *NoopAI) IndexPost(_ context.Context, _ string, _ string, _ string, _ string, _ []string, _ time.Time) error {
