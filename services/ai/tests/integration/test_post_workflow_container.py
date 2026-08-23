@@ -1,12 +1,14 @@
-"""Container test: the draft workflow survives a full service restart.
+"""Container tests: the draft workflow survives restarts and races.
 
 A draft generated against one served container must still be resumable
 by a brand-new container pointed at the same Postgres checkpointer --
 the whole point of parking the review gate in a checkpoint instead of
-memory.
+memory. Concurrent approvals must also resolve to a single outcome.
 """
 
 from __future__ import annotations
+
+import concurrent.futures
 
 import grpc
 import pytest
@@ -81,3 +83,36 @@ def test_reject_then_reapprove_across_restart(start_service, ai_postgres) -> Non
         assert approved.status == pb.WORKFLOW_STATUS_APPROVED
     finally:
         second.stop()
+
+
+def test_concurrent_approvals_resolve_to_one_outcome(
+    start_service, ai_postgres
+) -> None:
+    """Two simultaneous approvals both succeed with the same payload.
+
+    The AI side is idempotent by design; whichever call resumes the
+    checkpoint first wins, and the loser's repeat-approve pre-check
+    returns the stored result. Publication-level exclusivity is proven
+    at the content layer.
+    """
+    service = start_service(RESTART_ENV)
+    try:
+        draft = service.stub.GeneratePostDraft(
+            pb.PostGenerationRequest(prompt="write about concurrency")
+        )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(
+                    service.stub.ApprovePost,
+                    pb.ApprovePostRequest(approval_id=draft.approval_id),
+                )
+                for _ in range(2)
+            ]
+            results = [future.result(timeout=30) for future in futures]
+
+        assert all(r.status == pb.WORKFLOW_STATUS_APPROVED for r in results)
+        assert results[0].title == results[1].title
+        assert results[0].approval_id == draft.approval_id
+    finally:
+        service.stop()
