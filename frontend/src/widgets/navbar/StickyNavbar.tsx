@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   PenSquare,
+  ShieldCheck,
   User,
   Waypoints,
   X,
@@ -29,6 +30,12 @@ const authoringNavigation = {
   to: "/create-blog",
   label: "Create Blog",
   icon: PenSquare,
+};
+
+const reviewNavigation = {
+  to: "/review",
+  label: "Review",
+  icon: ShieldCheck,
 };
 
 const accountNavigation = {
@@ -223,6 +230,7 @@ export const StickyNavbar = () => {
   const isHydrating = !hasHydrated || status === "hydrating";
   const isAuthenticated = hasHydrated && status === "authenticated";
   const AuthoringIcon = authoringNavigation.icon;
+  const ReviewIcon = reviewNavigation.icon;
   const displayName = user?.name || user?.username || "Workspace member";
   const accountIdentityName =
     user?.username || user?.name || "Workspace member";
@@ -257,6 +265,17 @@ export const StickyNavbar = () => {
               >
                 <AuthoringIcon className="h-4 w-4" />
                 {authoringNavigation.label}
+              </Link>
+
+              <Link
+                to={reviewNavigation.to}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "hidden h-11 px-4 md:inline-flex",
+                )}
+              >
+                <ReviewIcon className="h-4 w-4" />
+                {reviewNavigation.label}
               </Link>
 
               <DropdownMenu
@@ -388,6 +407,14 @@ export const StickyNavbar = () => {
                       >
                         <AuthoringIcon className="h-4 w-4" />
                         {authoringNavigation.label}
+                      </Link>
+                      <Link
+                        to={reviewNavigation.to}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={stackedMenuActionClassName}
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        {reviewNavigation.label}
                       </Link>
                       <Link
                         to={accountNavigation.to}

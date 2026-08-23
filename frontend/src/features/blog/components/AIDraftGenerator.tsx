@@ -14,6 +14,11 @@ interface AIDraftGeneratorProps {
   summary: string | null;
   isSummaryVisible: boolean;
   onToggleSummary: () => void;
+  // Optional peer-review path: submits the same prompt to
+  // createPostDraft so the generated post waits for another user's
+  // approval instead of landing in the editor.
+  onSubmitForReview?: () => void;
+  isSubmittingForReview?: boolean;
 }
 
 export const AIDraftGenerator: React.FC<AIDraftGeneratorProps> = ({
@@ -26,6 +31,8 @@ export const AIDraftGenerator: React.FC<AIDraftGeneratorProps> = ({
   summary,
   isSummaryVisible,
   onToggleSummary,
+  onSubmitForReview,
+  isSubmittingForReview = false,
 }) => {
   return (
     <Card className="gap-0 bg-surface-lowest py-0">
@@ -74,6 +81,19 @@ export const AIDraftGenerator: React.FC<AIDraftGeneratorProps> = ({
             >
               Clear Prompt
             </Button>
+            {onSubmitForReview && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onSubmitForReview}
+                disabled={isSubmittingForReview || !canGenerate}
+                className="sm:w-auto"
+              >
+                {isSubmittingForReview
+                  ? "Submitting..."
+                  : "Submit for Peer Review"}
+              </Button>
+            )}
           </div>
           {summary && (
             <div className="space-y-3">
