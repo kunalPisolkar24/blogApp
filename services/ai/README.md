@@ -120,6 +120,29 @@ This needs real embeddings, so run it against the `compose.local.yml` stack
 cites the expected posts for grounded rows and reports (without failing) any
 negative rows it still cites.
 
+### Chat evaluators
+
+`scripts/run_chat_evals.py` (`make eval-chat`) scores every dataset row with
+two evaluator kinds:
+
+- **Deterministic** — grounded rows must cite every expected post id (and
+  nothing outside the corpus); gibberish / out-of-scope rows must cite
+  nothing. Any violation fails the run.
+- **LLM-as-judge** — relevance and faithfulness scored per row by a judge
+  prompt; averages below `--min-relevance` / `--min-faithfulness` (0.7)
+  fail the run. Judges need `AI_LLM_MODE=real`; under fake mode only the
+  deterministic gate applies.
+
+```bash
+make eval-chat             # local gate against the live stack
+poetry run python scripts/run_chat_evals.py --upload   # LangSmith experiment
+```
+
+`--upload` runs the same target and evaluators through
+`langsmith.aevaluate`, so per-row feedback shows up as an experiment on the
+`topos-chat-eval` dataset (needs `LANGSMITH_API_KEY`; push the dataset first
+with `make eval-dataset`). See issue #161.
+
 ### Recommender evals
 
 `scripts/run_reco_evals.py` scores the personalized feed (`RecommendFeed`) in
