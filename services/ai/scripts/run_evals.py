@@ -7,7 +7,8 @@ local or future automation can gate on it:
 
 * ``chat`` -- deterministic citation checks plus optional LLM-as-judge
   relevance/faithfulness scoring on the ``topos-chat-eval`` dataset
-  (``scripts/eval_chat.py``, issue #161).
+  (``scripts/eval_chat.py``, issue #161). Negative rows fail on invented
+  citations; citing known posts is reported only.
 * ``reco`` -- precision@k, tag diversity and seen-ratio against a recorded
   baseline (``scripts/eval_reco.py``, issue #163).
 
@@ -42,16 +43,32 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import eval_chat
 import eval_reco
+from reco_eval_data import DEFAULT_K
 from verify_eval_dataset import index_corpus as index_chat_corpus
 
 from src.config import settings
-from src.generated import ai_service_pb2_grpc
+from src.generated import ai_service_pb2, ai_service_pb2_grpc
+
+
+def clear_eval_posts(stub: ai_service_pb2_grpc.AIServiceStub) -> None:
+    """Remove every post belonging to either eval corpus from the index.
+
+    Both corpora share the service's persistent ``posts`` Qdrant collection;
+    without this, a suite would retrieve (and cite) the other suite's posts
+    and any leftovers from earlier runs.
+    """
+    corpus_ids = [post["post_id"] for post in eval_chat.CORPUS] + [
+        post["post_id"] for post in eval_reco.CORPUS
+    ]
+    for post_id in corpus_ids:
+        stub.DeletePost(ai_service_pb2.DeleteRequest(post_id=post_id))
 
 
 def run_chat_suite(
     stub: ai_service_pb2_grpc.AIServiceStub, args: argparse.Namespace
 ) -> int:
     print(f"== chat suite: scoring {len(eval_chat.CURATED_QA)} curated rows ==")
+    clear_eval_posts(stub)
     index_chat_corpus(stub)
 
     judges_on = not args.no_judges and settings.LLM_MODE == "real"
@@ -83,8 +100,9 @@ def run_chat_suite(
 def run_reco_suite(
     stub: ai_service_pb2_grpc.AIServiceStub, args: argparse.Namespace
 ) -> int:
-    k = args.k if args.k is not None else eval_reco.DEFAULT_K
+    k = args.k if args.k is not None else DEFAULT_K
     print(f"== reco suite: scoring feeds (k={k}) ==")
+    clear_eval_posts(stub)
     eval_reco.index_corpus(stub)
 
     summary = eval_reco.run_suite(stub, k)
