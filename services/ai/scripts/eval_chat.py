@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Chat evaluators for the Topos grounded assistant.
 
 Scores every row of the curated chat eval dataset (``scripts/eval_data.py``,
@@ -11,25 +10,20 @@ kinds of evaluators:
 * LLM-as-judge -- relevance (does the answer address the question?) and
   faithfulness (is it supported by the cited posts?). Judges need a real LLM
   (``AI_LLM_MODE=real``); under fake mode they are skipped and only the
-  deterministic gate applies. Average scores below ``--min-relevance`` /
-  ``--min-faithfulness`` fail the run.
+  deterministic gate applies. Average scores below the configured minimums
+  fail the run.
 
-With ``--upload`` the same target and evaluators run through LangSmith
-(``langsmith.aevaluate``) so per-row feedback is visible as an experiment on
-the uploaded dataset. Requires ``LANGSMITH_API_KEY`` and a dataset pushed
-with ``make eval-dataset`` beforehand.
+The optional LangSmith path (``run_langsmith_experiment``) runs the same
+target and evaluators through ``langsmith.aevaluate`` so per-row feedback is
+visible as an experiment on the uploaded dataset; it requires
+``LANGSMITH_API_KEY`` and a dataset pushed with ``make eval-dataset``.
 
-Requires the service-level stack up (services/ai/compose.local.yml).
-
-Usage:
-    make eval-chat
-    poetry run python scripts/run_chat_evals.py --no-judges
-    poetry run python scripts/run_chat_evals.py --upload
+Driven by ``scripts/run_evals.py`` (--suite chat); needs the service-level
+stack up (services/ai/compose.local.yml).
 """
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import json
 import re
@@ -46,9 +40,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from eval_data import CORPUS, CURATED_QA, DATASET_NAME
-from verify_eval_dataset import index_corpus
 
-from src.config import settings
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.llm import LLMClient, LLMProvider
 
@@ -235,7 +227,7 @@ def make_chat_target(stub: ai_service_pb2_grpc.AIServiceStub):
 # --- Local run ---
 
 
-async def run_local(stub: ai_service_pb2_grpc.AIServiceStub, judges_on: bool) -> dict:
+async def run_suite(stub: ai_service_pb2_grpc.AIServiceStub, judges_on: bool) -> dict:
     """Score every curated row; returns the aggregate summary."""
     llm = judge_llm() if judges_on else None
 
@@ -388,79 +380,3 @@ async def run_langsmith_experiment(
             if feedback.key == "chat_deterministic" and not feedback.score:
                 failures += 1
     return failures, results.experiment_name()
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--address", default="127.0.0.1:50051")
-    parser.add_argument(
-        "--no-judges",
-        action="store_true",
-        help="skip the LLM-as-judge scoring; deterministic checks only",
-    )
-    parser.add_argument(
-        "--min-relevance",
-        type=float,
-        default=0.7,
-        help="minimum average relevance score before failing (default: 0.7)",
-    )
-    parser.add_argument(
-        "--min-faithfulness",
-        type=float,
-        default=0.7,
-        help="minimum average faithfulness score before failing (default: 0.7)",
-    )
-    parser.add_argument(
-        "--upload",
-        action="store_true",
-        help=(
-            "record a LangSmith experiment instead of running locally; needs "
-            f"LANGSMITH_API_KEY and the '{DATASET_NAME}' dataset pushed via "
-            "make eval-dataset"
-        ),
-    )
-    args = parser.parse_args(argv)
-
-    channel = grpc.insecure_channel(args.address)
-    grpc.channel_ready_future(channel).result(timeout=30)
-    stub = ai_service_pb2_grpc.AIServiceStub(channel)
-
-    print(f"Indexing {len(CORPUS)} corpus posts...")
-    index_corpus(stub)
-
-    judges_on = not args.no_judges and settings.LLM_MODE == "real"
-    if not args.no_judges and settings.LLM_MODE != "real":
-        print("Judges skipped (need AI_LLM_MODE=real); deterministic checks only.")
-
-    try:
-        if args.upload:
-            failures, experiment_name = asyncio.run(
-                run_langsmith_experiment(stub, judges_on)
-            )
-            print(f"Experiment '{experiment_name}' recorded in LangSmith.")
-        else:
-            print(f"Scoring {len(CURATED_QA)} curated rows...")
-            summary = asyncio.run(run_local(stub, judges_on))
-            print_summary(summary, judges_on)
-            failures = summary["counts"]["failed"]
-            if judges_on:
-                failures += gate_regressions(
-                    summary, args.min_relevance, args.min_faithfulness
-                )
-            if summary["counts"]["error"]:
-                print(
-                    f"warning: {summary['counts']['error']} row(s) hit a transient "
-                    "error and were skipped; re-run to cover them."
-                )
-    finally:
-        channel.close()
-
-    if failures:
-        print(f"FAILED: {failures} problem(s) found.")
-        return 1
-    print("OK: every deterministic check passed.")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

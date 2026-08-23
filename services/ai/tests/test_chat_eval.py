@@ -2,13 +2,12 @@
 
 These run without Docker or a live service: they guard the deterministic
 citation checks, the judge prompt assembly and score parsing, and the
-streaming answer aggregation used by ``scripts/run_chat_evals.py``.
+streaming answer aggregation used by ``scripts/eval_chat.py``.
 """
 
 from __future__ import annotations
 
-from scripts.eval_data import CORPUS
-from scripts.run_chat_evals import (
+from scripts.eval_chat import (
     EVAL_FAITHFULNESS_JUDGE_PROMPT,
     EVAL_RELEVANCE_JUDGE_PROMPT,
     _judge_feedback,
@@ -21,6 +20,7 @@ from scripts.run_chat_evals import (
     parse_judge_score,
     relevance_user_prompt,
 )
+from scripts.eval_data import CORPUS
 from src.generated import ai_service_pb2
 
 GROUNDED_ID = CORPUS[0]["post_id"]
