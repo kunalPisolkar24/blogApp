@@ -1,7 +1,7 @@
 """Offline checks for the recommender eval dataset and metric math.
 
 These run without Docker or a live service: they guard the metric functions
-used by ``scripts/run_reco_evals.py`` and the dataset's shape (valid ids,
+used by ``scripts/eval_reco.py`` and the dataset's shape (valid ids,
 disjoint train/held-out splits, sane user definitions).
 """
 
@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import re
 
-from scripts.reco_eval_data import CORPUS, POST_BY_ID, USERS
-from scripts.run_reco_evals import (
+from scripts.eval_reco import (
     precision_at_k,
+    print_comparison,
     relevant_ids,
     seen_ratio,
     tag_diversity,
 )
+from scripts.reco_eval_data import CORPUS, POST_BY_ID, USERS
 
 HEX24 = re.compile(r"^[0-9a-f]{24}$")
 
@@ -70,6 +71,35 @@ def test_relevant_ids_follow_interaction_topics() -> None:
         post_id for post_id, post in POST_BY_ID.items() if post["topic"] == "coffee"
     }
     assert relevant == expected
+
+
+def test_print_comparison_prints_every_recorded_metric(capsys) -> None:
+    current = {
+        "default": {"precision_at_k": 0.5, "diversity": 0.8, "seen_ratio": 0.0},
+        "surprise": {"precision_at_k": 0.2, "diversity": 0.7, "seen_ratio": 0.0},
+    }
+    baseline = {"modes": {"default": {"precision_at_k": 0.7, "seen_ratio": 0.0}}}
+    regressions = print_comparison(current, baseline, tolerance=0.05)
+    out = capsys.readouterr().out
+    # Recorded metrics are printed explicitly, unrecorded ones are skipped.
+    assert "baseline=0.700" in out and "current=0.500" in out
+    assert "seen_ratio" in out
+    assert "surprise" not in out
+    assert [(mode, key, base, cur) for mode, key, base, cur in regressions] == [
+        ("default", "precision_at_k", 0.7, 0.5)
+    ]
+
+
+def test_print_comparison_marks_passing_metrics_ok(capsys) -> None:
+    current = {
+        "default": {"precision_at_k": 0.7, "diversity": 0.8, "seen_ratio": 0.0},
+        "surprise": {"precision_at_k": 0.1, "diversity": 0.8, "seen_ratio": 0.0},
+    }
+    baseline = {"modes": {"default": {"precision_at_k": 0.7}}}
+    assert print_comparison(current, baseline, tolerance=0.05) == []
+    out = capsys.readouterr().out
+    assert "(ok" in out
+    assert "REGRESSION" not in out
 
 
 # --- Dataset shape ---

@@ -120,21 +120,60 @@ This needs real embeddings, so run it against the `compose.local.yml` stack
 cites the expected posts for grounded rows and reports (without failing) any
 negative rows it still cites.
 
+### Eval harness
+
+`scripts/run_evals.py` unifies the eval suites behind one entry point
+(`--suite chat|reco|all`, default all): it runs each selected suite against
+the live stack, prints per-suite metrics, compares against baselines
+explicitly, and exits non-zero when any suite regresses — so local or future
+automation can gate on the exit code. No CI wiring, on purpose.
+
+```bash
+make eval-all   # every suite in one command
+```
+
+### Chat evaluators
+
+The chat suite (`scripts/eval_chat.py`, `make eval-chat`) scores every
+dataset row with two evaluator kinds:
+
+- **Deterministic** — grounded rows must cite every expected post id (and
+  nothing outside the corpus); gibberish / out-of-scope rows must never
+  invent posts (fabricated ids fail; citing known posts is reported only).
+  Any violation fails the run.
+- **LLM-as-judge** — relevance and faithfulness scored per row by a judge
+  prompt; averages below `--min-relevance` / `--min-faithfulness` (0.7)
+  fail the run. Judges need `AI_LLM_MODE=real`; under fake mode only the
+  deterministic gate applies.
+
+```bash
+make eval-chat             # local gate against the live stack
+poetry run python scripts/run_evals.py --suite chat --upload
+```
+
+`--upload` records a LangSmith experiment instead of running locally: the
+same target and evaluators run through `langsmith.aevaluate`, so per-row
+feedback shows up on the `topos-chat-eval` dataset (needs
+`LANGSMITH_API_KEY`; push the dataset first with `make eval-dataset`). See
+issue #161.
+
 ### Recommender evals
 
-`scripts/run_reco_evals.py` scores the personalized feed (`RecommendFeed`) in
-DEFAULT and SURPRISE modes on precision@k against interaction-history topics,
-tag diversity, and seen-ratio (recommended ≠ already seen). The dataset — a
-fixed multi-topic corpus plus synthetic users with held-out interactions —
-lives in `scripts/reco_eval_data.py`. Run against the service-level stack:
+The reco suite (`scripts/eval_reco.py`) scores the personalized feed
+(`RecommendFeed`) in DEFAULT and SURPRISE modes on precision@k against
+interaction-history topics, tag diversity, and seen-ratio (recommended ≠
+already seen). The dataset — a fixed multi-topic corpus plus synthetic users
+with held-out interactions — lives in `scripts/reco_eval_data.py`. Run
+against the service-level stack:
 
 ```bash
 make eval-reco-baseline   # record reco_eval_baseline.json (gitignored)
-make eval-reco            # re-run; exits non-zero on regression vs baseline
+make eval-reco            # re-run; prints baseline vs current per metric,
+                          # exits non-zero on regression
 ```
 
-This is a local gate on purpose: run it before/after recommender changes. No
-CI wiring. See issue #163.
+This is a local gate on purpose: run it before/after recommender changes.
+See issue #163.
 
 ## Observability
 

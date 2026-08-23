@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Recommender evaluation harness for the Topos personalized feed.
+"""Recommender evaluation suite for the Topos personalized feed.
 
 Indexes the fixed corpus from ``scripts/reco_eval_data.py`` into a running
 ai-service, folds each synthetic user's interactions into a taste profile via
@@ -25,24 +24,22 @@ The first run should record a baseline:
     make eval-reco-baseline
 
 Later runs compare against ``reco_eval_baseline.json`` (gitignored) and exit
-non-zero when any metric drops by more than ``--tolerance``. This is a local
+non-zero when any metric drops by more than the tolerance. This is a local
 gate on purpose: no CI wiring, run it before/after recommender changes.
+Real embeddings make same-topic posts rank together; RecommendFeed never
+calls the LLM, so LLM_MODE=fake is fine.
 
-Requires the service-level stack (services/ai/compose.local.yml); real
-embeddings make same-topic posts rank together. RecommendFeed never calls the
-LLM, so LLM_MODE=fake is fine.
+Driven by ``scripts/run_evals.py`` (--suite reco); needs the service-level
+stack up (services/ai/compose.local.yml).
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
-
-import grpc
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -51,7 +48,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from reco_eval_data import CORPUS, DEFAULT_K, POST_BY_ID, SURPRISE_SEED, USERS
+from reco_eval_data import CORPUS, POST_BY_ID, SURPRISE_SEED, USERS
 
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 
@@ -232,71 +229,21 @@ def write_baseline(path: Path, summary: dict, k: int, tolerance: float) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--address", default="127.0.0.1:50051")
-    parser.add_argument(
-        "--k", type=int, default=None, help="feed depth (default: dataset DEFAULT_K)"
-    )
-    parser.add_argument(
-        "--tolerance",
-        type=float,
-        default=0.05,
-        help="allowed absolute metric drop vs baseline before failing (default: 0.05)",
-    )
-    parser.add_argument(
-        "--update-baseline",
-        action="store_true",
-        help="record a fresh baseline instead of comparing",
-    )
-    parser.add_argument(
-        "--baseline-path",
-        type=Path,
-        default=SCRIPT_DIR / "reco_eval_baseline.json",
-    )
-    args = parser.parse_args(argv)
-
-    channel = grpc.insecure_channel(args.address)
-    grpc.channel_ready_future(channel).result(timeout=30)
-    stub = ai_service_pb2_grpc.AIServiceStub(channel)
-
-    k = args.k if args.k is not None else DEFAULT_K
-
-    print(f"Indexing {len(CORPUS)} corpus posts...")
-    index_corpus(stub)
-
-    print(f"Scoring feeds (k={k})...")
-    summary = run_suite(stub, k)
-    channel.close()
-
-    for mode, metrics in summary.items():
-        pretty = ", ".join(f"{key}={metrics[key]:.3f}" for key in METRIC_KEYS)
-        print(f"{mode:>8}: {pretty}, cold_start_users={metrics['cold_start_users']}")
-
-    if args.update_baseline:
-        write_baseline(args.baseline_path, summary, k, args.tolerance)
-        print(f"Baseline written to {args.baseline_path}")
-        return 0
-
-    baseline = load_baseline(args.baseline_path)
-    if baseline is None:
-        print(
-            f"No baseline at {args.baseline_path}. Record one first with "
-            "`make eval-reco-baseline`."
-        )
-        return 1
-
-    regressions = find_regressions(summary, baseline, args.tolerance)
-    if regressions:
-        for mode, key, base, cur in regressions:
+def print_comparison(
+    current: dict, baseline: dict, tolerance: float
+) -> list[tuple[str, str, float, float]]:
+    """Print every recorded metric next to its baseline; returns regressions."""
+    regressions = find_regressions(current, baseline, tolerance)
+    regressed = {(mode, key) for mode, key, _, _ in regressions}
+    for mode in MODES:
+        base_mode = baseline.get("modes", {}).get(mode, {})
+        for key in METRIC_KEYS:
+            if key not in base_mode:
+                continue
+            marker = "REGRESSION" if (mode, key) in regressed else "ok"
             print(
-                f"REGRESSION {mode}.{key}: baseline={base:.3f} "
-                f"current={cur:.3f} (tolerance={args.tolerance})"
+                f"  [{mode:>8}] {key}: baseline={base_mode[key]:.3f} "
+                f"current={current[mode][key]:.3f} ({marker}, "
+                f"tolerance={tolerance})"
             )
-        return 1
-    print("OK: no recommender regression vs baseline.")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return regressions

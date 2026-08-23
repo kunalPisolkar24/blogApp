@@ -1,6 +1,6 @@
 """Curated recommender evaluation dataset for the Topos feed.
 
-Source of truth for ``scripts/run_reco_evals.py``. Defines a fixed corpus of
+Source of truth for ``scripts/eval_reco.py``. Defines a fixed corpus of
 blog posts spread over clearly separated topics and a set of synthetic users
 whose interaction history drives ``RecommendFeed``.
 
