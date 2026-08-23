@@ -93,6 +93,44 @@ type PaginatedChats {
   totalChats: Int!
 }
 
+enum DraftStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+# PostDraft is an AI-generated post paused for peer review. The author
+# cannot act on their own draft; approval by a different user publishes
+# it through the regular createPost path.
+type PostDraft {
+  id: ID!
+  approvalId: ID!
+  prompt: String!
+  title: String!
+  body: String!
+  summary: String!
+  tags: [String!]!
+  status: DraftStatus!
+  authorId: ID!
+  postId: ID
+  createdAt: String!
+  updatedAt: String!
+}
+
+type PaginatedPostDrafts {
+  drafts: [PostDraft!]!
+  totalPages: Int!
+  currentPage: Int!
+  totalDrafts: Int!
+}
+
+input DraftEditsInput {
+  title: String
+  body: String
+  summary: String
+  tags: [String!]
+}
+
 type Query {
   posts(page: Int, limit: Int): PaginatedPosts!
   post(id: ID!): Post
@@ -103,6 +141,10 @@ type Query {
   chats(page: Int, limit: Int): PaginatedChats!
   chat(id: ID!): Chat
   chatMessages(chatId: ID!, page: Int, limit: Int): PaginatedMessages!
+  # Community review queue: pending drafts from everyone but the caller.
+  postDrafts(page: Int, limit: Int): PaginatedPostDrafts!
+  # The caller's own drafts in every state.
+  myPostDrafts(page: Int, limit: Int): PaginatedPostDrafts!
 }
 
 type Mutation {
@@ -118,6 +160,10 @@ type Mutation {
   recordPostView(postId: ID!, mode: RecommendMode): Boolean!
   likePost(postId: ID!, mode: RecommendMode): Boolean!
   savePost(postId: ID!, mode: RecommendMode): Boolean!
+  createPostDraft(prompt: String!): PostDraft!
+  approvePostDraft(id: ID!, input: DraftEditsInput): PostDraft!
+  rejectPostDraft(id: ID!, reason: String): PostDraft!
+  deletePostDraft(id: ID!): Boolean!
 }
 
 input CreatePostInput {

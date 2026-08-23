@@ -17,6 +17,7 @@ from src.graphs.checkpointer import (
     close_checkpointer,
     start_checkpointer,
 )
+from src.graphs.post_graph import build_post_generation_graph
 from src.llm import FakeLLMClient, LLMClient
 from src.observability.langsmith import setup_langsmith
 from src.observability.logging import setup_logging
@@ -122,8 +123,19 @@ async def serve() -> None:
     logger.info("chat graphs compiled for sessions and stateless runs")
     chat_graphs = ChatGraphs(sessioned=_session_graph, stateless=_stateless_graph)
 
+    # Drafts share the chat checkpointer: the interrupt survives restarts
+    # and reviewers resume by approval id.
+    post_generation_graph = build_post_generation_graph(llm, checkpointer=checkpointer)
+    logger.info("post generation graph compiled with review interrupt")
+
     server, health_servicer = await create_server(
-        AIService(llm, search, embeddings, chat_graphs=chat_graphs)
+        AIService(
+            llm,
+            search,
+            embeddings,
+            chat_graphs=chat_graphs,
+            post_generation_graph=post_generation_graph,
+        )
     )
     handle_graceful_shutdown(server, health_servicer)
     try:

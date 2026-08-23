@@ -22,6 +22,9 @@ const (
 	AIService_GenerateSummary_FullMethodName   = "/ai.AIService/GenerateSummary"
 	AIService_GenerateTags_FullMethodName      = "/ai.AIService/GenerateTags"
 	AIService_GeneratePost_FullMethodName      = "/ai.AIService/GeneratePost"
+	AIService_GeneratePostDraft_FullMethodName = "/ai.AIService/GeneratePostDraft"
+	AIService_ApprovePost_FullMethodName       = "/ai.AIService/ApprovePost"
+	AIService_RejectPost_FullMethodName        = "/ai.AIService/RejectPost"
 	AIService_IndexPost_FullMethodName         = "/ai.AIService/IndexPost"
 	AIService_DeletePost_FullMethodName        = "/ai.AIService/DeletePost"
 	AIService_SearchPosts_FullMethodName       = "/ai.AIService/SearchPosts"
@@ -41,6 +44,9 @@ type AIServiceClient interface {
 	GenerateSummary(ctx context.Context, in *ContentRequest, opts ...grpc.CallOption) (*ContentResponse, error)
 	GenerateTags(ctx context.Context, in *ContextRequest, opts ...grpc.CallOption) (*TagsResponse, error)
 	GeneratePost(ctx context.Context, in *PostGenerationRequest, opts ...grpc.CallOption) (*PostGenerationResponse, error)
+	GeneratePostDraft(ctx context.Context, in *PostGenerationRequest, opts ...grpc.CallOption) (*PostWorkflowState, error)
+	ApprovePost(ctx context.Context, in *ApprovePostRequest, opts ...grpc.CallOption) (*PostWorkflowState, error)
+	RejectPost(ctx context.Context, in *RejectPostRequest, opts ...grpc.CallOption) (*PostWorkflowState, error)
 	IndexPost(ctx context.Context, in *IndexRequest, opts ...grpc.CallOption) (*IndexResponse, error)
 	DeletePost(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
 	SearchPosts(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
@@ -85,6 +91,36 @@ func (c *aIServiceClient) GeneratePost(ctx context.Context, in *PostGenerationRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PostGenerationResponse)
 	err := c.cc.Invoke(ctx, AIService_GeneratePost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) GeneratePostDraft(ctx context.Context, in *PostGenerationRequest, opts ...grpc.CallOption) (*PostWorkflowState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PostWorkflowState)
+	err := c.cc.Invoke(ctx, AIService_GeneratePostDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) ApprovePost(ctx context.Context, in *ApprovePostRequest, opts ...grpc.CallOption) (*PostWorkflowState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PostWorkflowState)
+	err := c.cc.Invoke(ctx, AIService_ApprovePost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) RejectPost(ctx context.Context, in *RejectPostRequest, opts ...grpc.CallOption) (*PostWorkflowState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PostWorkflowState)
+	err := c.cc.Invoke(ctx, AIService_RejectPost_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +243,9 @@ type AIServiceServer interface {
 	GenerateSummary(context.Context, *ContentRequest) (*ContentResponse, error)
 	GenerateTags(context.Context, *ContextRequest) (*TagsResponse, error)
 	GeneratePost(context.Context, *PostGenerationRequest) (*PostGenerationResponse, error)
+	GeneratePostDraft(context.Context, *PostGenerationRequest) (*PostWorkflowState, error)
+	ApprovePost(context.Context, *ApprovePostRequest) (*PostWorkflowState, error)
+	RejectPost(context.Context, *RejectPostRequest) (*PostWorkflowState, error)
 	IndexPost(context.Context, *IndexRequest) (*IndexResponse, error)
 	DeletePost(context.Context, *DeleteRequest) (*DeleteResponse, error)
 	SearchPosts(context.Context, *SearchRequest) (*SearchResponse, error)
@@ -235,6 +274,15 @@ func (UnimplementedAIServiceServer) GenerateTags(context.Context, *ContextReques
 }
 func (UnimplementedAIServiceServer) GeneratePost(context.Context, *PostGenerationRequest) (*PostGenerationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GeneratePost not implemented")
+}
+func (UnimplementedAIServiceServer) GeneratePostDraft(context.Context, *PostGenerationRequest) (*PostWorkflowState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GeneratePostDraft not implemented")
+}
+func (UnimplementedAIServiceServer) ApprovePost(context.Context, *ApprovePostRequest) (*PostWorkflowState, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApprovePost not implemented")
+}
+func (UnimplementedAIServiceServer) RejectPost(context.Context, *RejectPostRequest) (*PostWorkflowState, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectPost not implemented")
 }
 func (UnimplementedAIServiceServer) IndexPost(context.Context, *IndexRequest) (*IndexResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IndexPost not implemented")
@@ -337,6 +385,60 @@ func _AIService_GeneratePost_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AIServiceServer).GeneratePost(ctx, req.(*PostGenerationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_GeneratePostDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PostGenerationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).GeneratePostDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_GeneratePostDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).GeneratePostDraft(ctx, req.(*PostGenerationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_ApprovePost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApprovePostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).ApprovePost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_ApprovePost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).ApprovePost(ctx, req.(*ApprovePostRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_RejectPost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectPostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).RejectPost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_RejectPost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).RejectPost(ctx, req.(*RejectPostRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -532,6 +634,18 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GeneratePost",
 			Handler:    _AIService_GeneratePost_Handler,
+		},
+		{
+			MethodName: "GeneratePostDraft",
+			Handler:    _AIService_GeneratePostDraft_Handler,
+		},
+		{
+			MethodName: "ApprovePost",
+			Handler:    _AIService_ApprovePost_Handler,
+		},
+		{
+			MethodName: "RejectPost",
+			Handler:    _AIService_RejectPost_Handler,
 		},
 		{
 			MethodName: "IndexPost",

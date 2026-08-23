@@ -10,13 +10,15 @@ type Resolver struct {
 	TagService         *service.TagService
 	ChatService        *service.ChatService
 	InteractionService *service.PostInteractionService
+	DraftService       *service.PostDraftService
 }
 
-func NewResolver(postService *service.PostService, tagService *service.TagService, chatService *service.ChatService, interactionService *service.PostInteractionService) *Resolver {
+func NewResolver(postService *service.PostService, tagService *service.TagService, chatService *service.ChatService, interactionService *service.PostInteractionService, draftService *service.PostDraftService) *Resolver {
 	return &Resolver{
 		PostService:        postService,
 		TagService:         tagService,
 		ChatService:        chatService,
 		InteractionService: interactionService,
+		DraftService:       draftService,
 	}
 }

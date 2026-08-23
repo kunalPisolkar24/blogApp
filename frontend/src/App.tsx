@@ -31,6 +31,12 @@ const UserProfile = lazy(() =>
   })),
 );
 
+const ReviewQueuePage = lazy(() =>
+  import("@/features/blog/review").then((module) => ({
+    default: module.default,
+  })),
+);
+
 export default function App() {
   return (
     <Suspense fallback={<LoadingSpinner />}>
@@ -66,6 +72,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <UserProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/review"
+          element={
+            <ProtectedRoute>
+              <ReviewQueuePage />
             </ProtectedRoute>
           }
         />

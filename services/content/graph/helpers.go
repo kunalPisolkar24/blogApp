@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"time"
 
 	"github.com/kunalPisolkar24/topos/services/content/graph/model"
 	"github.com/kunalPisolkar24/topos/services/content/internal/domain"
@@ -229,6 +230,52 @@ func mapDomainPaginatedMessagesToModel(pm *domain.PaginatedMessages) *model.Pagi
 		TotalPages:    pm.TotalPages,
 		CurrentPage:   pm.Page,
 		TotalMessages: int(pm.TotalMessages),
+	}
+}
+
+func mapDomainPostDraftToModel(dd *domain.PostDraft) *model.PostDraft {
+	if dd == nil {
+		return nil
+	}
+
+	var postID *string
+	if dd.PostID != "" {
+		postID = &dd.PostID
+	}
+
+	return &model.PostDraft{
+		ID:         dd.ID,
+		ApprovalID: dd.ApprovalID,
+		Prompt:     dd.Prompt,
+		Title:      dd.Title,
+		Body:       dd.Body,
+		Summary:    dd.Summary,
+		Tags:       dd.Tags,
+		Status:     model.DraftStatus(dd.Status),
+		AuthorID:   dd.AuthorID,
+		PostID:     postID,
+		CreatedAt:  dd.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:  dd.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func mapDomainPaginatedPostDraftsToModel(pd *domain.PaginatedPostDrafts) *model.PaginatedPostDrafts {
+	if pd == nil {
+		return nil
+	}
+
+	drafts := make([]*model.PostDraft, 0, len(pd.Drafts))
+	for _, draft := range pd.Drafts {
+		if mapped := mapDomainPostDraftToModel(draft); mapped != nil {
+			drafts = append(drafts, mapped)
+		}
+	}
+
+	return &model.PaginatedPostDrafts{
+		Drafts:      drafts,
+		TotalPages:  pd.TotalPages,
+		CurrentPage: pd.Page,
+		TotalDrafts: int(pd.TotalDrafts),
 	}
 }
 

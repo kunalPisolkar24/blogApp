@@ -10,6 +10,9 @@ service AIService {
   rpc GenerateSummary (ContentRequest) returns (ContentResponse);
   rpc GenerateTags (ContextRequest) returns (TagsResponse);
   rpc GeneratePost (PostGenerationRequest) returns (PostGenerationResponse);
+  rpc GeneratePostDraft (PostGenerationRequest) returns (PostWorkflowState);
+  rpc ApprovePost (ApprovePostRequest) returns (PostWorkflowState);
+  rpc RejectPost (RejectPostRequest) returns (PostWorkflowState);
   rpc IndexPost (IndexRequest) returns (IndexResponse);
   rpc DeletePost (DeleteRequest) returns (DeleteResponse);
   rpc SearchPosts (SearchRequest) returns (SearchResponse);
@@ -48,6 +51,52 @@ message PostGenerationResponse {
   string body = 2;
   string summary = 3;
   repeated string tags = 4;
+}
+
+// WorkflowStatus is the lifecycle state of a human-in-the-loop post
+// generation workflow.
+enum WorkflowStatus {
+  WORKFLOW_STATUS_UNSPECIFIED = 0;
+  // Generated and paused for review.
+  WORKFLOW_STATUS_PENDING = 1;
+  // Approved; the final post payload is populated.
+  WORKFLOW_STATUS_APPROVED = 2;
+  // Rejected by a reviewer. The workflow stays resumable, so approval
+  // can still happen later.
+  WORKFLOW_STATUS_REJECTED = 3;
+}
+
+// PostWorkflowState is the shared response for the draft workflow RPCs:
+// GeneratePostDraft returns it paused at pending, ApprovePost resumes
+// it to approved with the final payload, RejectPost marks it rejected.
+message PostWorkflowState {
+  string title = 1;
+  string body = 2;
+  string summary = 3;
+  repeated string tags = 4;
+  // approval_id identifies this workflow; pass it back to ApprovePost
+  // or RejectPost to resume or reject it.
+  string approval_id = 5;
+  WorkflowStatus status = 6;
+}
+
+message ApprovePostRequest {
+  // approval_id returned by GeneratePostDraft.
+  string approval_id = 1;
+  // Optional edits applied before the workflow resumes: unset fields
+  // keep the generated value, a non-empty tags list replaces the
+  // generated tags.
+  optional string title = 2;
+  optional string body = 3;
+  optional string summary = 4;
+  repeated string tags = 5;
+}
+
+message RejectPostRequest {
+  // approval_id returned by GeneratePostDraft.
+  string approval_id = 1;
+  // Optional reviewer-facing reason recorded with the rejection.
+  string reason = 2;
 }
 
 message IndexRequest {

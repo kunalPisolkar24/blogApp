@@ -80,15 +80,19 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		ApprovePostDraft    func(childComplexity int, id string, input *model.DraftEditsInput) int
 		AskChat             func(childComplexity int, chatID string, query string) int
 		CreateChat          func(childComplexity int, title *string) int
 		CreatePost          func(childComplexity int, input model.CreatePostInput) int
+		CreatePostDraft     func(childComplexity int, prompt string) int
 		DeleteChat          func(childComplexity int, id string) int
 		DeletePost          func(childComplexity int, id string) int
+		DeletePostDraft     func(childComplexity int, id string) int
 		GeneratePostContent func(childComplexity int, prompt string) int
 		GenerateTags        func(childComplexity int, title string, body string) int
 		LikePost            func(childComplexity int, postID string, mode *model.RecommendMode) int
 		RecordPostView      func(childComplexity int, postID string, mode *model.RecommendMode) int
+		RejectPostDraft     func(childComplexity int, id string, reason *string) int
 		RenameChat          func(childComplexity int, id string, title string) int
 		SavePost            func(childComplexity int, postID string, mode *model.RecommendMode) int
 		UpdatePost          func(childComplexity int, id string, input model.UpdatePostInput) int
@@ -106,6 +110,13 @@ type ComplexityRoot struct {
 		Messages      func(childComplexity int) int
 		TotalMessages func(childComplexity int) int
 		TotalPages    func(childComplexity int) int
+	}
+
+	PaginatedPostDrafts struct {
+		CurrentPage func(childComplexity int) int
+		Drafts      func(childComplexity int) int
+		TotalDrafts func(childComplexity int) int
+		TotalPages  func(childComplexity int) int
 	}
 
 	PaginatedPosts struct {
@@ -132,11 +143,28 @@ type ComplexityRoot struct {
 		UpdatedAt     func(childComplexity int) int
 	}
 
+	PostDraft struct {
+		ApprovalID func(childComplexity int) int
+		AuthorID   func(childComplexity int) int
+		Body       func(childComplexity int) int
+		CreatedAt  func(childComplexity int) int
+		ID         func(childComplexity int) int
+		PostID     func(childComplexity int) int
+		Prompt     func(childComplexity int) int
+		Status     func(childComplexity int) int
+		Summary    func(childComplexity int) int
+		Tags       func(childComplexity int) int
+		Title      func(childComplexity int) int
+		UpdatedAt  func(childComplexity int) int
+	}
+
 	Query struct {
 		Chat               func(childComplexity int, id string) int
 		ChatMessages       func(childComplexity int, chatID string, page *int, limit *int) int
 		Chats              func(childComplexity int, page *int, limit *int) int
+		MyPostDrafts       func(childComplexity int, page *int, limit *int) int
 		Post               func(childComplexity int, id string) int
+		PostDrafts         func(childComplexity int, page *int, limit *int) int
 		Posts              func(childComplexity int, page *int, limit *int) int
 		PostsByTag         func(childComplexity int, tag string, page *int, limit *int) int
 		RecommendedPosts   func(childComplexity int, page *int, limit *int, mode *model.RecommendMode, seed *int) int
@@ -183,6 +211,10 @@ type MutationResolver interface {
 	RecordPostView(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error)
 	LikePost(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error)
 	SavePost(ctx context.Context, postID string, mode *model.RecommendMode) (bool, error)
+	CreatePostDraft(ctx context.Context, prompt string) (*model.PostDraft, error)
+	ApprovePostDraft(ctx context.Context, id string, input *model.DraftEditsInput) (*model.PostDraft, error)
+	RejectPostDraft(ctx context.Context, id string, reason *string) (*model.PostDraft, error)
+	DeletePostDraft(ctx context.Context, id string) (bool, error)
 }
 type PostResolver interface {
 	Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error)
@@ -199,6 +231,8 @@ type QueryResolver interface {
 	Chats(ctx context.Context, page *int, limit *int) (*model.PaginatedChats, error)
 	Chat(ctx context.Context, id string) (*model.Chat, error)
 	ChatMessages(ctx context.Context, chatID string, page *int, limit *int) (*model.PaginatedMessages, error)
+	PostDrafts(ctx context.Context, page *int, limit *int) (*model.PaginatedPostDrafts, error)
+	MyPostDrafts(ctx context.Context, page *int, limit *int) (*model.PaginatedPostDrafts, error)
 }
 type UserResolver interface {
 	Posts(ctx context.Context, obj *model.User, page *int, limit *int) (*model.PaginatedPosts, error)
@@ -333,6 +367,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.GeneratedPost.Title(childComplexity), true
 
+	case "Mutation.approvePostDraft":
+		if e.complexity.Mutation.ApprovePostDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_approvePostDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ApprovePostDraft(childComplexity, args["id"].(string), args["input"].(*model.DraftEditsInput)), true
 	case "Mutation.askChat":
 		if e.complexity.Mutation.AskChat == nil {
 			break
@@ -366,6 +411,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.CreatePost(childComplexity, args["input"].(model.CreatePostInput)), true
+	case "Mutation.createPostDraft":
+		if e.complexity.Mutation.CreatePostDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createPostDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreatePostDraft(childComplexity, args["prompt"].(string)), true
 	case "Mutation.deleteChat":
 		if e.complexity.Mutation.DeleteChat == nil {
 			break
@@ -388,6 +444,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.DeletePost(childComplexity, args["id"].(string)), true
+	case "Mutation.deletePostDraft":
+		if e.complexity.Mutation.DeletePostDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deletePostDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeletePostDraft(childComplexity, args["id"].(string)), true
 	case "Mutation.generatePostContent":
 		if e.complexity.Mutation.GeneratePostContent == nil {
 			break
@@ -432,6 +499,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.RecordPostView(childComplexity, args["postId"].(string), args["mode"].(*model.RecommendMode)), true
+	case "Mutation.rejectPostDraft":
+		if e.complexity.Mutation.RejectPostDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_rejectPostDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RejectPostDraft(childComplexity, args["id"].(string), args["reason"].(*string)), true
 	case "Mutation.renameChat":
 		if e.complexity.Mutation.RenameChat == nil {
 			break
@@ -515,6 +593,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PaginatedMessages.TotalPages(childComplexity), true
+
+	case "PaginatedPostDrafts.currentPage":
+		if e.complexity.PaginatedPostDrafts.CurrentPage == nil {
+			break
+		}
+
+		return e.complexity.PaginatedPostDrafts.CurrentPage(childComplexity), true
+	case "PaginatedPostDrafts.drafts":
+		if e.complexity.PaginatedPostDrafts.Drafts == nil {
+			break
+		}
+
+		return e.complexity.PaginatedPostDrafts.Drafts(childComplexity), true
+	case "PaginatedPostDrafts.totalDrafts":
+		if e.complexity.PaginatedPostDrafts.TotalDrafts == nil {
+			break
+		}
+
+		return e.complexity.PaginatedPostDrafts.TotalDrafts(childComplexity), true
+	case "PaginatedPostDrafts.totalPages":
+		if e.complexity.PaginatedPostDrafts.TotalPages == nil {
+			break
+		}
+
+		return e.complexity.PaginatedPostDrafts.TotalPages(childComplexity), true
 
 	case "PaginatedPosts.currentPage":
 		if e.complexity.PaginatedPosts.CurrentPage == nil {
@@ -631,6 +734,79 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Post.UpdatedAt(childComplexity), true
 
+	case "PostDraft.approvalId":
+		if e.complexity.PostDraft.ApprovalID == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.ApprovalID(childComplexity), true
+	case "PostDraft.authorId":
+		if e.complexity.PostDraft.AuthorID == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.AuthorID(childComplexity), true
+	case "PostDraft.body":
+		if e.complexity.PostDraft.Body == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.Body(childComplexity), true
+	case "PostDraft.createdAt":
+		if e.complexity.PostDraft.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.CreatedAt(childComplexity), true
+	case "PostDraft.id":
+		if e.complexity.PostDraft.ID == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.ID(childComplexity), true
+	case "PostDraft.postId":
+		if e.complexity.PostDraft.PostID == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.PostID(childComplexity), true
+	case "PostDraft.prompt":
+		if e.complexity.PostDraft.Prompt == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.Prompt(childComplexity), true
+	case "PostDraft.status":
+		if e.complexity.PostDraft.Status == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.Status(childComplexity), true
+	case "PostDraft.summary":
+		if e.complexity.PostDraft.Summary == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.Summary(childComplexity), true
+	case "PostDraft.tags":
+		if e.complexity.PostDraft.Tags == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.Tags(childComplexity), true
+	case "PostDraft.title":
+		if e.complexity.PostDraft.Title == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.Title(childComplexity), true
+	case "PostDraft.updatedAt":
+		if e.complexity.PostDraft.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.PostDraft.UpdatedAt(childComplexity), true
+
 	case "Query.chat":
 		if e.complexity.Query.Chat == nil {
 			break
@@ -664,6 +840,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Chats(childComplexity, args["page"].(*int), args["limit"].(*int)), true
+	case "Query.myPostDrafts":
+		if e.complexity.Query.MyPostDrafts == nil {
+			break
+		}
+
+		args, err := ec.field_Query_myPostDrafts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.MyPostDrafts(childComplexity, args["page"].(*int), args["limit"].(*int)), true
 	case "Query.post":
 		if e.complexity.Query.Post == nil {
 			break
@@ -675,6 +862,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Post(childComplexity, args["id"].(string)), true
+	case "Query.postDrafts":
+		if e.complexity.Query.PostDrafts == nil {
+			break
+		}
+
+		args, err := ec.field_Query_postDrafts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PostDrafts(childComplexity, args["page"].(*int), args["limit"].(*int)), true
 	case "Query.posts":
 		if e.complexity.Query.Posts == nil {
 			break
@@ -808,6 +1006,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputCreatePostInput,
+		ec.unmarshalInputDraftEditsInput,
 		ec.unmarshalInputUpdatePostInput,
 	)
 	first := true
@@ -1017,6 +1216,22 @@ func (ec *executionContext) field_Entity_findUserByID_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_approvePostDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalODraftEditsInput2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐDraftEditsInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_askChat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1044,6 +1259,17 @@ func (ec *executionContext) field_Mutation_createChat_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createPostDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "prompt", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["prompt"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createPost_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1056,6 +1282,17 @@ func (ec *executionContext) field_Mutation_createPost_args(ctx context.Context, 
 }
 
 func (ec *executionContext) field_Mutation_deleteChat_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deletePostDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -1133,6 +1370,22 @@ func (ec *executionContext) field_Mutation_recordPostView_args(ctx context.Conte
 		return nil, err
 	}
 	args["mode"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_rejectPostDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "reason", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["reason"] = arg1
 	return args, nil
 }
 
@@ -1250,6 +1503,38 @@ func (ec *executionContext) field_Query_chat_args(ctx context.Context, rawArgs m
 }
 
 func (ec *executionContext) field_Query_chats_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_myPostDrafts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_postDrafts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
@@ -2564,6 +2849,248 @@ func (ec *executionContext) fieldContext_Mutation_savePost(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createPostDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createPostDraft,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().CreatePostDraft(ctx, fc.Args["prompt"].(string))
+		},
+		nil,
+		ec.marshalNPostDraft2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraft,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createPostDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PostDraft_id(ctx, field)
+			case "approvalId":
+				return ec.fieldContext_PostDraft_approvalId(ctx, field)
+			case "prompt":
+				return ec.fieldContext_PostDraft_prompt(ctx, field)
+			case "title":
+				return ec.fieldContext_PostDraft_title(ctx, field)
+			case "body":
+				return ec.fieldContext_PostDraft_body(ctx, field)
+			case "summary":
+				return ec.fieldContext_PostDraft_summary(ctx, field)
+			case "tags":
+				return ec.fieldContext_PostDraft_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_PostDraft_status(ctx, field)
+			case "authorId":
+				return ec.fieldContext_PostDraft_authorId(ctx, field)
+			case "postId":
+				return ec.fieldContext_PostDraft_postId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_PostDraft_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_PostDraft_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PostDraft", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createPostDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_approvePostDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_approvePostDraft,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().ApprovePostDraft(ctx, fc.Args["id"].(string), fc.Args["input"].(*model.DraftEditsInput))
+		},
+		nil,
+		ec.marshalNPostDraft2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraft,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_approvePostDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PostDraft_id(ctx, field)
+			case "approvalId":
+				return ec.fieldContext_PostDraft_approvalId(ctx, field)
+			case "prompt":
+				return ec.fieldContext_PostDraft_prompt(ctx, field)
+			case "title":
+				return ec.fieldContext_PostDraft_title(ctx, field)
+			case "body":
+				return ec.fieldContext_PostDraft_body(ctx, field)
+			case "summary":
+				return ec.fieldContext_PostDraft_summary(ctx, field)
+			case "tags":
+				return ec.fieldContext_PostDraft_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_PostDraft_status(ctx, field)
+			case "authorId":
+				return ec.fieldContext_PostDraft_authorId(ctx, field)
+			case "postId":
+				return ec.fieldContext_PostDraft_postId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_PostDraft_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_PostDraft_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PostDraft", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_approvePostDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_rejectPostDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_rejectPostDraft,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().RejectPostDraft(ctx, fc.Args["id"].(string), fc.Args["reason"].(*string))
+		},
+		nil,
+		ec.marshalNPostDraft2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraft,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_rejectPostDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PostDraft_id(ctx, field)
+			case "approvalId":
+				return ec.fieldContext_PostDraft_approvalId(ctx, field)
+			case "prompt":
+				return ec.fieldContext_PostDraft_prompt(ctx, field)
+			case "title":
+				return ec.fieldContext_PostDraft_title(ctx, field)
+			case "body":
+				return ec.fieldContext_PostDraft_body(ctx, field)
+			case "summary":
+				return ec.fieldContext_PostDraft_summary(ctx, field)
+			case "tags":
+				return ec.fieldContext_PostDraft_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_PostDraft_status(ctx, field)
+			case "authorId":
+				return ec.fieldContext_PostDraft_authorId(ctx, field)
+			case "postId":
+				return ec.fieldContext_PostDraft_postId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_PostDraft_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_PostDraft_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PostDraft", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_rejectPostDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deletePostDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deletePostDraft,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().DeletePostDraft(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deletePostDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deletePostDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PaginatedChats_chats(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedChats) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2810,6 +3337,148 @@ func (ec *executionContext) _PaginatedMessages_totalMessages(ctx context.Context
 func (ec *executionContext) fieldContext_PaginatedMessages_totalMessages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "PaginatedMessages",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedPostDrafts_drafts(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedPostDrafts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedPostDrafts_drafts,
+		func(ctx context.Context) (any, error) {
+			return obj.Drafts, nil
+		},
+		nil,
+		ec.marshalNPostDraft2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraftᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedPostDrafts_drafts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedPostDrafts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PostDraft_id(ctx, field)
+			case "approvalId":
+				return ec.fieldContext_PostDraft_approvalId(ctx, field)
+			case "prompt":
+				return ec.fieldContext_PostDraft_prompt(ctx, field)
+			case "title":
+				return ec.fieldContext_PostDraft_title(ctx, field)
+			case "body":
+				return ec.fieldContext_PostDraft_body(ctx, field)
+			case "summary":
+				return ec.fieldContext_PostDraft_summary(ctx, field)
+			case "tags":
+				return ec.fieldContext_PostDraft_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_PostDraft_status(ctx, field)
+			case "authorId":
+				return ec.fieldContext_PostDraft_authorId(ctx, field)
+			case "postId":
+				return ec.fieldContext_PostDraft_postId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_PostDraft_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_PostDraft_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PostDraft", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedPostDrafts_totalPages(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedPostDrafts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedPostDrafts_totalPages,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalPages, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedPostDrafts_totalPages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedPostDrafts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedPostDrafts_currentPage(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedPostDrafts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedPostDrafts_currentPage,
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentPage, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedPostDrafts_currentPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedPostDrafts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PaginatedPostDrafts_totalDrafts(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedPostDrafts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedPostDrafts_totalDrafts,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalDrafts, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedPostDrafts_totalDrafts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedPostDrafts",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -3426,6 +4095,354 @@ func (ec *executionContext) fieldContext_Post_savedByMe(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _PostDraft_id(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_approvalId(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_approvalId,
+		func(ctx context.Context) (any, error) {
+			return obj.ApprovalID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_approvalId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_prompt(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_prompt,
+		func(ctx context.Context) (any, error) {
+			return obj.Prompt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_prompt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_title(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_title,
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_body(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_body,
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_summary(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_summary,
+		func(ctx context.Context) (any, error) {
+			return obj.Summary, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_summary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_tags(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_tags,
+		func(ctx context.Context) (any, error) {
+			return obj.Tags, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_tags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_status(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_status,
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		ec.marshalNDraftStatus2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐDraftStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type DraftStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_authorId(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_authorId,
+		func(ctx context.Context) (any, error) {
+			return obj.AuthorID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_authorId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_postId(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_postId,
+		func(ctx context.Context) (any, error) {
+			return obj.PostID, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_postId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_createdAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostDraft_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.PostDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostDraft_updatedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostDraft_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_posts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3891,6 +4908,108 @@ func (ec *executionContext) fieldContext_Query_chatMessages(ctx context.Context,
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_chatMessages_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_postDrafts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_postDrafts,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().PostDrafts(ctx, fc.Args["page"].(*int), fc.Args["limit"].(*int))
+		},
+		nil,
+		ec.marshalNPaginatedPostDrafts2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPostDrafts,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_postDrafts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "drafts":
+				return ec.fieldContext_PaginatedPostDrafts_drafts(ctx, field)
+			case "totalPages":
+				return ec.fieldContext_PaginatedPostDrafts_totalPages(ctx, field)
+			case "currentPage":
+				return ec.fieldContext_PaginatedPostDrafts_currentPage(ctx, field)
+			case "totalDrafts":
+				return ec.fieldContext_PaginatedPostDrafts_totalDrafts(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PaginatedPostDrafts", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_postDrafts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myPostDrafts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_myPostDrafts,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().MyPostDrafts(ctx, fc.Args["page"].(*int), fc.Args["limit"].(*int))
+		},
+		nil,
+		ec.marshalNPaginatedPostDrafts2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPostDrafts,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_myPostDrafts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "drafts":
+				return ec.fieldContext_PaginatedPostDrafts_drafts(ctx, field)
+			case "totalPages":
+				return ec.fieldContext_PaginatedPostDrafts_totalPages(ctx, field)
+			case "currentPage":
+				return ec.fieldContext_PaginatedPostDrafts_currentPage(ctx, field)
+			case "totalDrafts":
+				return ec.fieldContext_PaginatedPostDrafts_totalDrafts(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PaginatedPostDrafts", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_myPostDrafts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5835,6 +6954,54 @@ func (ec *executionContext) unmarshalInputCreatePostInput(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputDraftEditsInput(ctx context.Context, obj any) (model.DraftEditsInput, error) {
+	var it model.DraftEditsInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"title", "body", "summary", "tags"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "title":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Title = data
+		case "body":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("body"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Body = data
+		case "summary":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("summary"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Summary = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUpdatePostInput(ctx context.Context, obj any) (model.UpdatePostInput, error) {
 	var it model.UpdatePostInput
 	asMap := map[string]any{}
@@ -6279,6 +7446,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createPostDraft":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createPostDraft(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "approvePostDraft":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_approvePostDraft(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rejectPostDraft":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_rejectPostDraft(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletePostDraft":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deletePostDraft(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6384,6 +7579,60 @@ func (ec *executionContext) _PaginatedMessages(ctx context.Context, sel ast.Sele
 			}
 		case "totalMessages":
 			out.Values[i] = ec._PaginatedMessages_totalMessages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var paginatedPostDraftsImplementors = []string{"PaginatedPostDrafts"}
+
+func (ec *executionContext) _PaginatedPostDrafts(ctx context.Context, sel ast.SelectionSet, obj *model.PaginatedPostDrafts) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, paginatedPostDraftsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PaginatedPostDrafts")
+		case "drafts":
+			out.Values[i] = ec._PaginatedPostDrafts_drafts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalPages":
+			out.Values[i] = ec._PaginatedPostDrafts_totalPages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentPage":
+			out.Values[i] = ec._PaginatedPostDrafts_currentPage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalDrafts":
+			out.Values[i] = ec._PaginatedPostDrafts_totalDrafts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -6652,6 +7901,97 @@ func (ec *executionContext) _Post(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var postDraftImplementors = []string{"PostDraft"}
+
+func (ec *executionContext) _PostDraft(ctx context.Context, sel ast.SelectionSet, obj *model.PostDraft) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postDraftImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostDraft")
+		case "id":
+			out.Values[i] = ec._PostDraft_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "approvalId":
+			out.Values[i] = ec._PostDraft_approvalId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "prompt":
+			out.Values[i] = ec._PostDraft_prompt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._PostDraft_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "body":
+			out.Values[i] = ec._PostDraft_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "summary":
+			out.Values[i] = ec._PostDraft_summary(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tags":
+			out.Values[i] = ec._PostDraft_tags(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._PostDraft_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "authorId":
+			out.Values[i] = ec._PostDraft_authorId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postId":
+			out.Values[i] = ec._PostDraft_postId(ctx, field, obj)
+		case "createdAt":
+			out.Values[i] = ec._PostDraft_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._PostDraft_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var queryImplementors = []string{"Query"}
 
 func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -6851,6 +8191,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_chatMessages(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "postDrafts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_postDrafts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myPostDrafts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myPostDrafts(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -7609,6 +8993,16 @@ func (ec *executionContext) unmarshalNCreatePostInput2githubᚗcomᚋkunalPisolk
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNDraftStatus2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐDraftStatus(ctx context.Context, v any) (model.DraftStatus, error) {
+	var res model.DraftStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDraftStatus2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐDraftStatus(ctx context.Context, sel ast.SelectionSet, v model.DraftStatus) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNFieldSet2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -7739,6 +9133,20 @@ func (ec *executionContext) marshalNPaginatedMessages2ᚖgithubᚗcomᚋkunalPis
 	return ec._PaginatedMessages(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNPaginatedPostDrafts2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPostDrafts(ctx context.Context, sel ast.SelectionSet, v model.PaginatedPostDrafts) graphql.Marshaler {
+	return ec._PaginatedPostDrafts(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPaginatedPostDrafts2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPostDrafts(ctx context.Context, sel ast.SelectionSet, v *model.PaginatedPostDrafts) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PaginatedPostDrafts(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNPaginatedPosts2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPaginatedPosts(ctx context.Context, sel ast.SelectionSet, v model.PaginatedPosts) graphql.Marshaler {
 	return ec._PaginatedPosts(ctx, sel, &v)
 }
@@ -7809,6 +9217,64 @@ func (ec *executionContext) marshalNPost2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtop
 		return graphql.Null
 	}
 	return ec._Post(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPostDraft2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraft(ctx context.Context, sel ast.SelectionSet, v model.PostDraft) graphql.Marshaler {
+	return ec._PostDraft(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPostDraft2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraftᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PostDraft) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNPostDraft2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraft(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNPostDraft2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostDraft(ctx context.Context, sel ast.SelectionSet, v *model.PostDraft) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostDraft(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSearchResult2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐSearchResult(ctx context.Context, sel ast.SelectionSet, v model.SearchResult) graphql.Marshaler {
@@ -8478,6 +9944,32 @@ func (ec *executionContext) marshalOChat2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtop
 		return graphql.Null
 	}
 	return ec._Chat(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalODraftEditsInput2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐDraftEditsInput(ctx context.Context, v any) (*model.DraftEditsInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputDraftEditsInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalID(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.SelectionSet, v *string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalID(*v)
+	return res
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {

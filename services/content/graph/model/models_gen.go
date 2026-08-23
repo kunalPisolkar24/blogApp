@@ -33,6 +33,13 @@ type CreatePostInput struct {
 	ImageURL *string  `json:"imageUrl,omitempty"`
 }
 
+type DraftEditsInput struct {
+	Title   *string  `json:"title,omitempty"`
+	Body    *string  `json:"body,omitempty"`
+	Summary *string  `json:"summary,omitempty"`
+	Tags    []string `json:"tags,omitempty"`
+}
+
 type GeneratedPost struct {
 	Title   string   `json:"title"`
 	Body    string   `json:"body"`
@@ -55,6 +62,13 @@ type PaginatedMessages struct {
 	TotalPages    int            `json:"totalPages"`
 	CurrentPage   int            `json:"currentPage"`
 	TotalMessages int            `json:"totalMessages"`
+}
+
+type PaginatedPostDrafts struct {
+	Drafts      []*PostDraft `json:"drafts"`
+	TotalPages  int          `json:"totalPages"`
+	CurrentPage int          `json:"currentPage"`
+	TotalDrafts int          `json:"totalDrafts"`
 }
 
 type PaginatedPosts struct {
@@ -83,6 +97,21 @@ type Post struct {
 
 func (Post) IsEntity() {}
 
+type PostDraft struct {
+	ID         string      `json:"id"`
+	ApprovalID string      `json:"approvalId"`
+	Prompt     string      `json:"prompt"`
+	Title      string      `json:"title"`
+	Body       string      `json:"body"`
+	Summary    string      `json:"summary"`
+	Tags       []string    `json:"tags"`
+	Status     DraftStatus `json:"status"`
+	AuthorID   string      `json:"authorId"`
+	PostID     *string     `json:"postId,omitempty"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+}
+
 type Query struct {
 }
 
@@ -109,6 +138,63 @@ type User struct {
 }
 
 func (User) IsEntity() {}
+
+type DraftStatus string
+
+const (
+	DraftStatusPending  DraftStatus = "PENDING"
+	DraftStatusApproved DraftStatus = "APPROVED"
+	DraftStatusRejected DraftStatus = "REJECTED"
+)
+
+var AllDraftStatus = []DraftStatus{
+	DraftStatusPending,
+	DraftStatusApproved,
+	DraftStatusRejected,
+}
+
+func (e DraftStatus) IsValid() bool {
+	switch e {
+	case DraftStatusPending, DraftStatusApproved, DraftStatusRejected:
+		return true
+	}
+	return false
+}
+
+func (e DraftStatus) String() string {
+	return string(e)
+}
+
+func (e *DraftStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DraftStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DraftStatus", str)
+	}
+	return nil
+}
+
+func (e DraftStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DraftStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DraftStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
 
 type MessageRole string
 

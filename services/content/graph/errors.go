@@ -35,6 +35,8 @@ func mapDomainError(err error) *gqlerror.Error {
 		kind, message = "not_found", "not found"
 	case errors.Is(err, domain.ErrValidation):
 		kind, message = "validation", err.Error()
+	case errors.Is(err, domain.ErrConflict):
+		kind, message = "conflict", "already reviewed by someone else"
 	}
 
 	return &gqlerror.Error{

@@ -12,6 +12,13 @@ type GeneratedPost struct {
 	Tags    []string
 }
 
+// GeneratedDraft is a paused human-in-the-loop draft: the generated
+// payload plus the approval id used to resume or reject the workflow.
+type GeneratedDraft struct {
+	GeneratedPost
+	ApprovalID string
+}
+
 type SearchResult struct {
 	PostIDs []string
 	Total   int
@@ -30,6 +37,12 @@ type AIService interface {
 	GenerateSummary(ctx context.Context, text string) (string, error)
 	GenerateTags(ctx context.Context, title, body string) ([]string, error)
 	GeneratePost(ctx context.Context, prompt string) (*GeneratedPost, error)
+	// GeneratePostDraft produces a paused draft and returns its approval
+	// id; ApprovePost resumes it (with optional reviewer edits) into the
+	// final payload, RejectPost records a rejection.
+	GeneratePostDraft(ctx context.Context, prompt string) (*GeneratedDraft, error)
+	ApprovePost(ctx context.Context, approvalID string, review *DraftReview) (*GeneratedPost, error)
+	RejectPost(ctx context.Context, approvalID string, reason string) error
 	IndexPost(ctx context.Context, postID, title, body, summary string, tags []string, createdAt time.Time) error
 	DeletePost(ctx context.Context, postID string) error
 	SearchPosts(ctx context.Context, query string, offset, limit int) (*SearchResult, error)

@@ -439,3 +439,180 @@ export const RecommendedPostsDocument = gql`
   }
   ${PAGINATED_POST_FIELDS}
 ` as DocumentNode<RecommendedPostsQuery, RecommendedPostsQueryVariables>;
+
+export type DraftStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface PostDraft {
+  __typename?: "PostDraft";
+  id: string;
+  approvalId: string;
+  prompt: string;
+  title: string;
+  body: string;
+  summary: string;
+  tags: string[];
+  status: DraftStatus;
+  authorId: string;
+  postId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaginatedPostDrafts {
+  __typename?: "PaginatedPostDrafts";
+  drafts: PostDraft[];
+  totalPages: number;
+  currentPage: number;
+  totalDrafts: number;
+}
+
+export interface DraftEditsInput {
+  title?: string | null;
+  body?: string | null;
+  summary?: string | null;
+  tags?: string[] | null;
+}
+
+export interface PostDraftsQueryVariables {
+  page?: number;
+  limit?: number;
+}
+
+export interface PostDraftsQuery {
+  __typename?: "Query";
+  postDrafts: PaginatedPostDrafts;
+}
+
+export interface MyPostDraftsQueryVariables {
+  page?: number;
+  limit?: number;
+}
+
+export interface MyPostDraftsQuery {
+  __typename?: "Query";
+  myPostDrafts: PaginatedPostDrafts;
+}
+
+export interface CreatePostDraftMutationVariables {
+  prompt: string;
+}
+
+export interface CreatePostDraftMutation {
+  __typename?: "Mutation";
+  createPostDraft: PostDraft;
+}
+
+export interface ApprovePostDraftMutationVariables {
+  id: string;
+  input?: DraftEditsInput | null;
+}
+
+export interface ApprovePostDraftMutation {
+  __typename?: "Mutation";
+  approvePostDraft: PostDraft;
+}
+
+export interface RejectPostDraftMutationVariables {
+  id: string;
+  reason?: string | null;
+}
+
+export interface RejectPostDraftMutation {
+  __typename?: "Mutation";
+  rejectPostDraft: PostDraft;
+}
+
+export interface DeletePostDraftMutationVariables {
+  id: string;
+}
+
+export interface DeletePostDraftMutation {
+  __typename?: "Mutation";
+  deletePostDraft: boolean;
+}
+
+const POST_DRAFT_FIELDS = gql`
+  fragment PostDraftFields on PostDraft {
+    id
+    approvalId
+    prompt
+    title
+    body
+    summary
+    tags
+    status
+    authorId
+    postId
+    createdAt
+    updatedAt
+  }
+`;
+
+const PAGINATED_POST_DRAFT_FIELDS = gql`
+  fragment PaginatedPostDraftFields on PaginatedPostDrafts {
+    drafts {
+      ...PostDraftFields
+    }
+    totalPages
+    currentPage
+    totalDrafts
+  }
+  ${POST_DRAFT_FIELDS}
+`;
+
+export const PostDraftsDocument = gql`
+  query PostDrafts($page: Int, $limit: Int) {
+    postDrafts(page: $page, limit: $limit) {
+      ...PaginatedPostDraftFields
+    }
+  }
+  ${PAGINATED_POST_DRAFT_FIELDS}
+` as DocumentNode<PostDraftsQuery, PostDraftsQueryVariables>;
+
+export const MyPostDraftsDocument = gql`
+  query MyPostDrafts($page: Int, $limit: Int) {
+    myPostDrafts(page: $page, limit: $limit) {
+      ...PaginatedPostDraftFields
+    }
+  }
+  ${PAGINATED_POST_DRAFT_FIELDS}
+` as DocumentNode<MyPostDraftsQuery, MyPostDraftsQueryVariables>;
+
+export const CreatePostDraftDocument = gql`
+  mutation CreatePostDraft($prompt: String!) {
+    createPostDraft(prompt: $prompt) {
+      ...PostDraftFields
+    }
+  }
+  ${POST_DRAFT_FIELDS}
+` as DocumentNode<CreatePostDraftMutation, CreatePostDraftMutationVariables>;
+
+export const ApprovePostDraftDocument = gql`
+  mutation ApprovePostDraft($id: ID!, $input: DraftEditsInput) {
+    approvePostDraft(id: $id, input: $input) {
+      ...PostDraftFields
+    }
+  }
+  ${POST_DRAFT_FIELDS}
+` as DocumentNode<
+  ApprovePostDraftMutation,
+  ApprovePostDraftMutationVariables
+>;
+
+export const RejectPostDraftDocument = gql`
+  mutation RejectPostDraft($id: ID!, $reason: String) {
+    rejectPostDraft(id: $id, reason: $reason) {
+      ...PostDraftFields
+    }
+  }
+  ${POST_DRAFT_FIELDS}
+` as DocumentNode<
+  RejectPostDraftMutation,
+  RejectPostDraftMutationVariables
+>;
+
+export const DeletePostDraftDocument = gql`
+  mutation DeletePostDraft($id: ID!) {
+    deletePostDraft(id: $id)
+  }
+` as DocumentNode<DeletePostDraftMutation, DeletePostDraftMutationVariables>;

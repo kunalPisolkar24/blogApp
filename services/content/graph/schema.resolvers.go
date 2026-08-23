@@ -165,6 +165,72 @@ func (r *mutationResolver) SavePost(ctx context.Context, postID string, mode *mo
 	return r.toggleInteraction(ctx, postID, interactionMode(mode), r.InteractionService.ToggleSave)
 }
 
+// CreatePostDraft is the resolver for the createPostDraft field.
+func (r *mutationResolver) CreatePostDraft(ctx context.Context, prompt string) (*model.PostDraft, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	draft, err := r.DraftService.CreateDraft(ctx, prompt, userID)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPostDraftToModel(draft), nil
+}
+
+// ApprovePostDraft resumes a peer's draft into a published post; the
+// optional edits land on the AI workflow before it resumes.
+func (r *mutationResolver) ApprovePostDraft(ctx context.Context, id string, input *model.DraftEditsInput) (*model.PostDraft, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	var review *domain.DraftReview
+	if input != nil {
+		review = &domain.DraftReview{
+			Title:   input.Title,
+			Body:    input.Body,
+			Summary: input.Summary,
+			Tags:    input.Tags,
+		}
+	}
+
+	draft, err := r.DraftService.ApproveDraft(ctx, id, userID, review)
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPostDraftToModel(draft), nil
+}
+
+// RejectPostDraft is the resolver for the rejectPostDraft field.
+func (r *mutationResolver) RejectPostDraft(ctx context.Context, id string, reason *string) (*model.PostDraft, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	draft, err := r.DraftService.RejectDraft(ctx, id, userID, derefStr(reason))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPostDraftToModel(draft), nil
+}
+
+// DeletePostDraft withdraws the caller's own pending draft.
+func (r *mutationResolver) DeletePostDraft(ctx context.Context, id string) (bool, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return false, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	if err := r.DraftService.WithdrawDraft(ctx, id, userID); err != nil {
+		return false, mapDomainError(err)
+	}
+	return true, nil
+}
+
 // Related is the resolver for the related field.
 func (r *postResolver) Related(ctx context.Context, obj *model.Post, limit *int) ([]*model.Post, error) {
 	posts, err := relatedPostsFrom(ctx, r.PostService, obj.ID, deref(limit))
@@ -303,6 +369,34 @@ func (r *queryResolver) ChatMessages(ctx context.Context, chatID string, page *i
 		return nil, mapDomainError(err)
 	}
 	return mapDomainPaginatedMessagesToModel(msgs), nil
+}
+
+// PostDrafts is the resolver for the postDrafts field.
+func (r *queryResolver) PostDrafts(ctx context.Context, page *int, limit *int) (*model.PaginatedPostDrafts, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	drafts, err := r.DraftService.ListCommunity(ctx, userID, deref(page), deref(limit))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPaginatedPostDraftsToModel(drafts), nil
+}
+
+// MyPostDrafts is the resolver for the myPostDrafts field.
+func (r *queryResolver) MyPostDrafts(ctx context.Context, page *int, limit *int) (*model.PaginatedPostDrafts, error) {
+	userID, ok := middleware.UserIDFromContext(ctx)
+	if !ok {
+		return nil, mapDomainError(domain.ErrUnauthorized)
+	}
+
+	drafts, err := r.DraftService.ListMine(ctx, userID, deref(page), deref(limit))
+	if err != nil {
+		return nil, mapDomainError(err)
+	}
+	return mapDomainPaginatedPostDraftsToModel(drafts), nil
 }
 
 // Posts is the resolver for the posts field.
