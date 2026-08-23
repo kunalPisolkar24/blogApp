@@ -1,3 +1,4 @@
+import re
 from html.parser import HTMLParser
 
 _HIDDEN_TAGS = ("script", "style", "iframe", "noscript")
@@ -35,3 +36,12 @@ def clean_html(html_text: str) -> str:
     extractor = _TextExtractor()
     extractor.feed(html_text)
     return _collapse_whitespace(" ".join(extractor._parts))
+
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.DOTALL)
+
+
+def extract_json(raw: str) -> str:
+    """Strip markdown code fences around a JSON response."""
+    match = _JSON_FENCE_RE.search(raw)
+    return match.group(1).strip() if match else raw.strip()

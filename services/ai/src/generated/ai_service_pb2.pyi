@@ -10,6 +10,13 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class WorkflowStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    WORKFLOW_STATUS_UNSPECIFIED: _ClassVar[WorkflowStatus]
+    WORKFLOW_STATUS_PENDING: _ClassVar[WorkflowStatus]
+    WORKFLOW_STATUS_APPROVED: _ClassVar[WorkflowStatus]
+    WORKFLOW_STATUS_REJECTED: _ClassVar[WorkflowStatus]
+
 class InteractionKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     INTERACTION_KIND_UNSPECIFIED: _ClassVar[InteractionKind]
@@ -22,6 +29,10 @@ class RecommendMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RECOMMEND_MODE_UNSPECIFIED: _ClassVar[RecommendMode]
     RECOMMEND_MODE_DEFAULT: _ClassVar[RecommendMode]
     RECOMMEND_MODE_SURPRISE: _ClassVar[RecommendMode]
+WORKFLOW_STATUS_UNSPECIFIED: WorkflowStatus
+WORKFLOW_STATUS_PENDING: WorkflowStatus
+WORKFLOW_STATUS_APPROVED: WorkflowStatus
+WORKFLOW_STATUS_REJECTED: WorkflowStatus
 INTERACTION_KIND_UNSPECIFIED: InteractionKind
 INTERACTION_KIND_VIEW: InteractionKind
 INTERACTION_KIND_LIKE: InteractionKind
@@ -73,6 +84,44 @@ class PostGenerationResponse(_message.Message):
     summary: str
     tags: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, title: _Optional[str] = ..., body: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class PostWorkflowState(_message.Message):
+    __slots__ = ("title", "body", "summary", "tags", "approval_id", "status")
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    BODY_FIELD_NUMBER: _ClassVar[int]
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    TAGS_FIELD_NUMBER: _ClassVar[int]
+    APPROVAL_ID_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    title: str
+    body: str
+    summary: str
+    tags: _containers.RepeatedScalarFieldContainer[str]
+    approval_id: str
+    status: WorkflowStatus
+    def __init__(self, title: _Optional[str] = ..., body: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., approval_id: _Optional[str] = ..., status: _Optional[_Union[WorkflowStatus, str]] = ...) -> None: ...
+
+class ApprovePostRequest(_message.Message):
+    __slots__ = ("approval_id", "title", "body", "summary", "tags")
+    APPROVAL_ID_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    BODY_FIELD_NUMBER: _ClassVar[int]
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    TAGS_FIELD_NUMBER: _ClassVar[int]
+    approval_id: str
+    title: str
+    body: str
+    summary: str
+    tags: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, approval_id: _Optional[str] = ..., title: _Optional[str] = ..., body: _Optional[str] = ..., summary: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class RejectPostRequest(_message.Message):
+    __slots__ = ("approval_id", "reason")
+    APPROVAL_ID_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    approval_id: str
+    reason: str
+    def __init__(self, approval_id: _Optional[str] = ..., reason: _Optional[str] = ...) -> None: ...
 
 class IndexRequest(_message.Message):
     __slots__ = ("post_id", "title", "body", "summary", "tags", "created_at")

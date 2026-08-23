@@ -2,8 +2,8 @@ import asyncio
 import functools
 import json
 import logging
-import re
 import time
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
@@ -18,10 +18,18 @@ from src.domain.prompts import (
     post_user_prompt,
 )
 from src.domain.sanitize import sanitize_post_html
-from src.domain.text import clean_html
+from src.domain.text import clean_html, extract_json
 from src.embeddings import EmbeddingError, EmbeddingProvider
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.graphs.chat_graph import ChatGraphs, graphs_for_request
+from src.graphs.post_graph import (
+    STATUS_APPROVED,
+    STATUS_PENDING,
+    STATUS_REJECTED,
+    draft_edits_patch,
+    post_graph_config_for,
+    resume_with_decision,
+)
 from src.graphs.state import ChatMessage
 from src.llm import LLMError, LLMProvider, estimate_tokens
 from src.observability import metrics
@@ -50,10 +58,18 @@ class ValidationError(Exception):
         self.message = message
 
 
-def _extract_json(raw: str) -> str:
-    """Strip markdown code fences around a JSON response."""
-    match = re.search(r"```(?:json)?\s*(.+?)\s*```", raw, re.DOTALL)
-    return match.group(1).strip() if match else raw.strip()
+class NotFoundError(Exception):
+    """Raised when a referenced workflow or resource does not exist."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+
+_STATUS_TO_PROTO = {
+    STATUS_PENDING: ai_service_pb2.WORKFLOW_STATUS_PENDING,
+    STATUS_APPROVED: ai_service_pb2.WORKFLOW_STATUS_APPROVED,
+    STATUS_REJECTED: ai_service_pb2.WORKFLOW_STATUS_REJECTED,
+}
 
 
 def _interaction_weight(kind: int) -> float | None:
@@ -245,6 +261,9 @@ def rpc_metrics(
             except ValidationError as exc:
                 status = "INVALID_ARGUMENT"
                 await context.abort(grpc.StatusCode.INVALID_ARGUMENT, exc.message)
+            except NotFoundError as exc:
+                status = "NOT_FOUND"
+                await context.abort(grpc.StatusCode.NOT_FOUND, exc.message)
             except LLMError:
                 status = "UNAVAILABLE"
                 logger.exception("LLM provider failed")
@@ -280,11 +299,13 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         search: SearchStore,
         embeddings: EmbeddingProvider,
         chat_graphs: ChatGraphs | None = None,
+        post_generation_graph=None,
     ) -> None:
         self._llm = llm
         self._search = search
         self._embeddings = embeddings
         self._chat_graphs = chat_graphs
+        self._post_generation_graph = post_generation_graph
 
     @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
@@ -313,7 +334,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         )
 
         raw = await self._llm.generate_completion(TAGS_PROMPT, content)
-        parsed = json.loads(_extract_json(raw))
+        parsed = json.loads(extract_json(raw))
         tags = parsed.get("tags") if isinstance(parsed, dict) else parsed
         if not isinstance(tags, list):
             raise TypeError("LLM response tags are not a list")
@@ -331,7 +352,7 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         raw = await self._llm.generate_completion(
             POST_PROMPT, post_user_prompt(request.prompt)
         )
-        post = GeneratedPost.model_validate_json(_extract_json(raw))
+        post = GeneratedPost.model_validate_json(extract_json(raw))
         post.body = sanitize_post_html(post.body)
         return ai_service_pb2.PostGenerationResponse(
             title=post.title,
@@ -339,6 +360,120 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             summary=post.summary,
             tags=post.tags,
         )
+
+    def _workflow_state_pb(
+        self, values: dict[str, Any], approval_id: str
+    ) -> ai_service_pb2.PostWorkflowState:
+        status = _STATUS_TO_PROTO.get(values.get("status", ""), 0)
+        return ai_service_pb2.PostWorkflowState(
+            title=values.get("title", ""),
+            body=values.get("body", ""),
+            summary=values.get("summary", ""),
+            tags=list(values.get("tags", [])),
+            approval_id=approval_id,
+            status=status,
+        )
+
+    async def _draft_state(self, approval_id: str) -> dict[str, Any]:
+        """Checkpointed values of one draft workflow; empty when unknown."""
+        config = post_graph_config_for(approval_id)
+        snapshot = await self._post_generation_graph.aget_state(config)
+        return dict(snapshot.values or {})
+
+    @rpc_metrics("/ai.AIService/GeneratePostDraft")
+    async def GeneratePostDraft(
+        self,
+        request: ai_service_pb2.PostGenerationRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.PostWorkflowState:
+        """Generate a draft and pause the workflow at the review gate.
+
+        The returned approval_id names the checkpointed thread; nothing
+        is published until ApprovePost resumes it.
+        """
+        if self._post_generation_graph is None:
+            raise RuntimeError("post generation graph is not configured")
+
+        prompt = request.prompt.strip()
+        if not prompt:
+            raise ValidationError("prompt must be a non-empty string")
+        if len(prompt) > settings.MAX_POST_CHARS:
+            raise TooLargeError(settings.MAX_POST_CHARS)
+
+        approval_id = uuid.uuid4().hex
+        result = await self._post_generation_graph.ainvoke(
+            {"prompt": prompt}, config=post_graph_config_for(approval_id)
+        )
+        return self._workflow_state_pb(result, approval_id)
+
+    @rpc_metrics("/ai.AIService/ApprovePost")
+    async def ApprovePost(
+        self,
+        request: ai_service_pb2.ApprovePostRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.PostWorkflowState:
+        """Resume an approved draft; optional edits land before the resume.
+
+        Idempotent: approving an already-approved workflow returns its
+        stored payload without re-running anything.
+        """
+        if self._post_generation_graph is None:
+            raise RuntimeError("post generation graph is not configured")
+
+        if not request.approval_id:
+            raise ValidationError("approval_id must be a non-empty string")
+
+        values = await self._draft_state(request.approval_id)
+        if not values.get("title"):
+            raise NotFoundError(f"unknown approval_id: {request.approval_id}")
+        if values.get("status") == STATUS_APPROVED:
+            return self._workflow_state_pb(values, request.approval_id)
+
+        edits = draft_edits_patch(
+            title=request.title if request.HasField("title") else None,
+            body=request.body if request.HasField("body") else None,
+            summary=request.summary if request.HasField("summary") else None,
+            tags=list(request.tags) or None,
+        )
+        result = await resume_with_decision(
+            self._post_generation_graph,
+            post_graph_config_for(request.approval_id),
+            "approved",
+            edits=edits,
+        )
+        return self._workflow_state_pb(result, request.approval_id)
+
+    @rpc_metrics("/ai.AIService/RejectPost")
+    async def RejectPost(
+        self,
+        request: ai_service_pb2.RejectPostRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> ai_service_pb2.PostWorkflowState:
+        """Record a rejection while keeping the workflow resumable.
+
+        The state update leaves the thread paused at the review gate, so
+        a later ApprovePost can still publish it. Idempotent for repeats.
+        """
+        if self._post_generation_graph is None:
+            raise RuntimeError("post generation graph is not configured")
+
+        if not request.approval_id:
+            raise ValidationError("approval_id must be a non-empty string")
+
+        values = await self._draft_state(request.approval_id)
+        if not values.get("title"):
+            raise NotFoundError(f"unknown approval_id: {request.approval_id}")
+        if values.get("status") == STATUS_REJECTED:
+            return self._workflow_state_pb(values, request.approval_id)
+
+        updates: dict[str, Any] = {"status": STATUS_REJECTED}
+        if request.reason.strip():
+            updates["reason"] = request.reason
+        await self._post_generation_graph.aupdate_state(
+            post_graph_config_for(request.approval_id), updates
+        )
+        values.update(updates)
+        return self._workflow_state_pb(values, request.approval_id)
 
     @rpc_metrics("/ai.AIService/IndexPost")
     async def IndexPost(
