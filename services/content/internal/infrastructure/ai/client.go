@@ -570,6 +570,10 @@ func recommendModeToProto(mode domain.RecommendMode) pb.RecommendMode {
 	switch mode {
 	case domain.RecommendModeSurprise:
 		return pb.RecommendMode_RECOMMEND_MODE_SURPRISE
+	case domain.RecommendModeFresh:
+		return pb.RecommendMode_RECOMMEND_MODE_FRESH
+	case domain.RecommendModeExplorer:
+		return pb.RecommendMode_RECOMMEND_MODE_EXPLORER
 	default:
 		return pb.RecommendMode_RECOMMEND_MODE_DEFAULT
 	}

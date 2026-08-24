@@ -135,13 +135,17 @@ func (InteractionKind) EnumDescriptor() ([]byte, []int) {
 }
 
 // RecommendMode selects how a feed is ranked for a user: DEFAULT follows
-// the user's learned taste, SURPRISE deliberately strays from it.
+// the user's learned taste, SURPRISE deliberately strays from it, FRESH
+// narrows the window to recent posts, EXPLORER blends surprise pages
+// into the default ranking.
 type RecommendMode int32
 
 const (
 	RecommendMode_RECOMMEND_MODE_UNSPECIFIED RecommendMode = 0
 	RecommendMode_RECOMMEND_MODE_DEFAULT     RecommendMode = 1
 	RecommendMode_RECOMMEND_MODE_SURPRISE    RecommendMode = 2
+	RecommendMode_RECOMMEND_MODE_FRESH       RecommendMode = 3
+	RecommendMode_RECOMMEND_MODE_EXPLORER    RecommendMode = 4
 )
 
 // Enum value maps for RecommendMode.
@@ -150,11 +154,15 @@ var (
 		0: "RECOMMEND_MODE_UNSPECIFIED",
 		1: "RECOMMEND_MODE_DEFAULT",
 		2: "RECOMMEND_MODE_SURPRISE",
+		3: "RECOMMEND_MODE_FRESH",
+		4: "RECOMMEND_MODE_EXPLORER",
 	}
 	RecommendMode_value = map[string]int32{
 		"RECOMMEND_MODE_UNSPECIFIED": 0,
 		"RECOMMEND_MODE_DEFAULT":     1,
 		"RECOMMEND_MODE_SURPRISE":    2,
+		"RECOMMEND_MODE_FRESH":       3,
+		"RECOMMEND_MODE_EXPLORER":    4,
 	}
 )
 
@@ -2001,11 +2009,13 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x1cINTERACTION_KIND_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15INTERACTION_KIND_VIEW\x10\x01\x12\x19\n" +
 	"\x15INTERACTION_KIND_LIKE\x10\x02\x12\x19\n" +
-	"\x15INTERACTION_KIND_SAVE\x10\x03*h\n" +
+	"\x15INTERACTION_KIND_SAVE\x10\x03*\x9f\x01\n" +
 	"\rRecommendMode\x12\x1e\n" +
 	"\x1aRECOMMEND_MODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16RECOMMEND_MODE_DEFAULT\x10\x01\x12\x1b\n" +
-	"\x17RECOMMEND_MODE_SURPRISE\x10\x022\xe9\a\n" +
+	"\x17RECOMMEND_MODE_SURPRISE\x10\x02\x12\x18\n" +
+	"\x14RECOMMEND_MODE_FRESH\x10\x03\x12\x1b\n" +
+	"\x17RECOMMEND_MODE_EXPLORER\x10\x042\xe9\a\n" +
 	"\tAIService\x12:\n" +
 	"\x0fGenerateSummary\x12\x12.ai.ContentRequest\x1a\x13.ai.ContentResponse\x124\n" +
 	"\fGenerateTags\x12\x12.ai.ContextRequest\x1a\x10.ai.TagsResponse\x12E\n" +

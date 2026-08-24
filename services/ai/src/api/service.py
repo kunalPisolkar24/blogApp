@@ -23,6 +23,7 @@ from src.domain.text import clean_html, extract_json
 from src.embeddings import EmbeddingError, EmbeddingProvider
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.graphs.chat_graph import ChatGraphs, graphs_for_request
+from src.graphs.feed_graph import EXPLORER, FRESH, FeedAgent, execute_blend
 from src.graphs.post_graph import (
     STATUS_APPROVED,
     STATUS_PENDING,
@@ -97,7 +98,23 @@ def _mode_name(mode: int) -> str:
         ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED: "default",
         ai_service_pb2.RECOMMEND_MODE_DEFAULT: "default",
         ai_service_pb2.RECOMMEND_MODE_SURPRISE: "surprise",
+        ai_service_pb2.RECOMMEND_MODE_FRESH: "fresh",
+        ai_service_pb2.RECOMMEND_MODE_EXPLORER: "explorer",
     }[mode]
+
+
+def _preset_for_mode(mode: int) -> str | None:
+    """The blend preset a mode maps to, when it names one explicitly.
+
+    FRESH and EXPLORER are first-class modes served by the deterministic
+    engine with preset knobs; DEFAULT/UNSPECIFIED/SURPRISE return None
+    so they keep their dedicated paths (or the agent's pick).
+    """
+    if mode == ai_service_pb2.RECOMMEND_MODE_FRESH:
+        return FRESH
+    if mode == ai_service_pb2.RECOMMEND_MODE_EXPLORER:
+        return EXPLORER
+    return None
 
 
 def _kind_name(kind: int) -> str:
@@ -301,12 +318,14 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         embeddings: EmbeddingProvider,
         chat_graphs: ChatGraphs | None = None,
         post_generation_graph=None,
+        feed_agent: FeedAgent | None = None,
     ) -> None:
         self._llm = llm
         self._search = search
         self._embeddings = embeddings
         self._chat_graphs = chat_graphs
         self._post_generation_graph = post_generation_graph
+        self._feed_agent = feed_agent
 
     @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
@@ -619,6 +638,8 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED,
             ai_service_pb2.RECOMMEND_MODE_DEFAULT,
             ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            ai_service_pb2.RECOMMEND_MODE_FRESH,
+            ai_service_pb2.RECOMMEND_MODE_EXPLORER,
         ):
             raise ValidationError(f"unsupported recommend mode: {request.mode}")
         limit = request.limit or 10
@@ -631,7 +652,19 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
 
         mode = _mode_name(request.mode)
         start = time.perf_counter()
-        if request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
+        preset = _preset_for_mode(request.mode)
+        if preset is not None:
+            result = await execute_blend(
+                self._search, user_id, request.offset, limit, preset, request.seed
+            )
+        elif self._feed_agent is not None and request.mode != (
+            ai_service_pb2.RECOMMEND_MODE_SURPRISE
+        ):
+            preset = await self._feed_agent.decide(user_id)
+            result = await execute_blend(
+                self._search, user_id, request.offset, limit, preset, request.seed
+            )
+        elif request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
             result = await self._search.recommend_surprise(
                 user_id, request.offset, limit, request.seed
             )

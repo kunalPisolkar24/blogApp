@@ -29,6 +29,8 @@ class RecommendMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RECOMMEND_MODE_UNSPECIFIED: _ClassVar[RecommendMode]
     RECOMMEND_MODE_DEFAULT: _ClassVar[RecommendMode]
     RECOMMEND_MODE_SURPRISE: _ClassVar[RecommendMode]
+    RECOMMEND_MODE_FRESH: _ClassVar[RecommendMode]
+    RECOMMEND_MODE_EXPLORER: _ClassVar[RecommendMode]
 WORKFLOW_STATUS_UNSPECIFIED: WorkflowStatus
 WORKFLOW_STATUS_PENDING: WorkflowStatus
 WORKFLOW_STATUS_APPROVED: WorkflowStatus
@@ -40,6 +42,8 @@ INTERACTION_KIND_SAVE: InteractionKind
 RECOMMEND_MODE_UNSPECIFIED: RecommendMode
 RECOMMEND_MODE_DEFAULT: RecommendMode
 RECOMMEND_MODE_SURPRISE: RecommendMode
+RECOMMEND_MODE_FRESH: RecommendMode
+RECOMMEND_MODE_EXPLORER: RecommendMode
 
 class ContentRequest(_message.Message):
     __slots__ = ("text",)

@@ -89,3 +89,9 @@ RECOMMEND_COLD_START_RATIO = Gauge(
     "recommend_cold_start_ratio",
     "Share of recommend calls that returned an empty feed (cold start), 0-1",
 )
+
+FEED_AGENT_DECISIONS = Counter(
+    "feed_agent_decisions_total",
+    "Feed agent blend decisions: cache hits, fresh LLM picks, and fallbacks to balanced",
+    ["outcome"],
+)

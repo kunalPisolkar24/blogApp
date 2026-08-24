@@ -28,12 +28,16 @@ type SearchResult struct {
 }
 
 // RecommendMode selects how a feed is ranked for a user: DEFAULT follows
-// the user's learned taste, SURPRISE deliberately strays from it.
+// the user's learned taste, SURPRISE deliberately strays from it, FRESH
+// narrows the window to recent posts, EXPLORER blends surprise pages
+// into the default ranking.
 type RecommendMode string
 
 const (
 	RecommendModeDefault  RecommendMode = "default"
 	RecommendModeSurprise RecommendMode = "surprise"
+	RecommendModeFresh    RecommendMode = "fresh"
+	RecommendModeExplorer RecommendMode = "explorer"
 )
 
 type AIService interface {

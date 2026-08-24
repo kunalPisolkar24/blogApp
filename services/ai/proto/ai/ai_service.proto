@@ -195,11 +195,15 @@ enum InteractionKind {
 }
 
 // RecommendMode selects how a feed is ranked for a user: DEFAULT follows
-// the user's learned taste, SURPRISE deliberately strays from it.
+// the user's learned taste, SURPRISE deliberately strays from it, FRESH
+// narrows the window to recent posts, EXPLORER blends surprise pages
+// into the default ranking.
 enum RecommendMode {
   RECOMMEND_MODE_UNSPECIFIED = 0;
   RECOMMEND_MODE_DEFAULT = 1;
   RECOMMEND_MODE_SURPRISE = 2;
+  RECOMMEND_MODE_FRESH = 3;
+  RECOMMEND_MODE_EXPLORER = 4;
 }
 
 message UserProfileUpdateRequest {

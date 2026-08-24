@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     # Recommendations only surface posts created within this window; posts
     # without a usable created_at are excluded from the feed.
     RECOMMEND_RECENCY_DAYS: int = 60
+
+    # Feed agent (Layer 2): "deterministic" serves today's engine paths;
+    # "agent" lets an LLM pick a blend preset per user; "fake" scripts the
+    # decision so tests and load runs stay off the LLM.
+    AGENT_MODE: Literal["deterministic", "agent", "fake"] = "deterministic"
+    # How long a user's decided preset is reused before asking again.
+    AGENT_DECISION_TTL_SECONDS: int = 300
+    # Blend knobs the presets resolve to: FRESH narrows the recency
+    # window; EXPLORER interleaves that share of surprise pages into the
+    # default ranking.
+    FEED_FRESH_RECENCY_DAYS: int = 14
+    FEED_EXPLORER_SURPRISE_RATIO: float = 0.3
     # Surprise mode queries the negated profile vector, so scores above
     # this threshold mean posts genuinely unlike the user's taste
     # (cos(profile, post) < -SURPRISE_DENSE_SCORE_THRESHOLD). When a page

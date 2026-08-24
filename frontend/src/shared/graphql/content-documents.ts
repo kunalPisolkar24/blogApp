@@ -231,7 +231,7 @@ export interface SearchPostsQuery {
   };
 }
 
-export type RecommendMode = "DEFAULT" | "SURPRISE";
+export type RecommendMode = "DEFAULT" | "SURPRISE" | "FRESH" | "EXPLORER";
 
 export interface RecommendedPostsQueryVariables {
   page?: number;

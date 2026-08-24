@@ -385,6 +385,8 @@ export type QueryUsersArgs = {
 
 export enum RecommendMode {
   Default = 'DEFAULT',
+  Explorer = 'EXPLORER',
+  Fresh = 'FRESH',
   Surprise = 'SURPRISE'
 }
 

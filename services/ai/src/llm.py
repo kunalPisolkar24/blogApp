@@ -13,6 +13,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt
 from src.config import settings
 from src.domain.prompts import (
     CHAT_SYSTEM_PROMPT,
+    FEED_AGENT_PROMPT,
     HISTORY_SUMMARY_PROMPT,
     JUDGE_RELEVANCE_PROMPT,
     POST_PROMPT,
@@ -405,6 +406,8 @@ class FakeLLMClient:
         "references from earlier turns remain noted here."
     )
 
+    _FEED_PRESET = "balanced"
+
     def __init__(self, tool_replies: list[CompletionReply] | None = None) -> None:
         self._responses = {
             SUMMARY_PROMPT: self._SUMMARY,
@@ -414,6 +417,7 @@ class FakeLLMClient:
             REWRITE_QUERY_PROMPT: self._REWRITE_QUERY,
             JUDGE_RELEVANCE_PROMPT: self._JUDGE_VERDICT,
             HISTORY_SUMMARY_PROMPT: self._HISTORY_SUMMARY,
+            FEED_AGENT_PROMPT: self._FEED_PRESET,
         }
         # Scripted tool-phase replies consumed in order; tests stay
         # deterministic by queueing exactly what the loop should see.

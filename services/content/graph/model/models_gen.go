@@ -262,16 +262,20 @@ type RecommendMode string
 const (
 	RecommendModeDefault  RecommendMode = "DEFAULT"
 	RecommendModeSurprise RecommendMode = "SURPRISE"
+	RecommendModeFresh    RecommendMode = "FRESH"
+	RecommendModeExplorer RecommendMode = "EXPLORER"
 )
 
 var AllRecommendMode = []RecommendMode{
 	RecommendModeDefault,
 	RecommendModeSurprise,
+	RecommendModeFresh,
+	RecommendModeExplorer,
 }
 
 func (e RecommendMode) IsValid() bool {
 	switch e {
-	case RecommendModeDefault, RecommendModeSurprise:
+	case RecommendModeDefault, RecommendModeSurprise, RecommendModeFresh, RecommendModeExplorer:
 		return true
 	}
 	return false
