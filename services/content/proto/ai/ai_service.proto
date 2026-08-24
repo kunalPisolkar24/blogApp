@@ -210,6 +210,10 @@ message UserProfileUpdateRequest {
   string user_id = 1;
   string post_id = 2;
   InteractionKind kind = 3;
+  // source_mode attributes the interaction to the feed surface it came
+  // from; SURPRISE folds the post into the taste profile with a reduced
+  // weight. Unspecified means unattributed.
+  RecommendMode source_mode = 4;
 }
 
 message UserProfileUpdateResponse {}

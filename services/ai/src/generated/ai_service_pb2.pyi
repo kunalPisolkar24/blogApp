@@ -260,14 +260,16 @@ class ChatChunk(_message.Message):
     def __init__(self, delta: _Optional[str] = ..., done: _Optional[bool] = ..., cited_post_ids: _Optional[_Iterable[str]] = ..., error: _Optional[str] = ...) -> None: ...
 
 class UserProfileUpdateRequest(_message.Message):
-    __slots__ = ("user_id", "post_id", "kind")
+    __slots__ = ("user_id", "post_id", "kind", "source_mode")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     POST_ID_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_MODE_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     post_id: str
     kind: InteractionKind
-    def __init__(self, user_id: _Optional[str] = ..., post_id: _Optional[str] = ..., kind: _Optional[_Union[InteractionKind, str]] = ...) -> None: ...
+    source_mode: RecommendMode
+    def __init__(self, user_id: _Optional[str] = ..., post_id: _Optional[str] = ..., kind: _Optional[_Union[InteractionKind, str]] = ..., source_mode: _Optional[_Union[RecommendMode, str]] = ...) -> None: ...
 
 class UserProfileUpdateResponse(_message.Message):
     __slots__ = ()

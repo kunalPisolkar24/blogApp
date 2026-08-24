@@ -85,7 +85,7 @@ func (a *NoopAI) ChatAnswer(_ context.Context, _, _ string, _ []domain.ChatTurn,
 
 // UpdateUserProfile and DeleteUserProfile no-op in fallback mode: there
 // is no local profile store, so the profile simply stays absent.
-func (a *NoopAI) UpdateUserProfile(_ context.Context, _, _ string, _ domain.PostInteractionKind) error {
+func (a *NoopAI) UpdateUserProfile(_ context.Context, _, _ string, _ domain.PostInteractionKind, _ domain.RecommendMode) error {
 	return nil
 }
 

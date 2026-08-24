@@ -616,6 +616,16 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         weight = _interaction_weight(request.kind)
         if weight is None:
             raise ValidationError(f"unsupported interaction kind: {request.kind}")
+        if request.source_mode not in (
+            ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED,
+            ai_service_pb2.RECOMMEND_MODE_DEFAULT,
+            ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+        ):
+            raise ValidationError(f"unsupported source mode: {request.source_mode}")
+
+        if request.source_mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
+            weight *= settings.PROFILE_SURPRISE_FEEDBACK_MULTIPLIER
+            metrics.SURPRISE_INTERACTIONS.labels(kind=_kind_name(request.kind)).inc()
 
         await self._search.update_user_profile(user_id, post_id, weight)
         metrics.PROFILE_UPDATES.labels(kind=_kind_name(request.kind)).inc()

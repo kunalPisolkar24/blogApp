@@ -80,6 +80,12 @@ PROFILE_UPDATES = Counter(
     ["kind"],
 )
 
+SURPRISE_INTERACTIONS = Counter(
+    "surprise_interactions_total",
+    "Interactions attributed to a surprise feed, folded into profiles at the reduced weight",
+    ["kind"],
+)
+
 RECOMMEND_COLD_START = Counter(
     "recommend_cold_start_total",
     "Total number of recommend calls that returned an empty feed (cold start)",

@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     PROFILE_VIEW_WEIGHT: float = 1.0
     PROFILE_LIKE_WEIGHT: float = 3.0
     PROFILE_SAVE_WEIGHT: float = 5.0
+    # Surprise-sourced interactions fold into the taste profile at a
+    # reduced weight: they start from anti-taste suggestions, so each
+    # one counts for less than a direct like.
+    PROFILE_SURPRISE_FEEDBACK_MULTIPLIER: float = 0.5
     # Caps keeping a single user's profile bounded: interaction history,
     # distinct interest tags, and the weight any one tag can accumulate.
     PROFILE_SEEN_POSTS_CAP: int = 200

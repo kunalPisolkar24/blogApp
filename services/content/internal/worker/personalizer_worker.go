@@ -226,7 +226,7 @@ func (w *PersonalizerWorker) processMessage(ctx context.Context, m kafka.Message
 	)
 	defer span.End()
 
-	if err := w.aiService.UpdateUserProfile(ctx, payload.UserID, payload.PostID, payload.Kind); err != nil {
+	if err := w.aiService.UpdateUserProfile(ctx, payload.UserID, payload.PostID, payload.Kind, payload.Mode); err != nil {
 		return fmt.Errorf("update user profile: %w", err)
 	}
 

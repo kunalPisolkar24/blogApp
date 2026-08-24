@@ -324,7 +324,10 @@ async def test_metrics_recommend_cold_start_ratio_and_counter(running_server) ->
     await stub.RecommendFeed(ai_service_pb2.RecommendRequest(user_id="user-1"))
     assert _cold_start_total() == cold_before + 1
 
-    total = sum(_recommend_counter(mode, "OK") for mode in ("default", "surprise", "fresh", "explorer"))
+    total = sum(
+        _recommend_counter(mode, "OK")
+        for mode in ("default", "surprise", "fresh", "explorer")
+    )
     ratio = REGISTRY.get_sample_value("recommend_cold_start_ratio")
     assert ratio == _cold_start_total() / total
 
