@@ -4,6 +4,7 @@ import httpx
 import pytest
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 
+from src.config import settings
 from src.generated import ai_service_pb2
 from src.llm import FakeLLMClient
 
@@ -78,8 +79,19 @@ def test_metrics_expose_process_stats(service) -> None:
 def test_fake_mode_records_no_llm_calls(service) -> None:
     service.stub.GenerateSummary(ai_service_pb2.ContentRequest(text="hello"))
 
-    assert _counter_value(service, "llm_requests_total", {"status": "success"}) == 0.0
-    assert _counter_value(service, "llm_requests_total", {"status": "error"}) == 0.0
+    model = settings.LLM_MODEL
+    assert (
+        _counter_value(
+            service, "llm_requests_total", {"status": "success", "model": model}
+        )
+        == 0.0
+    )
+    assert (
+        _counter_value(
+            service, "llm_requests_total", {"status": "error", "model": model}
+        )
+        == 0.0
+    )
 
 
 def test_logs_are_json_and_include_access_log(service) -> None:

@@ -94,11 +94,15 @@ def _record_tokens(
     completion = usage.completion_tokens if usage is not None else None
     if completion is None:
         completion = completion_chars // 4
-    metrics.LLM_TOKENS.labels(method=method, token_type="prompt").inc(prompt)
-    metrics.LLM_TOKENS.labels(method=method, token_type="completion").inc(completion)
-    metrics.LLM_TOKENS.labels(method=method, token_type="total").inc(
-        prompt + completion
-    )
+    metrics.LLM_TOKENS.labels(
+        method=method, token_type="prompt", model=settings.LLM_MODEL
+    ).inc(prompt)
+    metrics.LLM_TOKENS.labels(
+        method=method, token_type="completion", model=settings.LLM_MODEL
+    ).inc(completion)
+    metrics.LLM_TOKENS.labels(
+        method=method, token_type="total", model=settings.LLM_MODEL
+    ).inc(prompt + completion)
 
 
 class LLMProvider(Protocol):
@@ -169,7 +173,11 @@ async def _sse_deltas(
 
 
 def _before_retry(retry_state) -> None:
-    logger.warning("retrying LLM call after attempt %s", retry_state.attempt_number)
+    logger.warning(
+        "retrying LLM call (%s) after attempt %s",
+        settings.LLM_MODEL,
+        retry_state.attempt_number,
+    )
     metrics.LLM_RETRIES.inc()
 
 
@@ -231,8 +239,10 @@ class LLMClient:
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMError(str(exc)) from exc
         finally:
-            metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
-            metrics.LLM_REQUESTS.labels(status=status).inc()
+            metrics.LLM_REQUEST_DURATION.labels(model=settings.LLM_MODEL).observe(
+                time.perf_counter() - start
+            )
+            metrics.LLM_REQUESTS.labels(status=status, model=settings.LLM_MODEL).inc()
         return result
 
     @traceable(run_type="llm")
@@ -271,8 +281,10 @@ class LLMClient:
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMError(str(exc)) from exc
         finally:
-            metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
-            metrics.LLM_REQUESTS.labels(status=status).inc()
+            metrics.LLM_REQUEST_DURATION.labels(model=settings.LLM_MODEL).observe(
+                time.perf_counter() - start
+            )
+            metrics.LLM_REQUESTS.labels(status=status, model=settings.LLM_MODEL).inc()
 
     @traceable(run_type="llm")
     async def generate_tool_completion(
@@ -311,8 +323,10 @@ class LLMClient:
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMError(str(exc)) from exc
         finally:
-            metrics.LLM_REQUEST_DURATION.observe(time.perf_counter() - start)
-            metrics.LLM_REQUESTS.labels(status=status).inc()
+            metrics.LLM_REQUEST_DURATION.labels(model=settings.LLM_MODEL).observe(
+                time.perf_counter() - start
+            )
+            metrics.LLM_REQUESTS.labels(status=status, model=settings.LLM_MODEL).inc()
 
         requests = tuple(
             ToolRequest(
