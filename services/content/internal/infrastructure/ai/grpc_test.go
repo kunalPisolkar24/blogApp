@@ -17,8 +17,9 @@ import (
 
 type fakeAIServiceServer struct {
 	pb.UnimplementedAIServiceServer
-	summaryErr error
-	chatReq    *pb.ChatAnswerRequest
+	summaryErr         error
+	chatReq            *pb.ChatAnswerRequest
+	lastProfileRequest *pb.UserProfileUpdateRequest
 }
 
 func (f *fakeAIServiceServer) GenerateSummary(ctx context.Context, req *pb.ContentRequest) (*pb.ContentResponse, error) {
@@ -67,6 +68,7 @@ func (f *fakeAIServiceServer) RelatedPostsBatch(ctx context.Context, req *pb.Rel
 }
 
 func (f *fakeAIServiceServer) UpdateUserProfile(ctx context.Context, req *pb.UserProfileUpdateRequest) (*pb.UserProfileUpdateResponse, error) {
+	f.lastProfileRequest = req
 	return &pb.UserProfileUpdateResponse{}, nil
 }
 
@@ -164,11 +166,13 @@ func TestGRPCClientRelatedPostsBatch(t *testing.T) {
 }
 
 func TestGRPCClientUpdateUserProfile(t *testing.T) {
-	client := newTestGRPCClient(t, &fakeAIServiceServer{})
+	server := &fakeAIServiceServer{}
+	client := newTestGRPCClient(t, server)
 
-	err := client.UpdateUserProfile(context.Background(), "u_1", "p_1", domain.PostInteractionLike)
+	err := client.UpdateUserProfile(context.Background(), "u_1", "p_1", domain.PostInteractionLike, domain.RecommendModeSurprise)
 
 	require.NoError(t, err)
+	assert.Equal(t, pb.RecommendMode_RECOMMEND_MODE_SURPRISE, server.lastProfileRequest.SourceMode, "the source mode must reach the wire")
 }
 
 func TestGRPCClientRecommendFeed(t *testing.T) {

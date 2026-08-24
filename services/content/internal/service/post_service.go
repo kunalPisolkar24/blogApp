@@ -349,8 +349,26 @@ func (s *PostService) RecommendedPosts(ctx context.Context, userID string, page,
 			TotalPages: int(math.Ceil(float64(search.Total) / float64(limit))),
 			TotalPosts: int64(search.Total),
 			Page:       page,
+			Reasons:    mapReasons(search.Reasons, recommended),
 		}, nil
 	})
+}
+
+// mapReasons keeps the AI's evidence lines for the recommended posts
+// that made the page; filtered-out posts lose their entry.
+func mapReasons(reasons map[string]string, recommended []*domain.Post) []*domain.PostReason {
+	if len(reasons) == 0 {
+		return nil
+	}
+	mapped := make([]*domain.PostReason, 0, len(recommended))
+	for _, post := range recommended {
+		reason, ok := reasons[post.ID]
+		if !ok {
+			continue
+		}
+		mapped = append(mapped, &domain.PostReason{PostID: post.ID, Reason: reason})
+	}
+	return mapped
 }
 
 // RelatedPosts returns the semantic neighbours of a post, ranked by the

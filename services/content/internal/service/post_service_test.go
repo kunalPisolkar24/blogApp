@@ -687,6 +687,35 @@ func TestRecommendedPostsRanksDropsMissingExcludesOwn(t *testing.T) {
 	assert.Equal(t, before, promtestutil.ToFloat64(metrics.RecommendColdStartTotal), "a populated feed is not a cold start")
 }
 
+func TestRecommendedPostsKeepsReasonsForServedPosts(t *testing.T) {
+	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
+		return &domain.SearchResult{
+			PostIDs: []string{"p_1", "p_2", "mine"},
+			Total:   3,
+			Reasons: map[string]string{
+				"p_1":  "Because you engage with golang posts",
+				"mine": "Because you engage with golang posts",
+				"gone": "Because you engage with golang posts",
+			},
+		}, nil
+	}}
+	repo := &testutil.MockPostRepository{FindByIDsFn: func(ctx context.Context, ids []string) ([]*domain.Post, error) {
+		return []*domain.Post{
+			{ID: "p_1", Title: "First", AuthorID: "u_2"},
+			{ID: "p_2", Title: "Second", AuthorID: "u_2", Tags: []string{"rust"}},
+			{ID: "mine", Title: "Mine", AuthorID: "u_1"},
+		}, nil
+	}}
+	s := newSearchService(t, ai, repo, nil)
+
+	result, err := s.RecommendedPosts(context.Background(), "u_1", 1, 10, domain.RecommendModeDefault, 0)
+
+	require.NoError(t, err)
+	require.Len(t, result.Reasons, 1, "only served posts with evidence keep a reason")
+	assert.Equal(t, "p_1", result.Reasons[0].PostID)
+	assert.Equal(t, "Because you engage with golang posts", result.Reasons[0].Reason)
+}
+
 func TestRecommendedPostsColdStartFallsBackToRecency(t *testing.T) {
 	before := promtestutil.ToFloat64(metrics.RecommendColdStartTotal)
 	ai := &testutil.MockAIService{RecommendFeedFn: func(ctx context.Context, userID string, offset, limit int, mode domain.RecommendMode, seed uint32) (*domain.SearchResult, error) {
@@ -708,6 +737,7 @@ func TestRecommendedPostsColdStartFallsBackToRecency(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Posts, 2)
 	assert.Equal(t, int64(2), result.TotalPosts, "fallback totals come from the repository")
+	assert.Nil(t, result.Reasons, "fallback feeds carry no reasons")
 	assert.Equal(t, before+1, promtestutil.ToFloat64(metrics.RecommendColdStartTotal), "an empty AI result must count as a cold start")
 }
 

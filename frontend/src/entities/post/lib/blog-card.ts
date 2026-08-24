@@ -44,6 +44,7 @@ export interface BlogCardItem {
   publishedAt: string | null;
   likedByMe: boolean;
   savedByMe: boolean;
+  reason?: string;
 }
 
 export function stripHtml(html: string) {

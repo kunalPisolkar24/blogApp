@@ -248,12 +248,12 @@ func (c *resilientClient) ChatAnswer(ctx context.Context, threadID, query string
 // UpdateUserProfile and DeleteUserProfile mutate the AI service's user
 // profile store, so like the index write paths they never fabricate
 // success: an open breaker or a failed RPC surfaces an error.
-func (c *resilientClient) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+func (c *resilientClient) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 	if !c.breaker(domainProfile).canProceed() {
 		metrics.AIFallbackEngaged.WithLabelValues("update_user_profile").Inc()
 		return domain.ErrAICircuitOpen
 	}
-	if err := c.primary.UpdateUserProfile(ctx, userID, postID, kind); err != nil {
+	if err := c.primary.UpdateUserProfile(ctx, userID, postID, kind, mode); err != nil {
 		c.breaker(domainProfile).recordFailure()
 		return err
 	}
@@ -570,19 +570,24 @@ func recommendModeToProto(mode domain.RecommendMode) pb.RecommendMode {
 	switch mode {
 	case domain.RecommendModeSurprise:
 		return pb.RecommendMode_RECOMMEND_MODE_SURPRISE
+	case domain.RecommendModeFresh:
+		return pb.RecommendMode_RECOMMEND_MODE_FRESH
+	case domain.RecommendModeExplorer:
+		return pb.RecommendMode_RECOMMEND_MODE_EXPLORER
 	default:
 		return pb.RecommendMode_RECOMMEND_MODE_DEFAULT
 	}
 }
 
-func (c *grpcClient) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+func (c *grpcClient) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 	ctx, cancel := context.WithTimeout(ctx, profileTimeout)
 	defer cancel()
 
 	_, err := c.client.UpdateUserProfile(ctx, &pb.UserProfileUpdateRequest{
-		UserId: userID,
-		PostId: postID,
-		Kind:   interactionKindToProto(kind),
+		UserId:     userID,
+		PostId:     postID,
+		Kind:       interactionKindToProto(kind),
+		SourceMode: recommendModeToProto(mode),
 	})
 	return err
 }
@@ -612,6 +617,7 @@ func (c *grpcClient) RecommendFeed(ctx context.Context, userID string, offset, l
 	return &domain.SearchResult{
 		PostIDs: resp.PostIds,
 		Total:   int(resp.Total),
+		Reasons: resp.Reasons,
 	}, nil
 }
 

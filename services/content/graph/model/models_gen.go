@@ -72,10 +72,11 @@ type PaginatedPostDrafts struct {
 }
 
 type PaginatedPosts struct {
-	Posts       []*Post `json:"posts"`
-	TotalPages  int     `json:"totalPages"`
-	CurrentPage int     `json:"currentPage"`
-	TotalPosts  int     `json:"totalPosts"`
+	Posts       []*Post       `json:"posts"`
+	TotalPages  int           `json:"totalPages"`
+	CurrentPage int           `json:"currentPage"`
+	TotalPosts  int           `json:"totalPosts"`
+	Reasons     []*PostReason `json:"reasons"`
 }
 
 type Post struct {
@@ -110,6 +111,11 @@ type PostDraft struct {
 	PostID     *string     `json:"postId,omitempty"`
 	CreatedAt  string      `json:"createdAt"`
 	UpdatedAt  string      `json:"updatedAt"`
+}
+
+type PostReason struct {
+	PostID string `json:"postId"`
+	Reason string `json:"reason"`
 }
 
 type Query struct {
@@ -256,16 +262,20 @@ type RecommendMode string
 const (
 	RecommendModeDefault  RecommendMode = "DEFAULT"
 	RecommendModeSurprise RecommendMode = "SURPRISE"
+	RecommendModeFresh    RecommendMode = "FRESH"
+	RecommendModeExplorer RecommendMode = "EXPLORER"
 )
 
 var AllRecommendMode = []RecommendMode{
 	RecommendModeDefault,
 	RecommendModeSurprise,
+	RecommendModeFresh,
+	RecommendModeExplorer,
 }
 
 func (e RecommendMode) IsValid() bool {
 	switch e {
-	case RecommendModeDefault, RecommendModeSurprise:
+	case RecommendModeDefault, RecommendModeSurprise, RecommendModeFresh, RecommendModeExplorer:
 		return true
 	}
 	return false

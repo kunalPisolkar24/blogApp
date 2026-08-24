@@ -33,10 +33,11 @@ func interactionMessage(t *testing.T, payload domain.UserInteractedPayload) kafk
 }
 
 func TestPersonalizerProcessMessageUpdatesProfile(t *testing.T) {
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		assert.Equal(t, "u_1", userID)
 		assert.Equal(t, "p_1", postID)
 		assert.Equal(t, domain.PostInteractionLike, kind)
+		assert.Empty(t, mode, "unattributed events stay unattributed")
 		return nil
 	}}
 	w := newTestPersonalizerWorker(t, ai)
@@ -45,6 +46,23 @@ func TestPersonalizerProcessMessageUpdatesProfile(t *testing.T) {
 		UserID: "u_1",
 		PostID: "p_1",
 		Kind:   domain.PostInteractionLike,
+	}))
+
+	require.NoError(t, err)
+}
+
+func TestPersonalizerProcessMessageForwardsSurpriseMode(t *testing.T) {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
+		assert.Equal(t, domain.RecommendModeSurprise, mode, "the event's feed attribution must reach the AI service")
+		return nil
+	}}
+	w := newTestPersonalizerWorker(t, ai)
+
+	err := w.processMessage(context.Background(), interactionMessage(t, domain.UserInteractedPayload{
+		UserID: "u_1",
+		PostID: "p_1",
+		Kind:   domain.PostInteractionLike,
+		Mode:   domain.RecommendModeSurprise,
 	}))
 
 	require.NoError(t, err)
@@ -78,7 +96,7 @@ func TestPersonalizerProcessMessageMissingFields(t *testing.T) {
 }
 
 func TestPersonalizerProcessMessageAIError(t *testing.T) {
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		return errors.New("ai down")
 	}}
 	w := newTestPersonalizerWorker(t, ai)
@@ -95,7 +113,7 @@ func TestPersonalizerProcessMessageAIError(t *testing.T) {
 
 func TestPersonalizerProcessWithRetriesExhaustsAttempts(t *testing.T) {
 	attempts := 0
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		attempts++
 		return errors.New("boom")
 	}}
@@ -113,7 +131,7 @@ func TestPersonalizerProcessWithRetriesExhaustsAttempts(t *testing.T) {
 
 func TestPersonalizerProcessWithRetriesRecovers(t *testing.T) {
 	attempts := 0
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		attempts++
 		if attempts < 3 {
 			return errors.New("boom")
@@ -134,7 +152,7 @@ func TestPersonalizerProcessWithRetriesRecovers(t *testing.T) {
 
 func TestPersonalizerProcessWithRetriesFailsFastOnPermanentError(t *testing.T) {
 	attempts := 0
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		attempts++
 		return permanentf("unparseable message")
 	}}
@@ -152,7 +170,7 @@ func TestPersonalizerProcessWithRetriesFailsFastOnPermanentError(t *testing.T) {
 
 func TestPersonalizerProcessWithRetriesFailsFastOnCircuitOpen(t *testing.T) {
 	attempts := 0
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		attempts++
 		return domain.ErrAICircuitOpen
 	}}

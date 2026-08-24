@@ -61,6 +61,43 @@ def stub(running_server) -> ai_stubs.AIServiceStub:
 
 
 @pytest.fixture
+async def agent_server(unused_tcp_port: int, search_index: SearchIndex):
+    """Server wired with the feed agent in scripted-fake mode."""
+    from src.graphs.feed_graph import FeedAgent
+
+    llm = FakeLLM(response="fresh")
+    chat_graphs = ChatGraphs(
+        sessioned=build_chat_graph(
+            llm, search_index, FakeEmbeddingClient(), checkpointer=InMemorySaver()
+        ),
+        stateless=build_chat_graph(llm, search_index, FakeEmbeddingClient()),
+    )
+    server, _health_servicer = await create_server(
+        AIService(
+            llm,
+            search_index,
+            FakeEmbeddingClient(),
+            chat_graphs=chat_graphs,
+            feed_agent=FeedAgent(llm, search_index),
+        ),
+        str(unused_tcp_port),
+    )
+    await server.start()
+    channel = grpc.aio.insecure_channel(f"127.0.0.1:{unused_tcp_port}")
+    await channel.channel_ready()
+
+    yield channel
+
+    await channel.close()
+    await server.stop(grace=None)
+
+
+@pytest.fixture
+def agent_stub(agent_server) -> ai_stubs.AIServiceStub:
+    return ai_stubs.AIServiceStub(agent_server)
+
+
+@pytest.fixture
 async def running_server_factory(fake_llm: FakeLLM, unused_tcp_port: int):
     """Builds a running gRPC server backed by a custom embedding provider."""
 

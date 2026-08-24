@@ -341,6 +341,27 @@ class SearchIndex:
             if post_id in payload_by_id
         ]
 
+    async def user_tag_weights(self, user_id: str) -> dict[str, float]:
+        """The user's accumulated interest-tag weights; empty on cold start."""
+        profile = await self._user_profile(user_id)
+        if profile is None:
+            return {}
+        return profile[1].get("tag_weights") or {}
+
+    async def post_tags(self, post_ids: list[str]) -> dict[str, list[str]]:
+        """Map each known post id to its stored tags."""
+        if not post_ids:
+            return {}
+        records = await self._client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION,
+            ids=[_point_id(post_id) for post_id in post_ids],
+            with_payload=True,
+        )
+        return {
+            _post_id_from_point(record.id): (record.payload or {}).get("tags", [])
+            for record in records
+        }
+
     async def update_user_profile(
         self, user_id: str, post_id: str, weight: float
     ) -> None:
@@ -399,14 +420,21 @@ class SearchIndex:
             ],
         )
 
-    async def recommend(self, user_id: str, offset: int, limit: int) -> SearchResult:
+    async def recommend(
+        self,
+        user_id: str,
+        offset: int,
+        limit: int,
+        recency_days: int | None = None,
+    ) -> SearchResult:
         """Rank posts for a user from their stored interest profile.
 
         Queries the posts collection with the user's profile vector and
         tag weights — no embedding call — restricted to posts created
-        within RECOMMEND_RECENCY_DAYS and excluding the user's seen
-        history. A user without a profile (cold start) gets an empty feed
-        so the content service can fall back to recency-based ranking.
+        within `recency_days` (RECOMMEND_RECENCY_DAYS when omitted) and
+        excluding the user's seen history. A user without a profile
+        (cold start) gets an empty feed so the content service can fall
+        back to recency-based ranking.
         """
         profile = await self._user_profile(user_id)
         if profile is None:
@@ -415,7 +443,7 @@ class SearchIndex:
         post_ids = await self._rank_window(
             profile[0],
             profile[1].get("tag_weights", {}),
-            self._feed_filter(profile[1]),
+            self._feed_filter(profile[1], recency_days),
         )
         return SearchResult(
             post_ids=post_ids[offset : offset + limit], total=len(post_ids)
@@ -439,9 +467,16 @@ class SearchIndex:
             return None
         return profiles[0].vector[DENSE_VECTOR], payload
 
-    def _feed_filter(self, payload: dict) -> models.Filter:
+    def _feed_filter(
+        self, payload: dict, recency_days: int | None = None
+    ) -> models.Filter:
         """Restrict the feed to recent posts the user has not seen yet."""
-        cutoff = datetime.now(UTC) - timedelta(days=settings.RECOMMEND_RECENCY_DAYS)
+        days = (
+            recency_days
+            if recency_days is not None
+            else settings.RECOMMEND_RECENCY_DAYS
+        )
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         must = [
             models.FieldCondition(
                 key="created_at",
@@ -792,6 +827,21 @@ class MemoryIndex:
                 )
         return posts
 
+    async def user_tag_weights(self, user_id: str) -> dict[str, float]:
+        """Mirror SearchIndex.user_tag_weights over in-memory profiles."""
+        profile = self._profiles.get(user_id)
+        if profile is None or profile.total_weight <= 0:
+            return {}
+        return dict(profile.tag_weights)
+
+    async def post_tags(self, post_ids: list[str]) -> dict[str, list[str]]:
+        """Mirror SearchIndex.post_tags over in-memory posts."""
+        return {
+            post_id: self._posts[post_id].tags
+            for post_id in post_ids
+            if post_id in self._posts
+        }
+
     async def update_user_profile(
         self, user_id: str, post_id: str, weight: float
     ) -> None:
@@ -803,13 +853,24 @@ class MemoryIndex:
             self._profiles.get(user_id), post.post_id, post.dense, post.tags, weight
         )
 
-    async def recommend(self, user_id: str, offset: int, limit: int) -> SearchResult:
+    async def recommend(
+        self,
+        user_id: str,
+        offset: int,
+        limit: int,
+        recency_days: int | None = None,
+    ) -> SearchResult:
         """Mirror SearchIndex.recommend over in-memory posts."""
         profile = self._profiles.get(user_id)
         if profile is None or profile.total_weight <= 0:
             return SearchResult(post_ids=[], total=0)
 
-        cutoff = datetime.now(UTC) - timedelta(days=settings.RECOMMEND_RECENCY_DAYS)
+        days = (
+            recency_days
+            if recency_days is not None
+            else settings.RECOMMEND_RECENCY_DAYS
+        )
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         seen = set(profile.seen_post_ids)
         candidates = [
             post

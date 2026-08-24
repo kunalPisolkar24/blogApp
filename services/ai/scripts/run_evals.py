@@ -107,8 +107,14 @@ def run_reco_suite(
 
     summary = eval_reco.run_suite(stub, k)
     for mode, metrics in summary.items():
+        if not isinstance(metrics, dict):
+            continue
         pretty = ", ".join(f"{key}={metrics[key]:.3f}" for key in eval_reco.METRIC_KEYS)
         print(f"  [{mode:>8}] {pretty}, cold_start_users={metrics['cold_start_users']}")
+    for preset in ("fresh", "explorer"):
+        gain = summary.get(f"{preset}_diversity_gain_vs_default")
+        if gain is not None:
+            print(f"  [{preset:>8}] diversity_gain_vs_default={gain:+.3f}")
 
     if args.update_baseline:
         eval_reco.write_baseline(args.baseline_path, summary, k, args.tolerance)

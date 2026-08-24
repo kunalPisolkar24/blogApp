@@ -17,6 +17,7 @@ from src.graphs.checkpointer import (
     close_checkpointer,
     start_checkpointer,
 )
+from src.graphs.feed_graph import FeedAgent
 from src.graphs.post_graph import build_post_generation_graph
 from src.llm import FakeLLMClient, LLMClient
 from src.observability.langsmith import setup_langsmith
@@ -102,6 +103,13 @@ async def serve() -> None:
         if settings.VECTOR_MODE == "fake"
         else SearchIndex(embeddings)
     )
+
+    feed_agent = None
+    if settings.AGENT_MODE != "deterministic":
+        agent_llm = FakeLLMClient() if settings.AGENT_MODE == "fake" else llm
+        feed_agent = FeedAgent(agent_llm, search)
+    logger.info("feed agent: %s", settings.AGENT_MODE)
+
     await _ensure_search_ready(search)
 
     checkpointer = build_checkpointer()
@@ -136,6 +144,7 @@ async def serve() -> None:
             embeddings,
             chat_graphs=chat_graphs,
             post_generation_graph=post_generation_graph,
+            feed_agent=feed_agent,
         )
     )
     handle_graceful_shutdown(server, health_servicer)

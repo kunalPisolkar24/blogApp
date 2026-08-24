@@ -29,6 +29,8 @@ class RecommendMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RECOMMEND_MODE_UNSPECIFIED: _ClassVar[RecommendMode]
     RECOMMEND_MODE_DEFAULT: _ClassVar[RecommendMode]
     RECOMMEND_MODE_SURPRISE: _ClassVar[RecommendMode]
+    RECOMMEND_MODE_FRESH: _ClassVar[RecommendMode]
+    RECOMMEND_MODE_EXPLORER: _ClassVar[RecommendMode]
 WORKFLOW_STATUS_UNSPECIFIED: WorkflowStatus
 WORKFLOW_STATUS_PENDING: WorkflowStatus
 WORKFLOW_STATUS_APPROVED: WorkflowStatus
@@ -40,6 +42,8 @@ INTERACTION_KIND_SAVE: InteractionKind
 RECOMMEND_MODE_UNSPECIFIED: RecommendMode
 RECOMMEND_MODE_DEFAULT: RecommendMode
 RECOMMEND_MODE_SURPRISE: RecommendMode
+RECOMMEND_MODE_FRESH: RecommendMode
+RECOMMEND_MODE_EXPLORER: RecommendMode
 
 class ContentRequest(_message.Message):
     __slots__ = ("text",)
@@ -256,14 +260,16 @@ class ChatChunk(_message.Message):
     def __init__(self, delta: _Optional[str] = ..., done: _Optional[bool] = ..., cited_post_ids: _Optional[_Iterable[str]] = ..., error: _Optional[str] = ...) -> None: ...
 
 class UserProfileUpdateRequest(_message.Message):
-    __slots__ = ("user_id", "post_id", "kind")
+    __slots__ = ("user_id", "post_id", "kind", "source_mode")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     POST_ID_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_MODE_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     post_id: str
     kind: InteractionKind
-    def __init__(self, user_id: _Optional[str] = ..., post_id: _Optional[str] = ..., kind: _Optional[_Union[InteractionKind, str]] = ...) -> None: ...
+    source_mode: RecommendMode
+    def __init__(self, user_id: _Optional[str] = ..., post_id: _Optional[str] = ..., kind: _Optional[_Union[InteractionKind, str]] = ..., source_mode: _Optional[_Union[RecommendMode, str]] = ...) -> None: ...
 
 class UserProfileUpdateResponse(_message.Message):
     __slots__ = ()
@@ -284,12 +290,21 @@ class RecommendRequest(_message.Message):
     def __init__(self, user_id: _Optional[str] = ..., offset: _Optional[int] = ..., limit: _Optional[int] = ..., mode: _Optional[_Union[RecommendMode, str]] = ..., seed: _Optional[int] = ...) -> None: ...
 
 class RecommendResponse(_message.Message):
-    __slots__ = ("post_ids", "total")
+    __slots__ = ("post_ids", "total", "reasons")
+    class ReasonsEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     POST_IDS_FIELD_NUMBER: _ClassVar[int]
     TOTAL_FIELD_NUMBER: _ClassVar[int]
+    REASONS_FIELD_NUMBER: _ClassVar[int]
     post_ids: _containers.RepeatedScalarFieldContainer[str]
     total: int
-    def __init__(self, post_ids: _Optional[_Iterable[str]] = ..., total: _Optional[int] = ...) -> None: ...
+    reasons: _containers.ScalarMap[str, str]
+    def __init__(self, post_ids: _Optional[_Iterable[str]] = ..., total: _Optional[int] = ..., reasons: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class DeleteUserProfileRequest(_message.Message):
     __slots__ = ("user_id",)

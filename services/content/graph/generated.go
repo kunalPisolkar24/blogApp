@@ -122,6 +122,7 @@ type ComplexityRoot struct {
 	PaginatedPosts struct {
 		CurrentPage func(childComplexity int) int
 		Posts       func(childComplexity int) int
+		Reasons     func(childComplexity int) int
 		TotalPages  func(childComplexity int) int
 		TotalPosts  func(childComplexity int) int
 	}
@@ -156,6 +157,11 @@ type ComplexityRoot struct {
 		Tags       func(childComplexity int) int
 		Title      func(childComplexity int) int
 		UpdatedAt  func(childComplexity int) int
+	}
+
+	PostReason struct {
+		PostID func(childComplexity int) int
+		Reason func(childComplexity int) int
 	}
 
 	Query struct {
@@ -631,6 +637,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PaginatedPosts.Posts(childComplexity), true
+	case "PaginatedPosts.reasons":
+		if e.complexity.PaginatedPosts.Reasons == nil {
+			break
+		}
+
+		return e.complexity.PaginatedPosts.Reasons(childComplexity), true
 	case "PaginatedPosts.totalPages":
 		if e.complexity.PaginatedPosts.TotalPages == nil {
 			break
@@ -806,6 +818,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.PostDraft.UpdatedAt(childComplexity), true
+
+	case "PostReason.postId":
+		if e.complexity.PostReason.PostID == nil {
+			break
+		}
+
+		return e.complexity.PostReason.PostID(childComplexity), true
+	case "PostReason.reason":
+		if e.complexity.PostReason.Reason == nil {
+			break
+		}
+
+		return e.complexity.PostReason.Reason(childComplexity), true
 
 	case "Query.chat":
 		if e.complexity.Query.Chat == nil {
@@ -3635,6 +3660,41 @@ func (ec *executionContext) fieldContext_PaginatedPosts_totalPosts(_ context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _PaginatedPosts_reasons(ctx context.Context, field graphql.CollectedField, obj *model.PaginatedPosts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PaginatedPosts_reasons,
+		func(ctx context.Context) (any, error) {
+			return obj.Reasons, nil
+		},
+		nil,
+		ec.marshalNPostReason2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostReasonᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PaginatedPosts_reasons(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PaginatedPosts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "postId":
+				return ec.fieldContext_PostReason_postId(ctx, field)
+			case "reason":
+				return ec.fieldContext_PostReason_reason(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PostReason", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Post_id(ctx context.Context, field graphql.CollectedField, obj *model.Post) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4443,6 +4503,64 @@ func (ec *executionContext) fieldContext_PostDraft_updatedAt(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _PostReason_postId(ctx context.Context, field graphql.CollectedField, obj *model.PostReason) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostReason_postId,
+		func(ctx context.Context) (any, error) {
+			return obj.PostID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostReason_postId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostReason",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PostReason_reason(ctx context.Context, field graphql.CollectedField, obj *model.PostReason) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_PostReason_reason,
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_PostReason_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PostReason",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_posts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4476,6 +4594,8 @@ func (ec *executionContext) fieldContext_Query_posts(ctx context.Context, field 
 				return ec.fieldContext_PaginatedPosts_currentPage(ctx, field)
 			case "totalPosts":
 				return ec.fieldContext_PaginatedPosts_totalPosts(ctx, field)
+			case "reasons":
+				return ec.fieldContext_PaginatedPosts_reasons(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PaginatedPosts", field.Name)
 		},
@@ -4645,6 +4765,8 @@ func (ec *executionContext) fieldContext_Query_postsByTag(ctx context.Context, f
 				return ec.fieldContext_PaginatedPosts_currentPage(ctx, field)
 			case "totalPosts":
 				return ec.fieldContext_PaginatedPosts_totalPosts(ctx, field)
+			case "reasons":
+				return ec.fieldContext_PaginatedPosts_reasons(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PaginatedPosts", field.Name)
 		},
@@ -4743,6 +4865,8 @@ func (ec *executionContext) fieldContext_Query_recommendedPosts(ctx context.Cont
 				return ec.fieldContext_PaginatedPosts_currentPage(ctx, field)
 			case "totalPosts":
 				return ec.fieldContext_PaginatedPosts_totalPosts(ctx, field)
+			case "reasons":
+				return ec.fieldContext_PaginatedPosts_reasons(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PaginatedPosts", field.Name)
 		},
@@ -5406,6 +5530,8 @@ func (ec *executionContext) fieldContext_User_posts(ctx context.Context, field g
 				return ec.fieldContext_PaginatedPosts_currentPage(ctx, field)
 			case "totalPosts":
 				return ec.fieldContext_PaginatedPosts_totalPosts(ctx, field)
+			case "reasons":
+				return ec.fieldContext_PaginatedPosts_reasons(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PaginatedPosts", field.Name)
 		},
@@ -7690,6 +7816,11 @@ func (ec *executionContext) _PaginatedPosts(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "reasons":
+			out.Values[i] = ec._PaginatedPosts_reasons(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -7966,6 +8097,50 @@ func (ec *executionContext) _PostDraft(ctx context.Context, sel ast.SelectionSet
 			}
 		case "updatedAt":
 			out.Values[i] = ec._PostDraft_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var postReasonImplementors = []string{"PostReason"}
+
+func (ec *executionContext) _PostReason(ctx context.Context, sel ast.SelectionSet, obj *model.PostReason) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postReasonImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostReason")
+		case "postId":
+			out.Values[i] = ec._PostReason_postId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._PostReason_reason(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9275,6 +9450,60 @@ func (ec *executionContext) marshalNPostDraft2ᚖgithubᚗcomᚋkunalPisolkar24�
 		return graphql.Null
 	}
 	return ec._PostDraft(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPostReason2ᚕᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostReasonᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PostReason) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNPostReason2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostReason(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNPostReason2ᚖgithubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐPostReason(ctx context.Context, sel ast.SelectionSet, v *model.PostReason) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostReason(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSearchResult2githubᚗcomᚋkunalPisolkar24ᚋtoposᚋservicesᚋcontentᚋgraphᚋmodelᚐSearchResult(ctx context.Context, sel ast.SelectionSet, v model.SearchResult) graphql.Marshaler {

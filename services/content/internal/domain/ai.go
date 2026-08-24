@@ -22,15 +22,22 @@ type GeneratedDraft struct {
 type SearchResult struct {
 	PostIDs []string
 	Total   int
+	// Reasons maps post id -> evidence line from the user's real
+	// interaction profile; posts without evidence are absent.
+	Reasons map[string]string
 }
 
 // RecommendMode selects how a feed is ranked for a user: DEFAULT follows
-// the user's learned taste, SURPRISE deliberately strays from it.
+// the user's learned taste, SURPRISE deliberately strays from it, FRESH
+// narrows the window to recent posts, EXPLORER blends surprise pages
+// into the default ranking.
 type RecommendMode string
 
 const (
 	RecommendModeDefault  RecommendMode = "default"
 	RecommendModeSurprise RecommendMode = "surprise"
+	RecommendModeFresh    RecommendMode = "fresh"
+	RecommendModeExplorer RecommendMode = "explorer"
 )
 
 type AIService interface {
@@ -53,8 +60,10 @@ type AIService interface {
 	RelatedPostsBatch(ctx context.Context, postIDs []string, limit int) (map[string]*SearchResult, error)
 	ChatAnswer(ctx context.Context, threadID, query string, history []ChatTurn, topK int) (*ChatAnswer, error)
 	// UpdateUserProfile folds an interaction into the user's interest
-	// profile so future feeds can be ranked by it.
-	UpdateUserProfile(ctx context.Context, userID, postID string, kind PostInteractionKind) error
+	// profile so future feeds can be ranked by it. The mode attributes
+	// the interaction to its feed surface; surprise-sourced ones count
+	// at a reduced weight inside the AI service.
+	UpdateUserProfile(ctx context.Context, userID, postID string, kind PostInteractionKind, mode RecommendMode) error
 	// RecommendFeed ranks posts for a user by their learned taste.
 	// A user with no profile yet yields an empty result.
 	RecommendFeed(ctx context.Context, userID string, offset, limit int, mode RecommendMode, seed uint32) (*SearchResult, error)

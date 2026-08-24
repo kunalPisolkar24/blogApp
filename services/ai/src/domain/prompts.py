@@ -140,3 +140,17 @@ def chat_user_prompt(
 
     parts.append(f"Question: {query}")
     return "\n\n".join(parts)
+
+
+FEED_AGENT_PROMPT = (
+    "You pick the blend preset for a blogger's recommendation feed.\n"
+    "- fresh: only recent posts, for users who want what is new\n"
+    "- balanced: the standard mix of taste-matched posts\n"
+    "- explorer: mostly taste-matched with some deliberate surprises\n"
+    "Answer with exactly one word: fresh, balanced, or explorer."
+)
+
+
+def feed_agent_user_prompt(profile_summary: str) -> str:
+    """Describe one user's taste profile for the blend decision."""
+    return f"User taste profile:\n{profile_summary}"

@@ -35,7 +35,7 @@ func TestPersonalizerWorkerUpdatesProfileFromInteraction(t *testing.T) {
 	}))
 
 	var calls atomic.Int32
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		calls.Add(1)
 		require.Equal(t, "u_roundtrip", userID)
 		require.Equal(t, "p_roundtrip", postID)
@@ -76,7 +76,7 @@ func TestPersonalizerWorkerRetriesThenDeadLetters(t *testing.T) {
 	}))
 
 	var attempts atomic.Int32
-	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+	ai := &testutil.MockAIService{UpdateUserProfileFn: func(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 		attempts.Add(1)
 		return errors.New("profile update unavailable")
 	}}

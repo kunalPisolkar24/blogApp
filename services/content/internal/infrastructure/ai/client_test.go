@@ -86,7 +86,7 @@ func (s *stubAI) ChatAnswer(ctx context.Context, threadID, query string, history
 	return &domain.ChatAnswer{Content: "answer"}, nil
 }
 
-func (s *stubAI) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind) error {
+func (s *stubAI) UpdateUserProfile(ctx context.Context, userID, postID string, kind domain.PostInteractionKind, mode domain.RecommendMode) error {
 	return s.err
 }
 

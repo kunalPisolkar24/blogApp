@@ -34,6 +34,12 @@ type PaginatedPosts {
   totalPages: Int!
   currentPage: Int!
   totalPosts: Int!
+  reasons: [PostReason!]!
+}
+
+type PostReason {
+  postId: ID!
+  reason: String!
 }
 
 type GeneratedPost {
@@ -51,6 +57,8 @@ type SearchResult {
 enum RecommendMode {
   DEFAULT
   SURPRISE
+  FRESH
+  EXPLORER
 }
 
 enum MessageRole {

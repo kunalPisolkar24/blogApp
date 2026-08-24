@@ -17,11 +17,13 @@ from src.domain.prompts import (
     TAGS_PROMPT,
     post_user_prompt,
 )
+from src.domain.reasons import build_reasons
 from src.domain.sanitize import sanitize_post_html
 from src.domain.text import clean_html, extract_json
 from src.embeddings import EmbeddingError, EmbeddingProvider
 from src.generated import ai_service_pb2, ai_service_pb2_grpc
 from src.graphs.chat_graph import ChatGraphs, graphs_for_request
+from src.graphs.feed_graph import EXPLORER, FRESH, FeedAgent, execute_blend
 from src.graphs.post_graph import (
     STATUS_APPROVED,
     STATUS_PENDING,
@@ -96,7 +98,23 @@ def _mode_name(mode: int) -> str:
         ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED: "default",
         ai_service_pb2.RECOMMEND_MODE_DEFAULT: "default",
         ai_service_pb2.RECOMMEND_MODE_SURPRISE: "surprise",
+        ai_service_pb2.RECOMMEND_MODE_FRESH: "fresh",
+        ai_service_pb2.RECOMMEND_MODE_EXPLORER: "explorer",
     }[mode]
+
+
+def _preset_for_mode(mode: int) -> str | None:
+    """The blend preset a mode maps to, when it names one explicitly.
+
+    FRESH and EXPLORER are first-class modes served by the deterministic
+    engine with preset knobs; DEFAULT/UNSPECIFIED/SURPRISE return None
+    so they keep their dedicated paths (or the agent's pick).
+    """
+    if mode == ai_service_pb2.RECOMMEND_MODE_FRESH:
+        return FRESH
+    if mode == ai_service_pb2.RECOMMEND_MODE_EXPLORER:
+        return EXPLORER
+    return None
 
 
 def _kind_name(kind: int) -> str:
@@ -300,12 +318,14 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         embeddings: EmbeddingProvider,
         chat_graphs: ChatGraphs | None = None,
         post_generation_graph=None,
+        feed_agent: FeedAgent | None = None,
     ) -> None:
         self._llm = llm
         self._search = search
         self._embeddings = embeddings
         self._chat_graphs = chat_graphs
         self._post_generation_graph = post_generation_graph
+        self._feed_agent = feed_agent
 
     @rpc_metrics("/ai.AIService/GenerateSummary")
     async def GenerateSummary(
@@ -596,6 +616,16 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
         weight = _interaction_weight(request.kind)
         if weight is None:
             raise ValidationError(f"unsupported interaction kind: {request.kind}")
+        if request.source_mode not in (
+            ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED,
+            ai_service_pb2.RECOMMEND_MODE_DEFAULT,
+            ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+        ):
+            raise ValidationError(f"unsupported source mode: {request.source_mode}")
+
+        if request.source_mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
+            weight *= settings.PROFILE_SURPRISE_FEEDBACK_MULTIPLIER
+            metrics.SURPRISE_INTERACTIONS.labels(kind=_kind_name(request.kind)).inc()
 
         await self._search.update_user_profile(user_id, post_id, weight)
         metrics.PROFILE_UPDATES.labels(kind=_kind_name(request.kind)).inc()
@@ -618,6 +648,8 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             ai_service_pb2.RECOMMEND_MODE_UNSPECIFIED,
             ai_service_pb2.RECOMMEND_MODE_DEFAULT,
             ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            ai_service_pb2.RECOMMEND_MODE_FRESH,
+            ai_service_pb2.RECOMMEND_MODE_EXPLORER,
         ):
             raise ValidationError(f"unsupported recommend mode: {request.mode}")
         limit = request.limit or 10
@@ -630,7 +662,19 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
 
         mode = _mode_name(request.mode)
         start = time.perf_counter()
-        if request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
+        preset = _preset_for_mode(request.mode)
+        if preset is not None:
+            result = await execute_blend(
+                self._search, user_id, request.offset, limit, preset, request.seed
+            )
+        elif self._feed_agent is not None and request.mode != (
+            ai_service_pb2.RECOMMEND_MODE_SURPRISE
+        ):
+            preset = await self._feed_agent.decide(user_id)
+            result = await execute_blend(
+                self._search, user_id, request.offset, limit, preset, request.seed
+            )
+        elif request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE:
             result = await self._search.recommend_surprise(
                 user_id, request.offset, limit, request.seed
             )
@@ -640,8 +684,29 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             mode, time.perf_counter() - start, cold_start=result.total == 0
         )
         return ai_service_pb2.RecommendResponse(
-            post_ids=result.post_ids, total=result.total
+            post_ids=result.post_ids,
+            total=result.total,
+            reasons=await self._recommendation_reasons(
+                user_id,
+                result.post_ids,
+                surprise=request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            ),
         )
+
+    async def _recommendation_reasons(
+        self, user_id: str, post_ids: list[str], surprise: bool
+    ) -> dict[str, str]:
+        """Evidence lines for a feed page; empty for surprise feeds.
+
+        Surprise posts are deliberately off-taste, so taste-based
+        evidence would be misleading there.
+        """
+        if surprise or not post_ids:
+            return {}
+        tag_weights = await self._search.user_tag_weights(user_id)
+        if not tag_weights:
+            return {}
+        return build_reasons(tag_weights, await self._search.post_tags(post_ids))
 
     @rpc_metrics("/ai.AIService/Embed")
     async def Embed(

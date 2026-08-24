@@ -52,6 +52,12 @@ export interface PaginatedContentPosts {
   totalPosts: number;
 }
 
+export interface ContentPostReason {
+  __typename?: "PostReason";
+  postId: string;
+  reason: string;
+}
+
 export interface CreatePostInput {
   title: string;
   body: string;
@@ -225,7 +231,7 @@ export interface SearchPostsQuery {
   };
 }
 
-export type RecommendMode = "DEFAULT" | "SURPRISE";
+export type RecommendMode = "DEFAULT" | "SURPRISE" | "FRESH" | "EXPLORER";
 
 export interface RecommendedPostsQueryVariables {
   page?: number;
@@ -236,7 +242,7 @@ export interface RecommendedPostsQueryVariables {
 
 export interface RecommendedPostsQuery {
   __typename?: "Query";
-  recommendedPosts: PaginatedContentPosts;
+  recommendedPosts: PaginatedContentPosts & { reasons: ContentPostReason[] };
 }
 
 const POST_CARD_FIELDS = gql`
@@ -435,6 +441,10 @@ export const RecommendedPostsDocument = gql`
   ) {
     recommendedPosts(page: $page, limit: $limit, mode: $mode, seed: $seed) {
       ...PaginatedPostFields
+      reasons {
+        postId
+        reason
+      }
     }
   }
   ${PAGINATED_POST_FIELDS}
