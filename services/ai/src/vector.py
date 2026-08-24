@@ -341,6 +341,27 @@ class SearchIndex:
             if post_id in payload_by_id
         ]
 
+    async def user_tag_weights(self, user_id: str) -> dict[str, float]:
+        """The user's accumulated interest-tag weights; empty on cold start."""
+        profile = await self._user_profile(user_id)
+        if profile is None:
+            return {}
+        return profile[1].get("tag_weights") or {}
+
+    async def post_tags(self, post_ids: list[str]) -> dict[str, list[str]]:
+        """Map each known post id to its stored tags."""
+        if not post_ids:
+            return {}
+        records = await self._client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION,
+            ids=[_point_id(post_id) for post_id in post_ids],
+            with_payload=True,
+        )
+        return {
+            _post_id_from_point(record.id): (record.payload or {}).get("tags", [])
+            for record in records
+        }
+
     async def update_user_profile(
         self, user_id: str, post_id: str, weight: float
     ) -> None:
@@ -791,6 +812,21 @@ class MemoryIndex:
                     RetrievedPost(post_id=post_id, title=stored.title, body=stored.body)
                 )
         return posts
+
+    async def user_tag_weights(self, user_id: str) -> dict[str, float]:
+        """Mirror SearchIndex.user_tag_weights over in-memory profiles."""
+        profile = self._profiles.get(user_id)
+        if profile is None or profile.total_weight <= 0:
+            return {}
+        return dict(profile.tag_weights)
+
+    async def post_tags(self, post_ids: list[str]) -> dict[str, list[str]]:
+        """Mirror SearchIndex.post_tags over in-memory posts."""
+        return {
+            post_id: self._posts[post_id].tags
+            for post_id in post_ids
+            if post_id in self._posts
+        }
 
     async def update_user_profile(
         self, user_id: str, post_id: str, weight: float

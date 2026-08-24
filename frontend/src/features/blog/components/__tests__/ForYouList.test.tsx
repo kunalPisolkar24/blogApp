@@ -32,12 +32,17 @@ const buildPost = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const buildPostsResponse = (posts: unknown[] = [buildPost()], totalPosts = 1) => ({
+const buildPostsResponse = (
+  posts: unknown[] = [buildPost()],
+  totalPosts = 1,
+  reasons: unknown[] = [],
+) => ({
   __typename: "PaginatedPosts",
   posts,
   totalPages: Math.ceil(totalPosts / 6),
   currentPage: 1,
   totalPosts,
+  reasons,
 });
 
 describe("ForYouList", () => {
@@ -91,6 +96,35 @@ describe("ForYouList", () => {
       await screen.findByRole("link", {
         name: /open blog post: optimizing neural network throughput/i,
       }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the recommendation reason on the matching card", async () => {
+    sessionStoreActions.markAuthenticated("test-token");
+    server.use(
+      graphqlApi.query("RecommendedPosts", () =>
+        HttpResponse.json({
+          data: {
+            recommendedPosts: buildPostsResponse(
+              [buildPost({ id: "recommended-post" })],
+              1,
+              [
+                {
+                  __typename: "PostReason",
+                  postId: "recommended-post",
+                  reason: "Because you engage with architecture posts",
+                },
+              ],
+            ),
+          },
+        }),
+      ),
+    );
+
+    renderWithProviders(<ForYouList />);
+
+    expect(
+      await screen.findByText(/because you engage with architecture posts/i),
     ).toBeInTheDocument();
   });
 

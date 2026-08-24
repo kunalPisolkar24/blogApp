@@ -22,6 +22,9 @@ type GeneratedDraft struct {
 type SearchResult struct {
 	PostIDs []string
 	Total   int
+	// Reasons maps post id -> evidence line from the user's real
+	// interaction profile; posts without evidence are absent.
+	Reasons map[string]string
 }
 
 // RecommendMode selects how a feed is ranked for a user: DEFAULT follows

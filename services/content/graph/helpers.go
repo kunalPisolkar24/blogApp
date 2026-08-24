@@ -99,11 +99,17 @@ func mapDomainPaginatedToModel(pp *domain.PaginatedPosts) *model.PaginatedPosts 
 		}
 	}
 
+	reasons := make([]*model.PostReason, 0, len(pp.Reasons))
+	for _, dr := range pp.Reasons {
+		reasons = append(reasons, &model.PostReason{PostID: dr.PostID, Reason: dr.Reason})
+	}
+
 	return &model.PaginatedPosts{
 		Posts:       posts,
 		TotalPages:  pp.TotalPages,
 		TotalPosts:  int(pp.TotalPosts),
 		CurrentPage: pp.Page,
+		Reasons:     reasons,
 	}
 }
 

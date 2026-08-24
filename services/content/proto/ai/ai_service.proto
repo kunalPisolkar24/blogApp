@@ -225,6 +225,9 @@ message RecommendResponse {
   // total is the number of rankable posts for the user, not the size of
   // this page.
   int32 total = 2;
+  // reasons maps post_id -> evidence line derived from the user's real
+  // interaction profile; posts without usable evidence are absent.
+  map<string, string> reasons = 3;
 }
 
 message DeleteUserProfileRequest {

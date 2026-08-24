@@ -62,6 +62,42 @@ async def test_recommend_feed_returns_ranked_posts(stub) -> None:
     assert response.total == 1
 
 
+async def test_recommend_feed_explains_default_picks_from_shared_tags(stub) -> None:
+    target = str(uuid4())
+    similar = str(uuid4())
+    await stub.IndexPost(_index_request(target, "beta doc", tags=["golang"]))
+    await stub.IndexPost(_index_request(similar, "beta doc", tags=["golang"]))
+    await _seed_profile(stub, "user-1", target)
+
+    response = await stub.RecommendFeed(_recommend_request("user-1"))
+
+    assert response.reasons == {
+        similar: "Because you engage with golang posts"
+    }
+
+
+async def test_recommend_feed_surprise_carries_no_reasons(stub) -> None:
+    target = str(uuid4())
+    unrelated = str(uuid4())
+    now = datetime.now(UTC)
+    await stub.IndexPost(
+        _index_request(target, "alpha doc", tags=["golang"], created_at=now)
+    )
+    await stub.IndexPost(
+        _index_request(unrelated, "omega doc", tags=["pottery"], created_at=now)
+    )
+    await _seed_profile(stub, "user-1", target)
+
+    response = await stub.RecommendFeed(
+        _recommend_request(
+            "user-1", mode=ai_service_pb2.RECOMMEND_MODE_SURPRISE, seed=7
+        )
+    )
+
+    assert response.post_ids
+    assert response.reasons == {}
+
+
 async def test_recommend_feed_returns_empty_for_cold_start_user(stub) -> None:
     await stub.IndexPost(_index_request(str(uuid4()), "beta doc"))
 

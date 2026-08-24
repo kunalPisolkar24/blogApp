@@ -41,6 +41,15 @@ type PaginatedPosts struct {
 	TotalPages int     `json:"totalPages"`
 	TotalPosts int64   `json:"totalPosts"`
 	Page       int     `json:"page"`
+	// Reasons pairs recommended posts with their evidence lines;
+	// empty for every non-recommended feed.
+	Reasons []*PostReason `json:"reasons,omitempty"`
+}
+
+// PostReason explains why a post was recommended to a user.
+type PostReason struct {
+	PostID string `json:"postId"`
+	Reason string `json:"reason"`
 }
 
 // SearchPostsResult is the outcome of a search query: the posts that

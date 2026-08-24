@@ -45,6 +45,11 @@ export const ForYouList: React.FC = () => {
     ? latestQuery.data?.posts
     : recommendedQuery.data?.recommendedPosts;
 
+  const reasonById = useMemo(() => {
+    const reasons = recommendedQuery.data?.recommendedPosts.reasons ?? [];
+    return new Map(reasons.map((entry) => [entry.postId, entry.reason]));
+  }, [recommendedQuery.data]);
+
   useEffect(() => {
     if (!isAuthenticated || useLatestFallback) {
       return;
@@ -68,8 +73,12 @@ export const ForYouList: React.FC = () => {
   }, [mode, seed]);
 
   const blogPosts = useMemo(
-    () => paginatedPosts?.posts.map(mapPostToBlogCardItem) ?? [],
-    [paginatedPosts],
+    () =>
+      paginatedPosts?.posts.map((post) => ({
+        ...mapPostToBlogCardItem(post),
+        reason: showLatest ? undefined : reasonById.get(post.id),
+      })) ?? [],
+    [paginatedPosts, showLatest, reasonById],
   );
 
   // Remember the feed mode per rendered card so the view recorded on

@@ -17,6 +17,7 @@ from src.domain.prompts import (
     TAGS_PROMPT,
     post_user_prompt,
 )
+from src.domain.reasons import build_reasons
 from src.domain.sanitize import sanitize_post_html
 from src.domain.text import clean_html, extract_json
 from src.embeddings import EmbeddingError, EmbeddingProvider
@@ -640,8 +641,29 @@ class AIService(ai_service_pb2_grpc.AIServiceServicer):
             mode, time.perf_counter() - start, cold_start=result.total == 0
         )
         return ai_service_pb2.RecommendResponse(
-            post_ids=result.post_ids, total=result.total
+            post_ids=result.post_ids,
+            total=result.total,
+            reasons=await self._recommendation_reasons(
+                user_id,
+                result.post_ids,
+                surprise=request.mode == ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+            ),
         )
+
+    async def _recommendation_reasons(
+        self, user_id: str, post_ids: list[str], surprise: bool
+    ) -> dict[str, str]:
+        """Evidence lines for a feed page; empty for surprise feeds.
+
+        Surprise posts are deliberately off-taste, so taste-based
+        evidence would be misleading there.
+        """
+        if surprise or not post_ids:
+            return {}
+        tag_weights = await self._search.user_tag_weights(user_id)
+        if not tag_weights:
+            return {}
+        return build_reasons(tag_weights, await self._search.post_tags(post_ids))
 
     @rpc_metrics("/ai.AIService/Embed")
     async def Embed(

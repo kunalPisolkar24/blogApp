@@ -1737,7 +1737,10 @@ type RecommendResponse struct {
 	PostIds []string               `protobuf:"bytes,1,rep,name=post_ids,json=postIds,proto3" json:"post_ids,omitempty"`
 	// total is the number of rankable posts for the user, not the size of
 	// this page.
-	Total         int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Total int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// reasons maps post_id -> evidence line derived from the user's real
+	// interaction profile; posts without usable evidence are absent.
+	Reasons       map[string]string `protobuf:"bytes,3,rep,name=reasons,proto3" json:"reasons,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1784,6 +1787,13 @@ func (x *RecommendResponse) GetTotal() int32 {
 		return x.Total
 	}
 	return 0
+}
+
+func (x *RecommendResponse) GetReasons() map[string]string {
+	if x != nil {
+		return x.Reasons
+	}
+	return nil
 }
 
 type DeleteUserProfileRequest struct {
@@ -1971,10 +1981,14 @@ const file_proto_ai_ai_service_proto_rawDesc = "" +
 	"\x06offset\x18\x02 \x01(\rR\x06offset\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\rR\x05limit\x12%\n" +
 	"\x04mode\x18\x04 \x01(\x0e2\x11.ai.RecommendModeR\x04mode\x12\x12\n" +
-	"\x04seed\x18\x05 \x01(\rR\x04seed\"D\n" +
+	"\x04seed\x18\x05 \x01(\rR\x04seed\"\xbe\x01\n" +
 	"\x11RecommendResponse\x12\x19\n" +
 	"\bpost_ids\x18\x01 \x03(\tR\apostIds\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total\"3\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12<\n" +
+	"\areasons\x18\x03 \x03(\v2\".ai.RecommendResponse.ReasonsEntryR\areasons\x1a:\n" +
+	"\fReasonsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"3\n" +
 	"\x18DeleteUserProfileRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x1b\n" +
 	"\x19DeleteUserProfileResponse*\x8a\x01\n" +
@@ -2026,7 +2040,7 @@ func file_proto_ai_ai_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_ai_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_proto_ai_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_proto_ai_ai_service_proto_goTypes = []any{
 	(WorkflowStatus)(0),               // 0: ai.WorkflowStatus
 	(InteractionKind)(0),              // 1: ai.InteractionKind
@@ -2062,52 +2076,54 @@ var file_proto_ai_ai_service_proto_goTypes = []any{
 	(*RecommendResponse)(nil),         // 31: ai.RecommendResponse
 	(*DeleteUserProfileRequest)(nil),  // 32: ai.DeleteUserProfileRequest
 	(*DeleteUserProfileResponse)(nil), // 33: ai.DeleteUserProfileResponse
-	(*timestamppb.Timestamp)(nil),     // 34: google.protobuf.Timestamp
+	nil,                               // 34: ai.RecommendResponse.ReasonsEntry
+	(*timestamppb.Timestamp)(nil),     // 35: google.protobuf.Timestamp
 }
 var file_proto_ai_ai_service_proto_depIdxs = []int32{
 	0,  // 0: ai.PostWorkflowState.status:type_name -> ai.WorkflowStatus
-	34, // 1: ai.IndexRequest.created_at:type_name -> google.protobuf.Timestamp
+	35, // 1: ai.IndexRequest.created_at:type_name -> google.protobuf.Timestamp
 	21, // 2: ai.RelatedBatchResponse.results:type_name -> ai.RelatedBatchItem
 	25, // 3: ai.ChatAnswerRequest.history:type_name -> ai.ChatMessage
 	1,  // 4: ai.UserProfileUpdateRequest.kind:type_name -> ai.InteractionKind
 	2,  // 5: ai.RecommendRequest.mode:type_name -> ai.RecommendMode
-	3,  // 6: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
-	5,  // 7: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
-	7,  // 8: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
-	7,  // 9: ai.AIService.GeneratePostDraft:input_type -> ai.PostGenerationRequest
-	10, // 10: ai.AIService.ApprovePost:input_type -> ai.ApprovePostRequest
-	11, // 11: ai.AIService.RejectPost:input_type -> ai.RejectPostRequest
-	12, // 12: ai.AIService.IndexPost:input_type -> ai.IndexRequest
-	14, // 13: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
-	16, // 14: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
-	18, // 15: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
-	20, // 16: ai.AIService.RelatedPostsBatch:input_type -> ai.RelatedBatchRequest
-	23, // 17: ai.AIService.Embed:input_type -> ai.EmbedRequest
-	26, // 18: ai.AIService.ChatAnswer:input_type -> ai.ChatAnswerRequest
-	28, // 19: ai.AIService.UpdateUserProfile:input_type -> ai.UserProfileUpdateRequest
-	30, // 20: ai.AIService.RecommendFeed:input_type -> ai.RecommendRequest
-	32, // 21: ai.AIService.DeleteUserProfile:input_type -> ai.DeleteUserProfileRequest
-	4,  // 22: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
-	6,  // 23: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
-	8,  // 24: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
-	9,  // 25: ai.AIService.GeneratePostDraft:output_type -> ai.PostWorkflowState
-	9,  // 26: ai.AIService.ApprovePost:output_type -> ai.PostWorkflowState
-	9,  // 27: ai.AIService.RejectPost:output_type -> ai.PostWorkflowState
-	13, // 28: ai.AIService.IndexPost:output_type -> ai.IndexResponse
-	15, // 29: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
-	17, // 30: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
-	19, // 31: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
-	22, // 32: ai.AIService.RelatedPostsBatch:output_type -> ai.RelatedBatchResponse
-	24, // 33: ai.AIService.Embed:output_type -> ai.EmbedResponse
-	27, // 34: ai.AIService.ChatAnswer:output_type -> ai.ChatChunk
-	29, // 35: ai.AIService.UpdateUserProfile:output_type -> ai.UserProfileUpdateResponse
-	31, // 36: ai.AIService.RecommendFeed:output_type -> ai.RecommendResponse
-	33, // 37: ai.AIService.DeleteUserProfile:output_type -> ai.DeleteUserProfileResponse
-	22, // [22:38] is the sub-list for method output_type
-	6,  // [6:22] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	34, // 6: ai.RecommendResponse.reasons:type_name -> ai.RecommendResponse.ReasonsEntry
+	3,  // 7: ai.AIService.GenerateSummary:input_type -> ai.ContentRequest
+	5,  // 8: ai.AIService.GenerateTags:input_type -> ai.ContextRequest
+	7,  // 9: ai.AIService.GeneratePost:input_type -> ai.PostGenerationRequest
+	7,  // 10: ai.AIService.GeneratePostDraft:input_type -> ai.PostGenerationRequest
+	10, // 11: ai.AIService.ApprovePost:input_type -> ai.ApprovePostRequest
+	11, // 12: ai.AIService.RejectPost:input_type -> ai.RejectPostRequest
+	12, // 13: ai.AIService.IndexPost:input_type -> ai.IndexRequest
+	14, // 14: ai.AIService.DeletePost:input_type -> ai.DeleteRequest
+	16, // 15: ai.AIService.SearchPosts:input_type -> ai.SearchRequest
+	18, // 16: ai.AIService.RelatedPosts:input_type -> ai.RelatedRequest
+	20, // 17: ai.AIService.RelatedPostsBatch:input_type -> ai.RelatedBatchRequest
+	23, // 18: ai.AIService.Embed:input_type -> ai.EmbedRequest
+	26, // 19: ai.AIService.ChatAnswer:input_type -> ai.ChatAnswerRequest
+	28, // 20: ai.AIService.UpdateUserProfile:input_type -> ai.UserProfileUpdateRequest
+	30, // 21: ai.AIService.RecommendFeed:input_type -> ai.RecommendRequest
+	32, // 22: ai.AIService.DeleteUserProfile:input_type -> ai.DeleteUserProfileRequest
+	4,  // 23: ai.AIService.GenerateSummary:output_type -> ai.ContentResponse
+	6,  // 24: ai.AIService.GenerateTags:output_type -> ai.TagsResponse
+	8,  // 25: ai.AIService.GeneratePost:output_type -> ai.PostGenerationResponse
+	9,  // 26: ai.AIService.GeneratePostDraft:output_type -> ai.PostWorkflowState
+	9,  // 27: ai.AIService.ApprovePost:output_type -> ai.PostWorkflowState
+	9,  // 28: ai.AIService.RejectPost:output_type -> ai.PostWorkflowState
+	13, // 29: ai.AIService.IndexPost:output_type -> ai.IndexResponse
+	15, // 30: ai.AIService.DeletePost:output_type -> ai.DeleteResponse
+	17, // 31: ai.AIService.SearchPosts:output_type -> ai.SearchResponse
+	19, // 32: ai.AIService.RelatedPosts:output_type -> ai.RelatedResponse
+	22, // 33: ai.AIService.RelatedPostsBatch:output_type -> ai.RelatedBatchResponse
+	24, // 34: ai.AIService.Embed:output_type -> ai.EmbedResponse
+	27, // 35: ai.AIService.ChatAnswer:output_type -> ai.ChatChunk
+	29, // 36: ai.AIService.UpdateUserProfile:output_type -> ai.UserProfileUpdateResponse
+	31, // 37: ai.AIService.RecommendFeed:output_type -> ai.RecommendResponse
+	33, // 38: ai.AIService.DeleteUserProfile:output_type -> ai.DeleteUserProfileResponse
+	23, // [23:39] is the sub-list for method output_type
+	7,  // [7:23] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_ai_ai_service_proto_init() }
@@ -2122,7 +2138,7 @@ func file_proto_ai_ai_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_ai_ai_service_proto_rawDesc), len(file_proto_ai_ai_service_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   31,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -29,6 +29,7 @@ export const BlogCard: React.FC<BlogCardProps> = ({
   publishedAt,
   likedByMe,
   savedByMe,
+  reason,
 }) => {
   const isAuthenticated =
     useSessionStore((state) => state.status) === "authenticated";
@@ -100,6 +101,14 @@ export const BlogCard: React.FC<BlogCardProps> = ({
                   <p className="line-clamp-3 max-w-3xl min-w-0 break-words text-[0.95rem] leading-7 tracking-[0.01em] text-muted-foreground sm:text-[1rem]">
                     {snippet}
                   </p>
+                  {reason && (
+                    <p
+                      data-slot="blog-card-reason"
+                      className="text-[0.8125rem] leading-5 text-muted-foreground/90"
+                    >
+                      {reason}
+                    </p>
+                  )}
                 </div>
 
                 {visibleTags.length > 0 && (

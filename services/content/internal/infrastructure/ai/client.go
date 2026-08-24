@@ -612,6 +612,7 @@ func (c *grpcClient) RecommendFeed(ctx context.Context, userID string, offset, l
 	return &domain.SearchResult{
 		PostIDs: resp.PostIds,
 		Total:   int(resp.Total),
+		Reasons: resp.Reasons,
 	}, nil
 }
 
