@@ -9,6 +9,9 @@ x-ai-service-env: &ai-service-env
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-snowflake-arctic-embed2:568m}
   VECTOR_MODE: ${VECTOR_MODE:-qdrant}
   QDRANT_URL: http://qdrant:6333
+  # deterministic | agent | fake; fake scripts the blend decision so
+  # agent-path load runs never touch an LLM.
+  AGENT_MODE: ${AGENT_MODE:-deterministic}
   LOG_LEVEL: ${LOG_LEVEL:-WARNING}
   METRICS_PORT: 12666
 
@@ -106,6 +109,10 @@ services:
       RECOMMEND_P99: ${RECOMMEND_P99:-600}
       SURPRISE_P95: ${SURPRISE_P95:-250}
       SURPRISE_P99: ${SURPRISE_P99:-600}
+      FRESH_P95: ${FRESH_P95:-250}
+      FRESH_P99: ${FRESH_P99:-600}
+      EXPLORER_P95: ${EXPLORER_P95:-250}
+      EXPLORER_P99: ${EXPLORER_P99:-600}
       CHAT_P95: ${CHAT_P95:-500}
       CHAT_P99: ${CHAT_P99:-1500}
     depends_on:

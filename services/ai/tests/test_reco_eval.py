@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from scripts.eval_reco import (
     precision_at_k,
     print_comparison,
@@ -157,3 +159,34 @@ def test_profiled_users_have_interactions_and_unique_ids() -> None:
         assert user["held_out_post_ids"], f"{user['id']} has no held-out posts"
     ids = [user["id"] for user in USERS]
     assert len(ids) == len(set(ids))
+
+
+# --- Feed modes / agent path ---
+
+
+def test_suite_covers_all_feed_modes() -> None:
+    from eval_reco import MODES
+
+    assert set(MODES) == {"default", "surprise", "fresh", "explorer"}
+
+
+def test_diversity_gains_compare_presets_to_default() -> None:
+    from eval_reco import diversity_gains
+
+    summary = {
+        "default": {"diversity": 0.6},
+        "fresh": {"diversity": 0.5},
+        "explorer": {"diversity": 0.9},
+        "explorer_diversity_gain_vs_default": 0.3,
+    }
+
+    gains = diversity_gains(summary)
+
+    assert gains["fresh_diversity_gain_vs_default"] == pytest.approx(-0.1)
+    assert gains["explorer_diversity_gain_vs_default"] == pytest.approx(0.3)
+
+
+def test_diversity_gains_tolerate_missing_default() -> None:
+    from eval_reco import diversity_gains
+
+    assert diversity_gains({"explorer": {"diversity": 0.9}}) == {}

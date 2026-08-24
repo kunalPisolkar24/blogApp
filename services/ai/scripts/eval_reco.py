@@ -2,8 +2,8 @@
 
 Indexes the fixed corpus from ``scripts/reco_eval_data.py`` into a running
 ai-service, folds each synthetic user's interactions into a taste profile via
-``UpdateUserProfile``, then scores ``RecommendFeed`` in DEFAULT and SURPRISE
-modes:
+``UpdateUserProfile``, then scores ``RecommendFeed`` across all feed modes
+(DEFAULT, SURPRISE, FRESH, EXPLORER):
 
 * ``precision_at_k`` -- fraction of the top-k feed whose post topic matches a
   topic from the user's interaction history.
@@ -13,6 +13,9 @@ modes:
 * ``seen_ratio``     -- fraction of the feed already interacted with. The
   service filters seen posts, so this is expected to stay at 0.0; the metric
   proves that invariant.
+
+Blend presets report an informational ``diversity_gain_vs_default`` so the
+agent's mix decisions can be compared against the standard ranking.
 
 Users without history (cold start) are reported separately and never
 aggregated, since their feed is empty by design.
@@ -27,7 +30,9 @@ Later runs compare against ``reco_eval_baseline.json`` (gitignored) and exit
 non-zero when any metric drops by more than the tolerance. This is a local
 gate on purpose: no CI wiring, run it before/after recommender changes.
 Real embeddings make same-topic posts rank together; RecommendFeed never
-calls the LLM, so LLM_MODE=fake is fine.
+calls the LLM, so LLM_MODE=fake is fine. To score the agent decision path,
+bring the service up with AGENT_MODE=fake (scripted picks) or agent before
+recording/comparing -- DEFAULT-mode rows then reflect the decided presets.
 
 Driven by ``scripts/run_evals.py`` (--suite reco); needs the service-level
 stack up (services/ai/compose.local.yml).
@@ -61,6 +66,8 @@ KINDS = {
 MODES = {
     "default": ai_service_pb2.RECOMMEND_MODE_DEFAULT,
     "surprise": ai_service_pb2.RECOMMEND_MODE_SURPRISE,
+    "fresh": ai_service_pb2.RECOMMEND_MODE_FRESH,
+    "explorer": ai_service_pb2.RECOMMEND_MODE_EXPLORER,
 }
 POST_BY_ID_TAGS = {post_id: post["tags"] for post_id, post in POST_BY_ID.items()}
 
@@ -155,7 +162,9 @@ def recommend(
         limit=k,
         mode=MODES[mode],
     )
-    if mode == "surprise":
+    if mode in ("surprise", "explorer"):
+        # Both blend surprise pages into the ranking; the seed keeps the
+        # shuffle deterministic across runs.
         request.seed = SURPRISE_SEED
     response = stub.RecommendFeed(request)
     return list(response.post_ids), response.total == 0
@@ -193,7 +202,24 @@ def run_suite(stub: ai_service_pb2_grpc.AIServiceStub, k: int) -> dict:
             for key, values in buckets.items()
         }
         summary[mode]["cold_start_users"] = cold_starts[mode]
+    summary.update(diversity_gains(summary))
     return summary
+
+
+def diversity_gains(summary: dict[str, dict[str, float]]) -> dict[str, float]:
+    """Informational diversity delta of each blend preset vs DEFAULT."""
+    default_mode = summary.get("default")
+    if default_mode is None:
+        return {}
+    default_diversity = default_mode["diversity"]
+    gains: dict[str, float] = {}
+    for preset in ("fresh", "explorer"):
+        mode = summary.get(preset)
+        if mode is not None:
+            gains[f"{preset}_diversity_gain_vs_default"] = (
+                mode["diversity"] - default_diversity
+            )
+    return gains
 
 
 def load_baseline(path: Path) -> dict | None:
@@ -209,7 +235,9 @@ def find_regressions(
     regressions: list[tuple[str, str, float, float]] = []
     for mode in MODES:
         base_mode = baseline.get("modes", {}).get(mode, {})
-        cur_mode = current[mode]
+        cur_mode = current.get(mode)
+        if cur_mode is None:
+            continue
         for key in METRIC_KEYS:
             if key not in base_mode:
                 continue
@@ -237,6 +265,9 @@ def print_comparison(
     regressed = {(mode, key) for mode, key, _, _ in regressions}
     for mode in MODES:
         base_mode = baseline.get("modes", {}).get(mode, {})
+        cur_mode = current.get(mode)
+        if cur_mode is None:
+            continue
         for key in METRIC_KEYS:
             if key not in base_mode:
                 continue

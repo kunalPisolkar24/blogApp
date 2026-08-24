@@ -1,4 +1,4 @@
-.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local eval-verify eval-verify-chat eval-chat eval-reco eval-reco-baseline eval-all load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-chat load-test-stop load-test-clean load-test-tail
+.PHONY: install generate run test test-coverage lint format format-check clean docker-build docker-run docker-stop docker-logs integration integration-clean eval-dataset eval-dataset-local eval-verify eval-verify-chat eval-chat eval-reco eval-reco-baseline eval-all load-test load-test-build load-test-summary load-test-tags load-test-post load-test-search load-test-related load-test-recommend load-test-surprise load-test-fresh load-test-explorer load-test-chat load-test-stop load-test-clean load-test-tail
 
 install:
 	poetry install
@@ -130,6 +130,12 @@ RECOMMEND_P95 ?= 250
 RECOMMEND_P99 ?= 600
 SURPRISE_P95 ?= $(if $(filter qdrant,$(VECTOR_MODE)),1000,250)
 SURPRISE_P99 ?= $(if $(filter qdrant,$(VECTOR_MODE)),2000,600)
+# Fresh runs the plain single-query shape; explorer pays for a surprise
+# page on top of the default ranking.
+FRESH_P95 ?= $(RECOMMEND_P95)
+FRESH_P99 ?= $(RECOMMEND_P99)
+EXPLORER_P95 ?= $(SURPRISE_P95)
+EXPLORER_P99 ?= $(SURPRISE_P99)
 
 # Chat streams a full LLM answer per call, so budgets widen for real
 # embeddings and again for a real LLM.
@@ -147,9 +153,11 @@ LT_VARS = SCRIPT=$(SCRIPT) RPS=$(RPS) VUS=$(VUS) DURATION=$(DURATION) \
 	SEARCH_P95=$(SEARCH_P95) SEARCH_P99=$(SEARCH_P99) \
 	RECOMMEND_P95=$(RECOMMEND_P95) RECOMMEND_P99=$(RECOMMEND_P99) \
 	SURPRISE_P95=$(SURPRISE_P95) SURPRISE_P99=$(SURPRISE_P99) \
+	FRESH_P95=$(FRESH_P95) FRESH_P99=$(FRESH_P99) \
+	EXPLORER_P95=$(EXPLORER_P95) EXPLORER_P99=$(EXPLORER_P99) \
 	CHAT_P95=$(CHAT_P95) CHAT_P99=$(CHAT_P99)
 
-VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search generate-related generate-recommend generate-surprise generate-chat
+VALID_SCRIPTS := mixed generate-summary generate-tags generate-post generate-search generate-related generate-recommend generate-surprise generate-fresh generate-explorer generate-chat
 
 load-test-build:
 	$(LT_VARS) $(COMPOSE_LT) build
@@ -190,6 +198,12 @@ load-test-recommend: load-test
 
 load-test-surprise: SCRIPT = generate-surprise
 load-test-surprise: load-test
+
+load-test-fresh: SCRIPT = generate-fresh
+load-test-fresh: load-test
+
+load-test-explorer: SCRIPT = generate-explorer
+load-test-explorer: load-test
 
 load-test-chat: SCRIPT = generate-chat
 load-test-chat: load-test
