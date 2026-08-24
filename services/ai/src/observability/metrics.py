@@ -20,12 +20,13 @@ GRPC_ACTIVE_REQUESTS = Gauge(
 LLM_REQUESTS = Counter(
     "llm_requests_total",
     "Total number of LLM provider calls",
-    ["status"],
+    ["status", "model"],
 )
 
 LLM_REQUEST_DURATION = Histogram(
     "llm_request_duration_seconds",
     "Time spent waiting for the LLM provider",
+    ["model"],
 )
 
 LLM_RETRIES = Counter(
@@ -36,7 +37,7 @@ LLM_RETRIES = Counter(
 LLM_TOKENS = Counter(
     "llm_tokens_total",
     "Token usage reported by the LLM provider, estimated from char counts when omitted",
-    ["method", "token_type"],
+    ["method", "token_type", "model"],
 )
 
 QUERY_REWRITES = Counter(

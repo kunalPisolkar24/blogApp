@@ -6,6 +6,7 @@ import grpc
 import pytest
 from prometheus_client.registry import REGISTRY
 
+from src.config import settings
 from src.generated import ai_service_pb2
 from src.generated import ai_service_pb2_grpc as ai_stubs
 from src.llm import LLMError
@@ -20,13 +21,19 @@ from tests.fakes import (
 
 
 def _llm_counter(status: str) -> float:
-    return REGISTRY.get_sample_value("llm_requests_total", {"status": status}) or 0.0
+    return (
+        REGISTRY.get_sample_value(
+            "llm_requests_total", {"status": status, "model": settings.LLM_MODEL}
+        )
+        or 0.0
+    )
 
 
 def _tokens(method: str, token_type: str) -> float:
     return (
         REGISTRY.get_sample_value(
-            "llm_tokens_total", {"method": method, "token_type": token_type}
+            "llm_tokens_total",
+            {"method": method, "token_type": token_type, "model": settings.LLM_MODEL},
         )
         or 0.0
     )
@@ -164,15 +171,20 @@ async def test_metrics_llm_retries_increment(monkeypatch) -> None:
 
 
 async def test_metrics_llm_duration_observed(monkeypatch) -> None:
-    count_before = REGISTRY.get_sample_value("llm_request_duration_seconds_count")
-    sum_before = REGISTRY.get_sample_value("llm_request_duration_seconds_sum")
+    labels = {"model": settings.LLM_MODEL}
+    count_before = REGISTRY.get_sample_value(
+        "llm_request_duration_seconds_count", labels
+    )
+    sum_before = REGISTRY.get_sample_value("llm_request_duration_seconds_sum", labels)
     assert count_before is not None and sum_before is not None
     client = make_client(monkeypatch, FakeHTTPClient(responses=[ok_response()]))
 
     await client.generate_completion("s", "u")
 
-    count_after = REGISTRY.get_sample_value("llm_request_duration_seconds_count")
-    sum_after = REGISTRY.get_sample_value("llm_request_duration_seconds_sum")
+    count_after = REGISTRY.get_sample_value(
+        "llm_request_duration_seconds_count", labels
+    )
+    sum_after = REGISTRY.get_sample_value("llm_request_duration_seconds_sum", labels)
     assert count_after is not None and sum_after is not None
     assert count_after == count_before + 1
     assert sum_after > sum_before

@@ -104,7 +104,7 @@ QUESTIONS = [
 
 METRIC_RE = re.compile(
     r'^llm_tokens_total\{method="(?P<method>[^"]+)",'
-    r'token_type="(?P<token_type>[^"]+)"\}\s+(?P<value>[\d.]+)$'
+    r'token_type="(?P<token_type>[^"]+)"[^}]*\}\s+(?P<value>[\d.]+)$'
 )
 
 

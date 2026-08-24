@@ -91,6 +91,7 @@ async def serve() -> None:
     logger.info("prometheus metrics exposed on port %s", settings.METRICS_PORT)
 
     llm = FakeLLMClient() if settings.LLM_MODE == "fake" else LLMClient()
+    logger.info("llm provider: mode %s model %s", settings.LLM_MODE, settings.LLM_MODEL)
     embeddings = (
         FakeEmbeddingClient()
         if settings.EMBEDDING_MODE == "fake"
